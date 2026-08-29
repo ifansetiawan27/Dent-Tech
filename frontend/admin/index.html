@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
+          <p class="text-sm text-slate-500 mt-0.5" id="today-label"></p>
+        </div>
+        <a href="/admin/tickets.html" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Ticket Baru</a>
+      </div>
+
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, refreshIcons, TICKET_STATUS } from '/components/ui.js';
+    import { fmtIDR, fmtDateTime, esc, timeAgo } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('dashboard');
+    lucide.createIcons();
+
+    document.getElementById('today-label').textContent = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const content = document.getElementById('content');
+    content.innerHTML = spinner('Memuat dashboard...');
+
+    function statCard(icon, label, value, tone, sub = '') {
+      const tones = {
+        blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600', emerald: 'bg-emerald-50 text-emerald-600',
+        red: 'bg-red-50 text-red-600', violet: 'bg-violet-50 text-violet-600', slate: 'bg-slate-100 text-slate-600'
+      };
+      return `<div class="card p-5 flex items-start gap-4 fade-up">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tones[tone]}"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
+        <div class="min-w-0">
+          <p class="text-sm text-slate-500">${label}</p>
+          <p class="text-xl font-bold text-slate-800 mt-0.5 truncate">${value}</p>
+          ${sub ? `<p class="text-xs text-slate-400 mt-0.5">${sub}</p>` : ''}
+        </div>
+      </div>`;
+    }
+
+    try {
+      const [dash, an] = await Promise.all([
+        api.get('/api/dashboard'),
+        api.get('/api/reports/analytics')
+      ]);
+      const s = dash.stats;
+
+      const statusColors = { OPEN: '#3b82f6', REVIEWING: '#f59e0b', ASSIGNED: '#8b5cf6', IN_PROGRESS: '#0ea5e9', COMPLETED: '#10b981', CLOSED: '#94a3b8', CANCELLED: '#ef4444' };
+
+      content.innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          ${statCard('ticket', 'Ticket Open / Review', s.openTickets, 'blue', 'Menunggu diproses')}
+          ${statCard('activity', 'Sedang Dikerjakan', s.inProgress, 'violet', 'Assigned & in progress')}
+          ${statCard('check-circle', 'Selesai Bulan Ini', s.completedMonth, 'emerald', `${s.paidInvoicesMonth} invoice dibayar`)}
+          ${statCard('receipt', 'Invoice Belum Dibayar', fmtIDR(s.unpaidInvoiceTotal), 'amber', 'Outstanding')}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
+          ${statCard('building-2', 'Customer Aktif', s.activeCustomers, 'slate')}
+          ${statCard('cog', 'Total Equipment', s.equipmentCount, 'slate')}
+          ${statCard('file-check-2', 'Laporan Menunggu Approval', s.pendingReports, s.pendingReports > 0 ? 'red' : 'slate')}
+          ${statCard('package', 'Stok Menipis', s.lowStock, s.lowStock > 0 ? 'red' : 'slate')}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+          <div class="card p-5">
+            <h3 class="font-semibold text-slate-800 mb-4">Ticket per Status</h3>
+            <div class="h-56 flex items-center justify-center"><canvas id="chart-status"></canvas></div>
+          </div>
+          <div class="card p-5 lg:col-span-2">
+            <h3 class="font-semibold text-slate-800 mb-4">Pendapatan 12 Bulan Terakhir</h3>
+            <div class="h-56"><canvas id="chart-revenue"></canvas></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+          <div class="card p-5 lg:col-span-2">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-slate-800">Ticket Terbaru</h3>
+              <a href="/admin/tickets.html" class="text-sm text-blue-600 hover:underline">Lihat semua</a>
+            </div>
+            <div class="space-y-3">
+              ${dash.recent_tickets.map((t) => `
+                <a href="/admin/ticket-detail.html?id=${t.id}" class="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-slate-700 truncate">${esc(t.problem)}</p>
+                    <p class="text-xs text-slate-400 mt-0.5">${t.number} · ${esc(t.customer_name)} · ${timeAgo(t.created_at)}</p>
+                  </div>
+                  ${statusBadge(t.status)}
+                </a>`).join('') || '<p class="text-sm text-slate-400 py-6 text-center">Belum ada ticket</p>'}
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-4">Jadwal Teknisi Hari Ini</h3>
+              <div class="space-y-3">
+                ${dash.todays_work_orders.map((w) => `
+                  <a href="/admin/workorder-detail.html?id=${w.id}" class="block p-3 rounded-xl bg-slate-50 hover:bg-blue-50/60 transition-colors">
+                    <div class="flex items-center justify-between gap-2">
+                      <p class="text-sm font-medium text-slate-700 truncate">${esc(w.customer_name)}</p>
+                      <span class="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">${esc(w.time_window || '-')}</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1 truncate">${esc(w.problem)}</p>
+                    <p class="text-[11px] text-slate-400 mt-1"><i data-lucide="hard-hat" class="w-3 h-3 inline -mt-0.5"></i> ${esc(w.technician_name || 'Belum ditugaskan')}</p>
+                  </a>`).join('') || '<p class="text-sm text-slate-400 py-4 text-center">Tidak ada jadwal hari ini</p>'}
+              </div>
+            </div>
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-4">Aktivitas Terakhir</h3>
+              <div class="space-y-3 max-h-72 overflow-y-auto pr-1">
+                ${dash.recent_activity.map((a) => `
+                  <div class="flex gap-3">
+                    <div class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-[10px] font-bold text-slate-500">${esc((a.user_name || '?').split(' ').map(x => x[0]).slice(0,2).join(''))}</div>
+                    <div class="min-w-0">
+                      <p class="text-xs text-slate-600 leading-snug">${esc(a.details)}</p>
+                      <p class="text-[11px] text-slate-400 mt-0.5">${esc(a.user_name)} · ${timeAgo(a.created_at)}</p>
+                    </div>
+                  </div>`).join('') || '<p class="text-sm text-slate-400 text-center py-4">Belum ada aktivitas</p>'}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      refreshIcons();
+
+      const statusData = dash.tickets_by_status;
+      new Chart(document.getElementById('chart-status'), {
+        type: 'doughnut',
+        data: {
+          labels: statusData.map((x) => (TICKET_STATUS[x.status]?.label) || x.status),
+          datasets: [{ data: statusData.map((x) => x.count), backgroundColor: statusData.map((x) => statusColors[x.status] || '#94a3b8'), borderWidth: 0 }]
+        },
+        options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }, cutout: '62%' }
+      });
+      new Chart(document.getElementById('chart-revenue'), {
+        type: 'bar',
+        data: {
+          labels: an.revenue_by_month.map((x) => x.label),
+          datasets: [{ label: 'Pendapatan', data: an.revenue_by_month.map((x) => x.revenue), backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 28 }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { y: { ticks: { callback: (v) => 'Rp ' + (v / 1000000).toFixed(1) + ' jt', font: { size: 10 } }, grid: { color: '#f1f5f9' } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+        }
+      });
+    } catch (e) {
+      content.innerHTML = errorState(e.message);
+      refreshIcons();
+    }
+  </script>
+</body>
+</html>

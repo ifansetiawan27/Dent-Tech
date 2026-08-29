@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Technicians & Users — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Technicians & Users</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Kelola akun teknisi, admin, dan customer</p>
+        </div>
+        <button id="btn-new" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Tambah User</button>
+      </div>
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input id="f-search" class="input sm:col-span-2" placeholder="Cari nama / email...">
+        <select id="f-role" class="input">
+          <option value="">Semua Role</option>
+          <option value="admin">Admin</option>
+          <option value="technician">Technician</option>
+          <option value="customer">Customer</option>
+        </select>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, table, openModal, toast, refreshIcons } from '/components/ui.js';
+    import { fmtDate, esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('technicians');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    let customers = [];
+
+    const ROLE_BADGE = {
+      admin: 'bg-blue-50 text-blue-700',
+      technician: 'bg-emerald-50 text-emerald-700',
+      customer: 'bg-amber-50 text-amber-700'
+    };
+
+    async function load() {
+      content.innerHTML = spinner('Memuat users...');
+      try {
+        const q = new URLSearchParams();
+        const s = document.getElementById('f-search').value.trim();
+        const r = document.getElementById('f-role').value;
+        if (s) q.set('search', s);
+        if (r) q.set('role', r);
+        const data = await api.get('/api/users?' + q.toString());
+        render(data.users);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('users', 'Tidak ada user', 'Belum ada user yang cocok dengan filter.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = list.map((u) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">${esc(u.name.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase())}</div>
+              <div>
+                <p class="font-semibold text-slate-700">${esc(u.name)} ${u.active ? '' : '<span class="text-xs text-red-500">(nonaktif)</span>'}</p>
+                <p class="text-xs text-slate-400">${esc(u.email)}</p>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-3"><span class="text-xs font-bold px-2 py-1 rounded-full ${ROLE_BADGE[u.role]}">${u.role.toUpperCase()}</span></td>
+          <td class="px-4 py-3 text-slate-600 text-sm">${esc(u.phone || '-')}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm">${esc(u.customer_name || '-')}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm whitespace-nowrap">${fmtDate(u.created_at)}</td>
+          <td class="px-4 py-3 text-right">
+            <button class="btn-ghost !p-2" data-edit="${u.id}" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+          </td>
+        </tr>`);
+      content.innerHTML = table(['User', 'Role', 'Telepon', 'Customer', 'Dibuat', ''], rows);
+      refreshIcons();
+      content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editModal(list.find((x) => x.id === b.dataset.edit))));
+    }
+
+    function editModal(u) {
+      const m = openModal({
+        title: `Edit User — ${esc(u.name)}`,
+        size: 'md',
+        body: `
+          <div class="space-y-4">
+            <div><label class="label">Nama</label><input id="u-name" class="input" value="${esc(u.name)}"></div>
+            <div><label class="label">Telepon</label><input id="u-phone" class="input" value="${esc(u.phone || '')}"></div>
+            <div><label class="label">Password Baru (kosongkan jika tidak diubah)</label><input id="u-password" type="password" class="input" placeholder="••••••••"></div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50">
+              <div>
+                <p class="text-sm font-medium text-slate-700">Akun aktif</p>
+                <p class="text-xs text-slate-400">User nonaktif tidak dapat login</p>
+              </div>
+              <input id="u-active" type="checkbox" class="w-5 h-5 accent-blue-600" ${u.active ? 'checked' : ''}>
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="u-submit" class="btn-primary">Simpan</button>`
+      });
+      m.el.querySelector('#u-submit').addEventListener('click', async () => {
+        const body = {
+          name: m.el.querySelector('#u-name').value.trim(),
+          phone: m.el.querySelector('#u-phone').value.trim(),
+          active: m.el.querySelector('#u-active').checked
+        };
+        const pw = m.el.querySelector('#u-password').value;
+        if (pw) body.password = pw;
+        if (!body.name) return toast('Nama wajib diisi', 'error');
+        try {
+          await api.put('/api/users/' + u.id, body);
+          m.close();
+          toast('User diperbarui');
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    function createModal() {
+      const m = openModal({
+        title: 'Tambah User',
+        size: 'md',
+        body: `
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="label">Nama *</label><input id="nu-name" class="input"></div>
+              <div><label class="label">Role *</label>
+                <select id="nu-role" class="input">
+                  <option value="technician">Technician</option>
+                  <option value="admin">Admin</option>
+                  <option value="customer">Customer</option>
+                </select>
+              </div>
+            </div>
+            <div><label class="label">Email *</label><input id="nu-email" type="email" class="input"></div>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="label">Password *</label><input id="nu-password" type="password" class="input" placeholder="min. 6 karakter"></div>
+              <div><label class="label">Telepon</label><input id="nu-phone" class="input"></div>
+            </div>
+            <div id="nu-customer-wrap" class="hidden">
+              <label class="label">Customer *</label>
+              <select id="nu-customer" class="input">
+                <option value="">Pilih customer...</option>
+                ${customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="nu-submit" class="btn-primary">Tambah User</button>`
+      });
+      m.el.querySelector('#nu-role').addEventListener('change', (e) => {
+        m.el.querySelector('#nu-customer-wrap').classList.toggle('hidden', e.target.value !== 'customer');
+      });
+      m.el.querySelector('#nu-submit').addEventListener('click', async () => {
+        const body = {
+          name: m.el.querySelector('#nu-name').value.trim(),
+          role: m.el.querySelector('#nu-role').value,
+          email: m.el.querySelector('#nu-email').value.trim(),
+          password: m.el.querySelector('#nu-password').value,
+          phone: m.el.querySelector('#nu-phone').value.trim(),
+          customer_id: m.el.querySelector('#nu-customer').value || null
+        };
+        if (!body.name || !body.email || !body.password) return toast('Nama, email, dan password wajib diisi', 'error');
+        try {
+          await api.post('/api/users', body);
+          m.close();
+          toast('User ditambahkan');
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    (async () => {
+      try { customers = (await api.get('/api/customers')).customers; } catch {}
+    })();
+
+    document.getElementById('btn-new').addEventListener('click', createModal);
+    document.getElementById('f-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+    document.getElementById('f-role').addEventListener('change', load);
+    load();
+  </script>
+</body>
+</html>

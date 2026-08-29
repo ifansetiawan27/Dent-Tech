@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoices — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Invoices</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Billing dan pembayaran service</p>
+        </div>
+        <button id="btn-settings" class="btn-secondary"><i data-lucide="settings" class="w-4 h-4"></i> Pengaturan Invoice</button>
+      </div>
+      <div id="stats" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4"></div>
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <select id="f-status" class="input">
+          <option value="">Semua Status</option>
+          <option value="SENT">Menunggu Pembayaran</option>
+          <option value="PAID">Lunas</option>
+        </select>
+        <select id="f-type" class="input">
+          <option value="">Semua Jenis</option>
+          <option value="FINAL">Invoice Final</option>
+          <option value="PROFORMA">Proforma Invoice</option>
+        </select>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, table, statusBadge, refreshIcons, INVOICE_STATUS, openModal, toast } from '/components/ui.js';
+    import { fmtIDR, fmtDate, esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('invoices');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+
+    async function load() {
+      content.innerHTML = spinner('Memuat invoices...');
+      try {
+        const st = document.getElementById('f-status').value;
+        const ty = document.getElementById('f-type').value;
+        const q = new URLSearchParams();
+        if (st) q.set('status', st);
+        if (ty) q.set('type', ty);
+        const data = await api.get('/api/invoices' + (q.toString() ? '?' + q.toString() : ''));
+        const list = data.invoices;
+        const unpaid = list.filter((i) => i.status === 'SENT' || i.status === 'OVERDUE');
+        const paid = list.filter((i) => i.status === 'PAID');
+        const sum = (arr) => arr.reduce((a, i) => a + (i.totals?.total || 0), 0);
+        document.getElementById('stats').innerHTML = `
+          <div class="card p-5"><p class="text-sm text-slate-500">Menunggu Pembayaran</p><p class="text-xl font-bold text-amber-600 mt-1">${fmtIDR(sum(unpaid))}</p><p class="text-xs text-slate-400 mt-0.5">${unpaid.length} invoice</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Sudah Dibayar</p><p class="text-xl font-bold text-emerald-600 mt-1">${fmtIDR(sum(paid))}</p><p class="text-xs text-slate-400 mt-0.5">${paid.length} invoice</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Total Invoice</p><p class="text-xl font-bold text-slate-800 mt-1">${list.length}</p><p class="text-xs text-slate-400 mt-0.5">Semua status</p></div>`;
+        render(list);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function typeBadge(t) {
+      if (t === 'PROFORMA') return '<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset bg-violet-50 text-violet-700 ring-violet-200">Proforma</span>';
+      return '<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset bg-slate-100 text-slate-600 ring-slate-200">Final</span>';
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('receipt', 'Belum ada invoice', 'Invoice dibuat otomatis saat service report disetujui, atau buat Proforma dari Work Order.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = list.map((i) => `
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/admin/invoice-detail.html?id=${i.id}'">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-700">${i.number}</p>
+            <p class="text-xs text-slate-400">${i.ticket_number || ''} · ${i.wo_number || ''}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600">${esc(i.customer_name || '-')}</td>
+          <td class="px-4 py-3">${typeBadge(i.type)}</td>
+          <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${fmtDate(i.issued_at)}</td>
+          <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${i.due_at ? fmtDate(i.due_at) : '-'}</td>
+          <td class="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">${fmtIDR(i.totals?.total)}</td>
+          <td class="px-4 py-3">${statusBadge(i.status, INVOICE_STATUS)}</td>
+        </tr>`);
+      content.innerHTML = table(['Invoice', 'Customer', 'Jenis', 'Diterbitkan', 'Jatuh Tempo', 'Total', 'Status'], rows);
+      refreshIcons();
+    }
+
+    document.getElementById('btn-settings').addEventListener('click', async () => {
+      try {
+        const s = await api.get('/api/invoice-settings');
+        const m = openModal({
+          title: 'Pengaturan Invoice', size: 'md',
+          body: `
+            <div class="space-y-4">
+              <div>
+                <label class="label">Mode Pajak</label>
+                <select id="set-tax" class="input">
+                  <option value="PPN" ${s.tax_mode === 'PPN' ? 'selected' : ''}>PPN (11%)</option>
+                  <option value="NON_PPN" ${s.tax_mode === 'NON_PPN' ? 'selected' : ''}>Non-PPN (tanpa pajak)</option>
+                </select>
+                <p class="text-xs text-slate-400 mt-1">Berlaku untuk invoice/proforma yang dibuat setelah pengaturan disimpan.</p>
+              </div>
+              <div>
+                <label class="label">Biaya Jasa Default (Rp)</label>
+                <input id="set-labor" type="number" min="0" step="1000" class="input" value="${s.default_labor}">
+                <p class="text-xs text-slate-400 mt-1">Dipakai sebagai nilai awal saat approve laporan / membuat proforma.</p>
+              </div>
+            </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="set-submit" class="btn-primary">Simpan Pengaturan</button>`
+        });
+        m.el.querySelector('#set-submit').addEventListener('click', async () => {
+          try {
+            await api.put('/api/invoice-settings', {
+              tax_mode: m.el.querySelector('#set-tax').value,
+              default_labor: Number(m.el.querySelector('#set-labor').value) || 0
+            });
+            m.close(); toast('Pengaturan invoice disimpan');
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    });
+
+    document.getElementById('f-status').addEventListener('change', load);
+    document.getElementById('f-type').addEventListener('change', load);
+    load();
+  </script>
+</body>
+</html>

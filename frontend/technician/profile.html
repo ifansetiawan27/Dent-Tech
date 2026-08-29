@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profil — Technician</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800 mb-4">Profil Saya</h1>
+      <div class="space-y-4">
+        <div class="card p-6 flex items-center gap-4">
+          <div class="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold" id="pf-initials"></div>
+          <div>
+            <p class="font-bold text-slate-800 text-lg" id="pf-name"></p>
+            <p class="text-sm text-slate-500" id="pf-email"></p>
+            <p class="text-sm text-slate-500" id="pf-phone"></p>
+            <span class="inline-block mt-1 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">Technician</span>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="font-semibold text-slate-800 mb-4">Ubah Password</h3>
+          <form id="pw-form" class="space-y-4" novalidate>
+            <div><label class="label">Password Saat Ini</label><input id="pw-current" type="password" class="input"></div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Password Baru</label><input id="pw-new" type="password" class="input" placeholder="min. 6 karakter"></div>
+              <div><label class="label">Ulangi Password Baru</label><input id="pw-confirm" type="password" class="input"></div>
+            </div>
+            <button type="submit" class="btn-primary w-full">Ubah Password</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth, getUser } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { toast } from '/components/ui.js';
+
+    requireAuth(['technician']);
+    initMobileLayout('profile', 'technician');
+    lucide.createIcons();
+
+    const user = getUser();
+    document.getElementById('pf-initials').textContent = user.name.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('pf-name').textContent = user.name;
+    document.getElementById('pf-email').textContent = user.email;
+    document.getElementById('pf-phone').textContent = user.phone || '';
+
+    document.getElementById('pw-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const current = document.getElementById('pw-current').value;
+      const next = document.getElementById('pw-new').value;
+      const confirm = document.getElementById('pw-confirm').value;
+      if (!current || !next) return toast('Password wajib diisi', 'error');
+      if (next.length < 6) return toast('Password baru minimal 6 karakter', 'error');
+      if (next !== confirm) return toast('Konfirmasi password tidak sama', 'error');
+      try {
+        await api.put('/api/auth/password', { current_password: current, new_password: next });
+        toast('Password berhasil diubah');
+        e.target.reset();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  </script>
+</body>
+</html>

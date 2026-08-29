@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">Pengaturan</h1>
+        <p class="text-sm text-slate-500 mt-0.5">Profil, keamanan, dan informasi perusahaan</p>
+      </div>
+
+      <div class="space-y-4">
+        <div class="card p-6">
+          <h3 class="font-semibold text-slate-800 mb-4">Profil Saya</h3>
+          <div id="profile" class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg font-bold" id="pf-initials"></div>
+            <div>
+              <p class="font-semibold text-slate-800" id="pf-name"></p>
+              <p class="text-sm text-slate-500" id="pf-email"></p>
+              <span class="inline-block mt-1 text-[10px] font-bold uppercase tracking-wide bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full" id="pf-role"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="font-semibold text-slate-800 mb-4">Ubah Password</h3>
+          <form id="pw-form" class="space-y-4" novalidate>
+            <div><label class="label">Password Saat Ini</label><input id="pw-current" type="password" class="input" autocomplete="current-password"></div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Password Baru</label><input id="pw-new" type="password" class="input" autocomplete="new-password" placeholder="min. 6 karakter"></div>
+              <div><label class="label">Ulangi Password Baru</label><input id="pw-confirm" type="password" class="input" autocomplete="new-password"></div>
+            </div>
+            <button type="submit" class="btn-primary">Ubah Password</button>
+          </form>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="font-semibold text-slate-800 mb-1">Informasi Perusahaan</h3>
+          <p class="text-xs text-slate-400 mb-4">Ditampilkan pada login page dan dokumen service</p>
+          <div id="company" class="space-y-4">
+            <div><label class="label">Nama Perusahaan</label><input id="co-name" class="input"></div>
+            <div><label class="label">Alamat</label><input id="co-address" class="input"></div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Telepon</label><input id="co-phone" class="input"></div>
+              <div><label class="label">Email</label><input id="co-email" class="input"></div>
+            </div>
+            <p class="text-xs text-slate-400">Perubahan informasi perusahaan dapat disesuaikan pada fase berikutnya (saat ini read-only dari seed).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth, getUser } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { toast, refreshIcons } from '/components/ui.js';
+    import { esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout(null);
+    lucide.createIcons();
+
+    const user = getUser();
+    document.getElementById('pf-initials').textContent = user.name.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('pf-name').textContent = user.name;
+    document.getElementById('pf-email').textContent = user.email;
+    document.getElementById('pf-role').textContent = user.role;
+
+    (async () => {
+      try {
+        const { settings } = await api.get('/api/auth/me');
+        document.getElementById('co-name').value = settings.company_name || '';
+        document.getElementById('co-address').value = settings.company_address || '';
+        document.getElementById('co-phone').value = settings.company_phone || '';
+        document.getElementById('co-email').value = settings.company_email || '';
+        ['co-name', 'co-address', 'co-phone', 'co-email'].forEach((id) => document.getElementById(id).disabled = true);
+      } catch {}
+    })();
+
+    document.getElementById('pw-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const current = document.getElementById('pw-current').value;
+      const next = document.getElementById('pw-new').value;
+      const confirm = document.getElementById('pw-confirm').value;
+      if (!current || !next) return toast('Password wajib diisi', 'error');
+      if (next.length < 6) return toast('Password baru minimal 6 karakter', 'error');
+      if (next !== confirm) return toast('Konfirmasi password tidak sama', 'error');
+      try {
+        await api.put('/api/auth/password', { current_password: current, new_password: next });
+        toast('Password berhasil diubah');
+        e.target.reset();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  </script>
+</body>
+</html>

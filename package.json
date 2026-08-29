@@ -1,0 +1,27 @@
+{
+  "name": "dent-tech-sms",
+  "version": "1.0.0",
+  "description": "Service Management System - Three Portal (Admin, Technician, Customer) untuk Dent Tech",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "test:api": "powershell -ExecutionPolicy Bypass -File test_api.ps1",
+    "test:browser": "node test_browser.js",
+    "test:flow": "node test_flow.js",
+    "test:portal": "node test_newfeatures.js",
+    "test:features": "node test_features2.js",
+    "test:visual": "node visual_audit.js",
+    "audit": "node audit.js"
+  },
+  "keywords": [
+    "service-management",
+    "ticketing",
+    "work-order",
+    "field-service"
+  ],
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

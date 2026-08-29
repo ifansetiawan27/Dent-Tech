@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Saya — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800 mb-4">Service Saya</h1>
+      <div class="flex gap-2 mb-4">
+        <button id="tab-active" class="px-4 py-2 rounded-full text-sm font-semibold bg-blue-600 text-white">Aktif</button>
+        <button id="tab-history" class="px-4 py-2 rounded-full text-sm font-semibold bg-white text-slate-500 border border-slate-200">Riwayat</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, refreshIcons, TICKET_STATUS, PRIORITY } from '/components/ui.js';
+    import { esc, timeAgo } from '/utils/format.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('tickets', 'customer');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    let all = [];
+    let tab = 'active';
+
+    async function load() {
+      content.innerHTML = spinner('Memuat service...');
+      try {
+        const d = await api.get('/api/tickets');
+        all = d.tickets;
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      const activeStatuses = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED'];
+      const list = all.filter((t) => tab === 'active' ? activeStatuses.includes(t.status) : ['CLOSED', 'CANCELLED'].includes(t.status));
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('ticket', tab === 'active' ? 'Tidak ada service aktif' : 'Belum ada riwayat', tab === 'active' ? 'Request service Anda akan tampil di sini.' : 'Service yang sudah selesai akan tersimpan di sini.', '<a href="/customer/request.html" class="btn-primary">Buat Request</a>')}</div>`;
+        refreshIcons();
+        return;
+      }
+      content.innerHTML = `<div class="space-y-3">
+        ${list.map((t) => `
+          <a href="/customer/ticket-detail.html?id=${t.id}" class="card p-4 block hover:border-blue-300 transition-colors">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-slate-400">${t.number}</span>
+              ${statusBadge(t.status)}
+            </div>
+            <p class="font-semibold text-slate-800 mt-2">${esc(t.problem)}</p>
+            <p class="text-xs text-slate-400 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' · ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ')) : ''} · ${timeAgo(t.created_at)}</p>
+          </a>`).join('')}
+      </div>`;
+      refreshIcons();
+    }
+
+    const tabActive = document.getElementById('tab-active');
+    const tabHistory = document.getElementById('tab-history');
+    function setTab(t) {
+      tab = t;
+      tabActive.className = 'px-4 py-2 rounded-full text-sm font-semibold ' + (t === 'active' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200');
+      tabHistory.className = 'px-4 py-2 rounded-full text-sm font-semibold ' + (t === 'history' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200');
+      render();
+    }
+    tabActive.addEventListener('click', () => setTab('active'));
+    tabHistory.addEventListener('click', () => setTab('history'));
+
+    load();
+  </script>
+</body>
+</html>

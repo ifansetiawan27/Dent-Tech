@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profil — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800 mb-4">Profil Saya</h1>
+      <div class="space-y-4">
+        <div class="card p-6 flex items-center gap-4">
+          <div id="pf-avatar" class="shrink-0"></div>
+          <div class="min-w-0">
+            <p class="font-bold text-slate-800 text-lg" id="pf-name"></p>
+            <p class="text-sm text-slate-500" id="pf-email"></p>
+            <p class="text-sm text-slate-500" id="pf-company"></p>
+            <span class="inline-block mt-1 text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Customer</span>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="font-semibold text-slate-800 mb-1">Foto Profil</h3>
+          <p class="text-xs text-slate-400 mb-4">Foto tampil di avatar dan terlihat oleh admin & teknisi</p>
+          <div class="flex items-center gap-4">
+            <div id="pf-photo-preview" class="shrink-0"></div>
+            <div class="flex-1">
+              <button id="pf-photo-btn" class="btn-secondary w-full"><i data-lucide="image-plus" class="w-4 h-4"></i> Ubah Foto Profil</button>
+              <input type="file" id="pf-photo-file" accept="image/*" class="hidden">
+              <p class="text-[11px] text-slate-400 mt-2">Format JPG/PNG/WebP, maks 5MB</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="font-semibold text-slate-800 mb-4">Ubah Password</h3>
+          <form id="pw-form" class="space-y-4" novalidate>
+            <div><label class="label">Password Saat Ini</label><input id="pw-current" type="password" class="input"></div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Password Baru</label><input id="pw-new" type="password" class="input" placeholder="min. 6 karakter"></div>
+              <div><label class="label">Ulangi Password Baru</label><input id="pw-confirm" type="password" class="input"></div>
+            </div>
+            <button type="submit" class="btn-primary w-full">Ubah Password</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth, getUser } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { toast, refreshIcons } from '/components/ui.js';
+    import { avatarHtml, uploadAvatar } from '/components/avatar.js';
+
+    requireAuth(['customer']);
+    initMobileLayout(null, 'customer');
+    lucide.createIcons();
+
+    let user = getUser();
+
+    function renderAvatar() {
+      document.getElementById('pf-avatar').innerHTML = avatarHtml(user, 'w-16 h-16', 'text-xl');
+      document.getElementById('pf-photo-preview').innerHTML = avatarHtml(user, 'w-14 h-14', 'text-base');
+    }
+    renderAvatar();
+    document.getElementById('pf-name').textContent = user.name;
+    document.getElementById('pf-email').textContent = user.email;
+
+    (async () => {
+      try {
+        const me = await api.get('/api/auth/me');
+        if (me.user) { user = me.user; renderAvatar(); }
+        const { customer } = await api.get('/api/customers/' + user.customer_id);
+        document.getElementById('pf-company').textContent = customer.name;
+      } catch {}
+    })();
+
+    const photoBtn = document.getElementById('pf-photo-btn');
+    const photoFile = document.getElementById('pf-photo-file');
+    photoBtn.addEventListener('click', () => photoFile.click());
+    photoFile.addEventListener('change', async () => {
+      const f = photoFile.files[0];
+      if (!f) return;
+      photoBtn.disabled = true;
+      try {
+        await uploadAvatar(f);
+        user = getUser();
+        renderAvatar();
+        toast('Foto profil diperbarui');
+        setTimeout(() => location.reload(), 700);
+      } catch (e) {
+        toast(e.message, 'error');
+        photoBtn.disabled = false;
+      }
+    });
+
+    document.getElementById('pw-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const current = document.getElementById('pw-current').value;
+      const next = document.getElementById('pw-new').value;
+      const confirm = document.getElementById('pw-confirm').value;
+      if (!current || !next) return toast('Password wajib diisi', 'error');
+      if (next.length < 6) return toast('Password baru minimal 6 karakter', 'error');
+      if (next !== confirm) return toast('Konfirmasi password tidak sama', 'error');
+      try {
+        await api.put('/api/auth/password', { current_password: current, new_password: next });
+        toast('Password berhasil diubah');
+        e.target.reset();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  </script>
+</body>
+</html>

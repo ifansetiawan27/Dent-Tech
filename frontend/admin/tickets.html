@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tickets — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Tickets</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Kelola seluruh service request dari customer</p>
+        </div>
+        <button id="btn-new" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Ticket Baru</button>
+      </div>
+
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <input id="f-search" class="input" placeholder="Cari nomor / masalah / customer...">
+        <select id="f-status" class="input">
+          <option value="">Semua Status</option>
+          <option>OPEN</option><option>REVIEWING</option><option>ASSIGNED</option>
+          <option>IN_PROGRESS</option><option>COMPLETED</option><option>CLOSED</option><option>CANCELLED</option>
+        </select>
+        <select id="f-priority" class="input">
+          <option value="">Semua Prioritas</option>
+          <option>URGENT</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option>
+        </select>
+        <button id="btn-filter" class="btn-secondary"><i data-lucide="search" class="w-4 h-4"></i> Terapkan Filter</button>
+      </div>
+
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, table, openModal, toast, refreshIcons, PRIORITY } from '/components/ui.js';
+    import { fmtDateTime, esc } from '/utils/format.js';
+    import { openTicketEditModal } from '/components/ticket-edit.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('tickets');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+
+    async function load() {
+      content.innerHTML = spinner('Memuat tickets...');
+      try {
+        const q = new URLSearchParams();
+        const s = document.getElementById('f-search').value.trim();
+        const st = document.getElementById('f-status').value;
+        const pr = document.getElementById('f-priority').value;
+        if (s) q.set('search', s);
+        if (st) q.set('status', st);
+        if (pr) q.set('priority', pr);
+        const data = await api.get('/api/tickets?' + q.toString());
+        render(data.tickets);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(tickets) {
+      if (!tickets.length) {
+        content.innerHTML = `<div class="card">${emptyState('ticket', 'Tidak ada ticket', 'Belum ada ticket yang cocok dengan filter Anda.', '<button class="btn-primary" onclick="document.getElementById(\'btn-new\').click()">Buat Ticket Baru</button>')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = tickets.map((t) => `
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/admin/ticket-detail.html?id=${t.id}'">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-700">${t.number}</p>
+            <p class="text-xs text-slate-400">${fmtDateTime(t.created_at)}</p>
+          </td>
+          <td class="px-4 py-3">
+            <p class="text-slate-700 max-w-md truncate">${esc(t.problem)}</p>
+            <p class="text-xs text-slate-400 mt-0.5">${esc(t.service_type || '-')}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600">${esc(t.customer_name || '-')}</td>
+          <td class="px-4 py-3 text-slate-600">${esc(t.equipment_name || ([t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ') || '-'))}</td>
+          <td class="px-4 py-3">${statusBadge(t.priority, PRIORITY)}</td>
+          <td class="px-4 py-3">${statusBadge(t.status)}</td>
+          <td class="px-4 py-3 text-slate-600">${esc(t.technician_name || '-')}</td>
+          <td class="px-4 py-3" onclick="event.stopPropagation()">
+            <button class="btn-ghost !p-2" data-edit="${t.id}" title="Edit Ticket"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+          </td>
+        </tr>`);
+      content.innerHTML = table(['Ticket', 'Masalah', 'Customer', 'Equipment', 'Prioritas', 'Status', 'Teknisi', ''], rows);
+      refreshIcons();
+      content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
+        const t = tickets.find((x) => x.id === b.dataset.edit);
+        if (t) openTicketEditModal(t, load);
+      }));
+    }
+
+    document.getElementById('btn-filter').addEventListener('click', load);
+    document.getElementById('f-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+
+    document.getElementById('btn-new').addEventListener('click', async () => {
+      try {
+        const [custData, eqData] = await Promise.all([api.get('/api/customers'), api.get('/api/equipment')]);
+        const m = openModal({
+          title: 'Buat Ticket Baru',
+          size: 'lg',
+          body: `
+            <form id="new-ticket-form" class="space-y-4" novalidate>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="label">Customer</label>
+                  <select id="nt-customer" class="input">
+                    <option value="">Pilih customer...</option>
+                    ${custData.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="label">Equipment</label>
+                  <select id="nt-equipment" class="input"><option value="">Pilih customer dulu</option></select>
+                </div>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="label">Jenis Service *</label>
+                  <select id="nt-type" class="input" required>
+                    <option value="">Pilih jenis...</option>
+                    <option>Repair</option><option>Preventive Maintenance</option><option>Installation</option><option>Inspection</option><option>Emergency</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="label">Prioritas</label>
+                  <select id="nt-priority" class="input"><option>LOW</option><option selected>MEDIUM</option><option>HIGH</option><option>URGENT</option></select>
+                </div>
+              </div>
+              <div>
+                <label class="label">Masalah *</label>
+                <input id="nt-problem" class="input" placeholder="Ringkasan masalah" required>
+              </div>
+              <div>
+                <label class="label">Deskripsi</label>
+                <textarea id="nt-desc" class="input" placeholder="Detail tambahan (opsional)"></textarea>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div><label class="label">Tanggal Preferensi</label><input id="nt-date" type="date" class="input"></div>
+                <div><label class="label">Waktu Preferensi</label><input id="nt-time" type="time" class="input"></div>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div><label class="label">Nama Kontak</label><input id="nt-contact" class="input"></div>
+                <div><label class="label">Telepon Kontak</label><input id="nt-phone" class="input"></div>
+              </div>
+            </form>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="nt-submit" class="btn-primary">Simpan Ticket</button>`
+        });
+        const eqSel = m.el.querySelector('#nt-equipment');
+        m.el.querySelector('#nt-customer').addEventListener('change', (e) => {
+          const cid = e.target.value;
+          const list = eqData.equipment.filter((x) => x.customer_id === cid);
+          eqSel.innerHTML = '<option value="">Tanpa equipment</option>' + list.map((x) => `<option value="${x.id}">${esc(x.name)} (${esc(x.serial_number || '-')})</option>`).join('');
+        });
+        m.el.querySelector('#nt-submit').addEventListener('click', async () => {
+          const body = {
+            customer_id: m.el.querySelector('#nt-customer').value || null,
+            equipment_id: m.el.querySelector('#nt-equipment').value || null,
+            service_type: m.el.querySelector('#nt-type').value,
+            priority: m.el.querySelector('#nt-priority').value,
+            problem: m.el.querySelector('#nt-problem').value.trim(),
+            description: m.el.querySelector('#nt-desc').value.trim(),
+            preferred_date: m.el.querySelector('#nt-date').value,
+            preferred_time: m.el.querySelector('#nt-time').value,
+            contact_name: m.el.querySelector('#nt-contact').value.trim(),
+            contact_phone: m.el.querySelector('#nt-phone').value.trim()
+          };
+          if (!body.problem) return toast('Masalah wajib diisi', 'error');
+          if (!body.service_type) return toast('Jenis service wajib dipilih', 'error');
+          if (!body.equipment_id && !body.customer_id) return toast('Pilih customer atau equipment', 'error');
+          try {
+            const res = await api.post('/api/tickets', body);
+            m.close();
+            toast(`Ticket ${res.number} berhasil dibuat`);
+            load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    });
+
+    load();
+  </script>
+</body>
+</html>

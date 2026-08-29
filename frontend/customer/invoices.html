@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800 mb-4">Invoice</h1>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
+    import { fmtIDR, fmtDate, esc } from '/utils/format.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('invoices', 'customer');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+
+    async function load() {
+      content.innerHTML = spinner('Memuat invoice...');
+      try {
+        const d = await api.get('/api/invoices');
+        const list = d.invoices;
+        if (!list.length) {
+          content.innerHTML = `<div class="card">${emptyState('receipt', 'Belum ada invoice', 'Invoice akan muncul setelah service Anda selesai dan disetujui.')}</div>`;
+          refreshIcons();
+          return;
+        }
+        const unpaid = list.filter((i) => i.status === 'SENT' || i.status === 'OVERDUE');
+        content.innerHTML = `
+          ${unpaid.length ? `
+          <div class="card p-4 mb-4 bg-amber-50/70 border-amber-200 flex items-center gap-3">
+            <i data-lucide="alert-circle" class="w-5 h-5 text-amber-500 shrink-0"></i>
+            <p class="text-sm text-slate-600">Anda memiliki <b>${unpaid.length}</b> invoice belum dibayar senilai <b>${fmtIDR(unpaid.reduce((a, i) => a + (i.totals?.total || 0), 0))}</b></p>
+          </div>` : ''}
+          <div class="space-y-3">
+            ${list.map((i) => `
+              <a href="/customer/invoice-detail.html?id=${i.id}" class="card p-4 block hover:border-blue-300 transition-colors">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-semibold text-slate-700 text-sm">${i.number}</p>
+                  ${statusBadge(i.status, INVOICE_STATUS)}
+                </div>
+                <div class="flex items-end justify-between mt-2">
+                  <div class="text-xs text-slate-400">
+                    <p>${i.ticket_number || ''}</p>
+                    <p>Jatuh tempo: ${i.due_at ? fmtDate(i.due_at) : '-'}</p>
+                  </div>
+                  <p class="font-bold text-slate-800">${fmtIDR(i.totals?.total)}</p>
+                </div>
+              </a>`).join('')}
+          </div>`;
+        refreshIcons();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

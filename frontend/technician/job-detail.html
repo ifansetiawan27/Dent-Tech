@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Job — Technician</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <a href="/technician/jobs.html" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"><i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali</a>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, openModal, confirmDialog, toast, refreshIcons, WO_STATUS, PRIORITY, REPORT_STATUS, photoGrid, bindLightbox, fileToDataUrl } from '/components/ui.js';
+    import { fmtDate, fmtDateTime, fmtIDR, esc } from '/utils/format.js';
+
+    requireAuth(['technician']);
+    initMobileLayout('jobs', 'technician');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const woId = new URLSearchParams(location.search).get('id');
+    let data = null;
+    let activeTab = 'checklist';
+
+    async function load(keepTab = true) {
+      if (!keepTab) activeTab = 'checklist';
+      content.innerHTML = spinner('Memuat job...');
+      try {
+        data = await api.get('/api/work-orders/' + woId);
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function headerCard() {
+      const wo = data.work_order;
+      return `
+        <div class="card p-5 mb-4">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="text-xs font-bold text-slate-400">${wo.number} · ${wo.ticket_number}</span>
+            <div class="flex gap-1.5">${statusBadge(wo.priority, PRIORITY)}${statusBadge(wo.status, WO_STATUS)}</div>
+          </div>
+          <h1 class="text-lg font-bold text-slate-800 mt-2">${esc(wo.problem)}</h1>
+          ${wo.ticket_description ? `<p class="text-sm text-slate-500 mt-1">${esc(wo.ticket_description)}</p>` : ''}
+          <div class="mt-4 space-y-2.5 text-sm">
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="building-2" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>
+              <div><p class="font-medium text-slate-700">${esc(wo.customer_name)}</p>
+              <p class="text-xs text-slate-400">${esc(wo.ticket_service_address || [wo.customer_address, wo.customer_city].filter(Boolean).join(', '))}</p></div>
+            </div>
+            ${wo.customer_phone ? `<a href="tel:${esc(wo.customer_phone)}" class="flex items-center gap-2.5 text-blue-600"><i data-lucide="phone" class="w-4 h-4 shrink-0"></i> ${esc(wo.customer_phone)}</a>` : ''}
+            ${(wo.equipment_name || wo.ticket_equipment_type) ? `<div class="flex items-center gap-2.5"><i data-lucide="cog" class="w-4 h-4 text-slate-400 shrink-0"></i><span class="text-slate-600">${esc(wo.equipment_name || [wo.ticket_equipment_type, wo.ticket_equipment_brand].filter(Boolean).join(' — '))}${wo.equipment_serial ? ' · SN ' + esc(wo.equipment_serial) : ''}${wo.equipment_location ? ' · ' + esc(wo.equipment_location) : ''}</span></div>` : ''}
+            <div class="flex items-center gap-2.5"><i data-lucide="calendar" class="w-4 h-4 text-slate-400 shrink-0"></i><span class="text-slate-600">${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</span></div>
+          </div>
+        </div>`;
+    }
+
+    function tabsBar() {
+      const tabs = [
+        ['checklist', 'Checklist', 'list-checks'],
+        ['diagnosis', 'Diagnosis', 'stethoscope'],
+        ['parts', 'Parts', 'package'],
+        ['photos', 'Foto', 'camera'],
+        ['complete', 'Selesai', 'check-circle']
+      ];
+      return `
+        <div class="sticky top-16 z-20 -mx-4 px-4 py-2 bg-slate-50/95 backdrop-blur mb-3">
+          <div class="flex gap-1.5 overflow-x-auto pb-1">
+            ${tabs.map(([key, label, icon]) => `
+              <button data-tab="${key}" class="tab-pill flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${activeTab === key ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200'}">
+                <i data-lucide="${icon}" class="w-4 h-4"></i> ${label}
+              </button>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    function checklistTab() {
+      const c = data.checklist;
+      if (!c) return `<div class="card p-6 text-center text-sm text-slate-400">Work order ini tidak menggunakan checklist template.</div>`;
+      const pct = c.total_items ? Math.round(c.answered_items / c.total_items * 100) : 0;
+      const RESULT = [['PASS', 'bg-emerald-600'], ['FAIL', 'bg-red-600'], ['NA', 'bg-slate-500']];
+      return `
+        <div class="card p-4 mb-3">
+          <div class="flex items-center justify-between text-sm mb-2">
+            <p class="font-semibold text-slate-700">${esc(c.template.name)} <span class="text-xs font-normal text-slate-400">v${esc(c.template.version)}</span></p>
+            <span class="text-xs text-slate-400">${c.answered_items}/${c.total_items} · ${pct}%</span>
+          </div>
+          <div class="h-2 rounded bg-slate-100"><div class="h-2 rounded bg-blue-500 transition-all" style="width:${pct}%"></div></div>
+        </div>
+        ${c.sections.map((sec) => `
+          <div class="card p-4 mb-3">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">${esc(sec.section)}</p>
+            <div class="space-y-3">
+              ${sec.items.map((it) => `
+                <div class="p-3 rounded-xl border ${it.result ? 'border-slate-200 bg-slate-50/50' : 'border-slate-200'}">
+                  <p class="text-sm text-slate-700">${esc(it.label)}${it.required ? ' <span class="text-red-400">*</span>' : ''}</p>
+                  <div class="flex gap-2 mt-2.5">
+                    ${RESULT.map(([r, cls]) => `
+                      <button data-item="${it.id}" data-result="${r}" class="chk-btn flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${it.result === r ? cls + ' text-white' : 'bg-white border border-slate-200 text-slate-400'}">${r}</button>`).join('')}
+                  </div>
+                  <input data-note="${it.id}" class="input mt-2 !py-1.5 text-xs ${it.result === 'FAIL' ? '' : 'hidden'}" placeholder="Catatan temuan..." value="${esc(it.note || '')}">
+                </div>`).join('')}
+            </div>
+          </div>`).join('')}`;
+    }
+
+    function diagnosisTab() {
+      const d = data.diagnosis;
+      return `
+        <div class="card p-4 mb-3">
+          <h3 class="font-semibold text-slate-800 mb-3">Diagnosis</h3>
+          <div class="space-y-3">
+            <div><label class="label">Temuan *</label><textarea id="dg-findings" class="input" placeholder="Apa yang ditemukan di lapangan...">${esc(d?.findings || '')}</textarea></div>
+            <div><label class="label">Akar Masalah</label><textarea id="dg-root" class="input !min-h-[4rem]" placeholder="Penyebab utama...">${esc(d?.root_cause || '')}</textarea></div>
+            <div><label class="label">Rekomendasi</label><textarea id="dg-recom" class="input !min-h-[4rem]" placeholder="Saran untuk customer...">${esc(d?.recommendation || '')}</textarea></div>
+            <button id="dg-save" class="btn-primary w-full">Simpan Diagnosis</button>
+          </div>
+        </div>
+        <div class="card p-4">
+          <h3 class="font-semibold text-slate-800 mb-3">Pekerjaan Dilakukan</h3>
+          <div class="space-y-2 mb-3">
+            ${data.work_performed.map((w) => `<div class="flex gap-2 text-sm text-slate-700 p-2.5 rounded-lg bg-slate-50"><i data-lucide="check" class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0"></i>${esc(w.description)}</div>`).join('') || '<p class="text-sm text-slate-400">Belum ada catatan pekerjaan</p>'}
+          </div>
+          <div class="flex gap-2">
+            <input id="wp-input" class="input" placeholder="cth: Mengganti elemen pemanas">
+            <button id="wp-add" class="btn-secondary shrink-0 !px-3"><i data-lucide="plus" class="w-4 h-4"></i></button>
+          </div>
+        </div>`;
+    }
+
+    function partsTab() {
+      return `
+        <div class="card p-4 mb-3">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-slate-800">Spare Parts</h3>
+            <button id="pt-add" class="btn-primary !py-2 !px-3 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> Tambah</button>
+          </div>
+          ${data.part_usages.length ? `
+            <div class="space-y-2">
+              ${data.part_usages.map((p) => `
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-slate-700 truncate">${esc(p.part_name)}</p>
+                    <p class="text-xs text-slate-400">${p.qty} ${esc(p.unit)} × ${fmtIDR(p.unit_price)}</p>
+                  </div>
+                  <span class="text-sm font-semibold text-slate-700">${fmtIDR(p.qty * p.unit_price)}</span>
+                  <button data-pt-del="${p.id}" class="btn-ghost !p-1.5 text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>`).join('')}
+              <div class="flex justify-between pt-2 border-t border-slate-100 text-sm">
+                <span class="text-slate-500">Total Part</span>
+                <span class="font-bold text-slate-800">${fmtIDR(data.parts_total)}</span>
+              </div>
+            </div>` : '<p class="text-sm text-slate-400">Belum ada part digunakan</p>'}
+        </div>`;
+    }
+
+    function photosTab() {
+      const before = data.photos.filter((p) => ['before', 'request'].includes(p.kind));
+      const after = data.photos.filter((p) => p.kind === 'after');
+      const other = data.photos.filter((p) => !['before', 'request', 'after'].includes(p.kind));
+      return `
+        <div class="card p-4 mb-3">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-slate-800">Foto Sebelum</h3>
+            <button data-upload="before" class="btn-secondary !py-2 !px-3 text-sm"><i data-lucide="camera" class="w-4 h-4"></i> Upload</button>
+          </div>
+          ${before.length ? photoGrid(before) : '<p class="text-sm text-slate-400">Ambil foto kondisi unit sebelum bekerja</p>'}
+        </div>
+        <div class="card p-4 mb-3">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-slate-800">Foto Sesudah <span class="text-red-400">*</span></h3>
+            <button data-upload="after" class="btn-secondary !py-2 !px-3 text-sm"><i data-lucide="camera" class="w-4 h-4"></i> Upload</button>
+          </div>
+          ${after.length ? photoGrid(after) : '<p class="text-sm text-slate-400">Wajib: bukti foto setelah pekerjaan selesai</p>'}
+        </div>
+        ${other.length ? `<div class="card p-4"><h3 class="font-semibold text-slate-800 mb-3">Foto Lainnya</h3>${photoGrid(other, { showKind: false })}</div>` : ''}
+        <input type="file" id="photo-file" accept="image/*" class="hidden">`;
+    }
+
+    function completeTab() {
+      const c = data.checklist;
+      const reqs = [
+        { ok: !c || c.complete, label: c ? `Checklist lengkap (${c.required_done}/${c.required_total} item wajib)` : 'Checklist (tanpa template)' },
+        { ok: !!data.diagnosis && !!data.diagnosis.findings?.trim(), label: 'Diagnosis terisi' },
+        { ok: data.work_performed.length > 0, label: 'Pekerjaan dilakukan tercatat' },
+        { ok: data.photos.some((p) => p.kind === 'after'), label: 'Foto AFTER diupload' }
+      ];
+      return `
+        <div class="card p-4 mb-3">
+          <h3 class="font-semibold text-slate-800 mb-3">Persyaratan Penyelesaian</h3>
+          <div class="space-y-2.5">
+            ${reqs.map((r) => `
+              <div class="flex items-center gap-2.5 text-sm">
+                <div class="w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${r.ok ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-300'}">
+                  <i data-lucide="${r.ok ? 'check' : 'circle'}" class="w-3.5 h-3.5"></i>
+                </div>
+                <span class="${r.ok ? 'text-slate-700' : 'text-slate-400'}">${r.label}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="card p-4">
+          <h3 class="font-semibold text-slate-800 mb-3">Service Report</h3>
+          <label class="label">Ringkasan Laporan *</label>
+          <textarea id="cm-summary" class="input" placeholder="Ringkasan hasil pekerjaan untuk customer..."></textarea>
+          <label class="label mt-3">Catatan Internal (opsional)</label>
+          <input id="cm-note" class="input" placeholder="Catatan untuk admin (tidak tampil ke customer)">
+          <button id="cm-submit" class="btn-primary w-full mt-4"><i data-lucide="send" class="w-4 h-4"></i> Selesaikan Pekerjaan & Kirim Laporan</button>
+        </div>`;
+    }
+
+    function reportStatusCard() {
+      const r = data.service_report;
+      if (!r) return '';
+      if (r.status === 'SUBMITTED') return `
+        <div class="card p-5 border-2 border-amber-200 text-center">
+          <i data-lucide="hourglass" class="w-8 h-8 text-amber-500 mx-auto"></i>
+          <p class="font-semibold text-slate-800 mt-2">Laporan ${r.number} terkirim</p>
+          <p class="text-sm text-slate-500 mt-1">Menunggu approval dari admin.</p>
+        </div>`;
+      if (r.status === 'APPROVED') return `
+        <div class="card p-5 border-2 border-emerald-200 text-center">
+          <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500 mx-auto"></i>
+          <p class="font-semibold text-slate-800 mt-2">Laporan ${r.number} disetujui</p>
+          <p class="text-sm text-slate-500 mt-1">${r.approved_at ? fmtDateTime(r.approved_at) : ''}</p>
+        </div>`;
+      return `
+        <div class="card p-5 border-2 border-red-200">
+          <div class="text-center">
+            <i data-lucide="rotate-ccw" class="w-8 h-8 text-red-500 mx-auto"></i>
+            <p class="font-semibold text-slate-800 mt-2">Laporan diminta revisi</p>
+          </div>
+          ${r.technician_note ? `<p class="text-sm text-slate-600 bg-red-50 rounded-lg p-3 mt-3">${esc(r.technician_note)}</p>` : ''}
+          <label class="label mt-4">Ringkasan revisi *</label>
+          <textarea id="rs-summary" class="input">${esc(r.summary || '')}</textarea>
+          <button id="rs-submit" class="btn-primary w-full mt-3">Kirim Ulang Laporan</button>
+        </div>`;
+    }
+
+    function render() {
+      const wo = data.work_order;
+      let html = headerCard();
+
+      if (wo.status === 'ASSIGNED') {
+        html += `
+          <div class="card p-6 text-center">
+            <i data-lucide="map-pin" class="w-10 h-10 text-blue-500 mx-auto"></i>
+            <p class="font-semibold text-slate-800 mt-3">Siap memulai pekerjaan?</p>
+            <p class="text-sm text-slate-500 mt-1">Pastikan Anda sudah berada di lokasi customer.</p>
+            <button id="btn-start" class="btn-primary w-full mt-4 !py-3"><i data-lucide="play" class="w-4 h-4"></i> Mulai Service</button>
+          </div>`;
+      } else if (wo.status === 'STARTED') {
+        html += tabsBar() + `<div id="tab-content"></div>`;
+      } else {
+        html += reportStatusCard();
+      }
+
+      content.innerHTML = html;
+      refreshIcons();
+
+      if (wo.status === 'STARTED') {
+        renderTab();
+        content.querySelectorAll('.tab-pill').forEach((b) => b.addEventListener('click', () => { activeTab = b.dataset.tab; render(); }));
+      }
+      const btnStart = document.getElementById('btn-start');
+      if (btnStart) btnStart.addEventListener('click', async () => {
+        btnStart.disabled = true;
+        try { await api.post(`/api/work-orders/${wo.id}/start`); toast('Service dimulai'); load(false); }
+        catch (e) { toast(e.message, 'error'); btnStart.disabled = false; }
+      });
+      const rsSubmit = document.getElementById('rs-submit');
+      if (rsSubmit) rsSubmit.addEventListener('click', async () => {
+        const summary = document.getElementById('rs-summary').value.trim();
+        if (!summary) return toast('Ringkasan wajib diisi', 'error');
+        try { await api.post(`/api/service-reports/${data.service_report.id}/resubmit`, { summary }); toast('Laporan dikirim ulang'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    function renderTab() {
+      const box = document.getElementById('tab-content');
+      if (!box) return;
+      if (activeTab === 'checklist') box.innerHTML = checklistTab();
+      else if (activeTab === 'diagnosis') box.innerHTML = diagnosisTab();
+      else if (activeTab === 'parts') box.innerHTML = partsTab();
+      else if (activeTab === 'photos') box.innerHTML = photosTab();
+      else box.innerHTML = completeTab();
+      refreshIcons();
+      bindLightbox(box);
+      bindTabEvents();
+    }
+
+    function bindTabEvents() {
+      // checklist buttons
+      document.querySelectorAll('.chk-btn').forEach((b) => b.addEventListener('click', async () => {
+        const itemId = b.dataset.item;
+        const result = b.dataset.result;
+        const noteInput = document.querySelector(`[data-note="${itemId}"]`);
+        b.closest('.flex').querySelectorAll('.chk-btn').forEach((x) => { x.className = 'chk-btn flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white border border-slate-200 text-slate-400'; });
+        const cls = { PASS: 'bg-emerald-600', FAIL: 'bg-red-600', NA: 'bg-slate-500' }[result];
+        b.className = `chk-btn flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${cls} text-white`;
+        if (noteInput) noteInput.classList.toggle('hidden', result !== 'FAIL');
+        try {
+          const res = await api.post(`/api/work-orders/${data.work_order.id}/checklist`, { items: [{ item_id: itemId, result, note: noteInput ? noteInput.value : '' }] });
+          data.checklist = res.checklist;
+          const bar = document.querySelector('.card .h-2 .bg-blue-500');
+          if (bar && data.checklist.total_items) {
+            const pct = Math.round(data.checklist.answered_items / data.checklist.total_items * 100);
+            bar.style.width = pct + '%';
+          }
+        } catch (e) { toast(e.message, 'error'); }
+      }));
+      document.querySelectorAll('[data-note]').forEach((inp) => inp.addEventListener('change', async () => {
+        const itemId = inp.dataset.note;
+        const item = data.checklist.sections.flatMap((s) => s.items).find((i) => i.id === itemId);
+        if (!item || !item.result) return;
+        try { await api.post(`/api/work-orders/${data.work_order.id}/checklist`, { items: [{ item_id: itemId, result: item.result, note: inp.value }] }); } catch {}
+      }));
+
+      // diagnosis
+      const dgSave = document.getElementById('dg-save');
+      if (dgSave) dgSave.addEventListener('click', async () => {
+        const findings = document.getElementById('dg-findings').value.trim();
+        if (!findings) return toast('Temuan wajib diisi', 'error');
+        try {
+          await api.post(`/api/work-orders/${data.work_order.id}/diagnosis`, {
+            findings,
+            root_cause: document.getElementById('dg-root').value.trim(),
+            recommendation: document.getElementById('dg-recom').value.trim()
+          });
+          toast('Diagnosis disimpan');
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+      const wpAdd = document.getElementById('wp-add');
+      if (wpAdd) wpAdd.addEventListener('click', async () => {
+        const inp = document.getElementById('wp-input');
+        if (!inp.value.trim()) return;
+        try { await api.post(`/api/work-orders/${data.work_order.id}/work-performed`, { description: inp.value.trim() }); inp.value = ''; load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+
+      // parts
+      const ptAdd = document.getElementById('pt-add');
+      if (ptAdd) ptAdd.addEventListener('click', partsModal);
+      document.querySelectorAll('[data-pt-del]').forEach((b) => b.addEventListener('click', async () => {
+        const ok = await confirmDialog({ title: 'Hapus Part', message: 'Batalkan penggunaan part ini? Stok akan dikembalikan.', confirmLabel: 'Hapus', danger: true });
+        if (!ok) return;
+        try { await api.del(`/api/work-orders/${data.work_order.id}/parts/${b.dataset.ptDel}`); toast('Part dihapus'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      }));
+
+      // photos
+      document.querySelectorAll('[data-upload]').forEach((b) => b.addEventListener('click', () => {
+        const fileInput = document.getElementById('photo-file');
+        fileInput.dataset.kind = b.dataset.upload;
+        fileInput.value = '';
+        fileInput.click();
+      }));
+      const fileInput = document.getElementById('photo-file');
+      if (fileInput) fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const kind = fileInput.dataset.kind;
+        toast('Memproses foto...', 'info');
+        try {
+          const dataUrl = await fileToDataUrl(file);
+          await api.post('/api/files', { dataUrl, kind, work_order_id: data.work_order.id, caption: kind === 'before' ? 'Kondisi sebelum perbaikan' : 'Kondisi setelah perbaikan', file_name: file.name });
+          toast('Foto berhasil diupload');
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+
+      // complete
+      const cmSubmit = document.getElementById('cm-submit');
+      if (cmSubmit) cmSubmit.addEventListener('click', async () => {
+        const summary = document.getElementById('cm-summary').value.trim();
+        if (!summary) return toast('Ringkasan laporan wajib diisi', 'error');
+        const ok = await confirmDialog({ title: 'Selesaikan Pekerjaan', message: 'Pekerjaan akan ditandai selesai dan laporan dikirim ke admin untuk approval. Pastikan semua data sudah benar.', confirmLabel: 'Ya, selesaikan' });
+        if (!ok) return;
+        cmSubmit.disabled = true;
+        try {
+          await api.post(`/api/work-orders/${data.work_order.id}/complete`, { summary, technician_note: document.getElementById('cm-note').value.trim() });
+          toast('Pekerjaan selesai, laporan terkirim');
+          load();
+        } catch (e) { toast(e.message, 'error'); cmSubmit.disabled = false; }
+      });
+    }
+
+    async function partsModal() {
+      try {
+        const partsData = await api.get('/api/parts');
+        const available = partsData.parts.filter((p) => p.stock > 0 && p.status === 'ACTIVE');
+        const m = openModal({
+          title: 'Tambah Spare Part',
+          size: 'md',
+          body: `
+            <div class="space-y-4">
+              <div>
+                <label class="label">Part</label>
+                <select id="mp-part" class="input">
+                  <option value="">Pilih part...</option>
+                  ${available.map((p) => `<option value="${p.id}">${esc(p.name)} — stok ${p.stock} ${esc(p.unit)} — ${fmtIDR(p.price)}</option>`).join('')}
+                </select>
+              </div>
+              <div><label class="label">Jumlah</label><input id="mp-qty" type="number" min="1" value="1" class="input"></div>
+              <div><label class="label">Catatan</label><input id="mp-note" class="input" placeholder="cth: ganti bearing handpiece"></div>
+            </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="mp-submit" class="btn-primary">Tambahkan</button>`
+        });
+        m.el.querySelector('#mp-submit').addEventListener('click', async () => {
+          const partId = m.el.querySelector('#mp-part').value;
+          if (!partId) return toast('Pilih part', 'error');
+          try {
+            await api.post(`/api/work-orders/${data.work_order.id}/parts`, {
+              part_id: partId,
+              qty: Number(m.el.querySelector('#mp-qty').value) || 1,
+              note: m.el.querySelector('#mp-note').value.trim()
+            });
+            m.close();
+            toast('Part ditambahkan');
+            load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    if (woId) load();
+    else content.innerHTML = errorState('Work order ID tidak ditemukan');
+  </script>
+</body>
+</html>

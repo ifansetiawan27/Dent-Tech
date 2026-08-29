@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment Saya — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800 mb-4">Equipment Saya</h1>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, openModal, refreshIcons, EQUIPMENT_STATUS } from '/components/ui.js';
+    import { fmtDate, esc } from '/utils/format.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('equipment', 'customer');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    let list = [];
+
+    async function load() {
+      content.innerHTML = spinner('Memuat equipment...');
+      try {
+        const d = await api.get('/api/equipment');
+        list = d.equipment;
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('cog', 'Belum ada equipment', 'Equipment Anda akan didaftarkan oleh admin.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      content.innerHTML = `<div class="space-y-3">
+        ${list.map((e) => `
+          <div class="card p-4">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-11 h-11 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0"><i data-lucide="cog" class="w-5 h-5"></i></div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-slate-800 truncate">${esc(e.name)}</p>
+                  <p class="text-xs text-slate-400 truncate">${esc(e.category || '')}${e.model ? ' · ' + esc(e.model) : ''}</p>
+                </div>
+              </div>
+              ${statusBadge(e.status, EQUIPMENT_STATUS)}
+            </div>
+            <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs text-slate-500">
+              <p><span class="text-slate-400">Serial:</span> ${esc(e.serial_number || '-')}</p>
+              <p><span class="text-slate-400">Lokasi:</span> ${esc(e.location || '-')}</p>
+              <p><span class="text-slate-400">Garansi:</span> ${e.warranty_until ? fmtDate(e.warranty_until) : '-'}</p>
+              <p><span class="text-slate-400">Service:</span> ${e.service_count}x</p>
+            </div>
+            <div class="flex gap-2 mt-3">
+              <button data-history="${e.id}" class="btn-secondary text-sm flex-1 !py-2"><i data-lucide="history" class="w-4 h-4"></i> Riwayat Service</button>
+              <a href="/customer/request.html" class="btn-primary text-sm flex-1 !py-2"><i data-lucide="wrench" class="w-4 h-4"></i> Request Service</a>
+            </div>
+          </div>`).join('')}
+      </div>`;
+      refreshIcons();
+      content.querySelectorAll('[data-history]').forEach((b) => b.addEventListener('click', () => historyModal(b.dataset.history)));
+    }
+
+    async function historyModal(id) {
+      try {
+        const { equipment: e } = await api.get('/api/equipment/' + id);
+        openModal({
+          title: `Riwayat Service — ${esc(e.name)}`,
+          size: 'md',
+          body: e.service_history.length ? `
+            <div class="space-y-2.5">
+              ${e.service_history.map((h) => `
+                <div class="p-3 rounded-xl bg-slate-50">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-slate-700">${h.number}</p>
+                    ${statusBadge(h.status)}
+                  </div>
+                  <p class="text-sm text-slate-500 mt-1">${esc(h.problem)}</p>
+                  <p class="text-xs text-slate-400 mt-1">${esc(h.service_type || '')} · ${fmtDate(h.created_at)}${h.technician_name ? ' · ' + esc(h.technician_name) : ''}</p>
+                </div>`).join('')}
+            </div>` : '<p class="text-sm text-slate-400 text-center py-6">Belum ada riwayat service untuk unit ini.</p>'
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    load();
+  </script>
+</body>
+</html>

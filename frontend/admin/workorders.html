@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Orders — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">Work Orders</h1>
+        <p class="text-sm text-slate-500 mt-0.5">Monitor pekerjaan teknisi dan approval laporan service</p>
+      </div>
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <select id="f-status" class="input">
+          <option value="">Semua Status</option>
+          <option>ASSIGNED</option><option>STARTED</option><option>COMPLETED</option><option>APPROVED</option><option>CANCELLED</option>
+        </select>
+        <select id="f-tech" class="input"><option value="">Semua Teknisi</option></select>
+        <button id="btn-filter" class="btn-secondary"><i data-lucide="search" class="w-4 h-4"></i> Terapkan Filter</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, table, refreshIcons, WO_STATUS, PRIORITY } from '/components/ui.js';
+    import { fmtDate, esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('workorders');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+
+    (async () => {
+      try {
+        const techs = await api.get('/api/users?role=technician');
+        document.getElementById('f-tech').innerHTML += techs.users.map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join('');
+      } catch {}
+    })();
+
+    async function load() {
+      content.innerHTML = spinner('Memuat work orders...');
+      try {
+        const q = new URLSearchParams();
+        const st = document.getElementById('f-status').value;
+        const tech = document.getElementById('f-tech').value;
+        if (st) q.set('status', st);
+        if (tech) q.set('technician_id', tech);
+        const data = await api.get('/api/work-orders?' + q.toString());
+        render(data.work_orders);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('clipboard-list', 'Tidak ada work order', 'Belum ada work order yang cocok dengan filter.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = list.map((w) => `
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/admin/workorder-detail.html?id=${w.id}'">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-700">${w.number}</p>
+            <p class="text-xs text-slate-400">${w.ticket_number}</p>
+          </td>
+          <td class="px-4 py-3">
+            <p class="text-slate-700 max-w-sm truncate">${esc(w.problem)}</p>
+            <p class="text-xs text-slate-400 mt-0.5">${esc(w.service_type || '-')}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600">${esc(w.customer_name)}</td>
+          <td class="px-4 py-3 text-slate-600">${esc(w.technician_name || '-')}</td>
+          <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${fmtDate(w.scheduled_date)}<br><span class="text-xs text-slate-400">${esc(w.time_window || '')}</span></td>
+          <td class="px-4 py-3">${statusBadge(w.priority, PRIORITY)}</td>
+          <td class="px-4 py-3">${statusBadge(w.status, WO_STATUS)}</td>
+        </tr>`);
+      content.innerHTML = table(['Work Order', 'Masalah', 'Customer', 'Teknisi', 'Jadwal', 'Prioritas', 'Status'], rows);
+      refreshIcons();
+    }
+
+    document.getElementById('btn-filter').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

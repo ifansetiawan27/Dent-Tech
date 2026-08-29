@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Work Order — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <a href="/admin/workorders.html" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"><i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali ke Work Orders</a>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, openModal, toast, refreshIcons, WO_STATUS, PRIORITY, REPORT_STATUS, photoGrid, bindLightbox } from '/components/ui.js';
+    import { fmtDate, fmtDateTime, fmtIDR, esc } from '/utils/format.js';
+    import { downloadChecklist } from '/utils/checklist-doc.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('workorders');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const woId = new URLSearchParams(location.search).get('id');
+    let data = null;
+
+    const RESULT_STYLE = { PASS: 'bg-emerald-50 text-emerald-700', FAIL: 'bg-red-50 text-red-700', NA: 'bg-slate-100 text-slate-500' };
+
+    async function load() {
+      content.innerHTML = spinner('Memuat work order...');
+      try {
+        data = await api.get('/api/work-orders/' + woId);
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      const { work_order: wo, checklist, diagnosis, work_performed, part_usages, parts_total, photos, service_report } = data;
+      const before = photos.filter((p) => p.kind === 'before' || p.kind === 'request');
+      const after = photos.filter((p) => p.kind === 'after');
+
+      content.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
+          <div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <h1 class="text-2xl font-bold text-slate-800">${wo.number}</h1>
+              ${statusBadge(wo.status, WO_STATUS)}
+              ${statusBadge(wo.priority, PRIORITY)}
+            </div>
+            <p class="text-slate-600 mt-1">${esc(wo.problem)}</p>
+            <p class="text-xs text-slate-400 mt-1"><a class="text-blue-600 hover:underline" href="/admin/ticket-detail.html?id=${wo.ticket_id}">${wo.ticket_number}</a> · ${esc(wo.service_type || '')}</p>
+          </div>
+          <div class="flex gap-2 flex-wrap justify-end">
+            ${checklist ? `<button id="btn-dl-checklist" class="btn-secondary"><i data-lucide="file-down" class="w-4 h-4"></i> Download Checklist (PDF)</button>` : ''}
+            ${['COMPLETED', 'APPROVED'].includes(wo.status) ? `<button id="btn-proforma" class="btn-secondary"><i data-lucide="file-text" class="w-4 h-4"></i> Buat Proforma Invoice</button>` : ''}
+            ${['ASSIGNED', 'STARTED'].includes(wo.status) ? `<button id="btn-resched" class="btn-secondary"><i data-lucide="calendar-clock" class="w-4 h-4"></i> Reschedule</button>` : ''}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="lg:col-span-2 space-y-4">
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-4">Checklist Service ${checklist ? `<span class="text-xs font-normal text-slate-400">— ${esc(checklist.template.name)} v${esc(checklist.template.version)} · ${checklist.answered_items}/${checklist.total_items} terisi</span>` : ''}</h3>
+              ${checklist ? checklist.sections.map((sec) => `
+                <div class="mb-4 last:mb-0">
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">${esc(sec.section)}</p>
+                  <div class="space-y-1.5">
+                    ${sec.items.map((it) => `
+                      <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-slate-50">
+                        <p class="text-sm text-slate-600 flex-1">${esc(it.label)}${it.required ? ' <span class="text-red-400">*</span>' : ''}</p>
+                        ${it.result ? `<span class="text-xs font-bold px-2 py-0.5 rounded ${RESULT_STYLE[it.result]}">${it.result}</span>` : '<span class="text-xs text-slate-300">Belum diisi</span>'}
+                      </div>
+                      ${it.note ? `<p class="text-xs text-slate-500 ml-3 -mt-0.5 mb-1">${esc(it.note)}</p>` : ''}`).join('')}
+                  </div>
+                </div>`).join('') : '<p class="text-sm text-slate-400">Tanpa checklist template</p>'}
+            </div>
+
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Diagnosis</h3>
+              ${diagnosis ? `
+                <div class="space-y-3 text-sm">
+                  <div><p class="text-xs text-slate-400 mb-0.5">Temuan</p><p class="text-slate-700 whitespace-pre-wrap">${esc(diagnosis.findings)}</p></div>
+                  ${diagnosis.root_cause ? `<div><p class="text-xs text-slate-400 mb-0.5">Akar Masalah</p><p class="text-slate-700 whitespace-pre-wrap">${esc(diagnosis.root_cause)}</p></div>` : ''}
+                  ${diagnosis.recommendation ? `<div><p class="text-xs text-slate-400 mb-0.5">Rekomendasi</p><p class="text-slate-700 whitespace-pre-wrap">${esc(diagnosis.recommendation)}</p></div>` : ''}
+                </div>` : '<p class="text-sm text-slate-400">Belum ada diagnosis</p>'}
+            </div>
+
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Pekerjaan Dilakukan</h3>
+              ${work_performed.length ? `<ul class="space-y-2">${work_performed.map((w) => `<li class="flex gap-2 text-sm text-slate-700"><i data-lucide="check" class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0"></i><span>${esc(w.description)}</span></li>`).join('')}</ul>` : '<p class="text-sm text-slate-400">Belum dicatat</p>'}
+            </div>
+
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Spare Parts Digunakan</h3>
+              ${part_usages.length ? `
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-sm">
+                    <thead><tr class="text-left text-xs uppercase text-slate-400 border-b border-slate-100">
+                      <th class="py-2 pr-4">Part</th><th class="py-2 pr-4">Qty</th><th class="py-2 pr-4">Harga</th><th class="py-2 text-right">Subtotal</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-50">
+                      ${part_usages.map((p) => `<tr><td class="py-2 pr-4 text-slate-700">${esc(p.part_name)}</td><td class="py-2 pr-4 text-slate-600">${p.qty} ${esc(p.unit)}</td><td class="py-2 pr-4 text-slate-600">${fmtIDR(p.unit_price)}</td><td class="py-2 text-right font-medium text-slate-700">${fmtIDR(p.qty * p.unit_price)}</td></tr>`).join('')}
+                    </tbody>
+                    <tfoot><tr><td colspan="3" class="py-2 text-right text-slate-500 font-medium">Total Part</td><td class="py-2 text-right font-bold text-slate-800">${fmtIDR(parts_total)}</td></tr></tfoot>
+                  </table>
+                </div>` : '<p class="text-sm text-slate-400">Tidak ada part digunakan</p>'}
+            </div>
+
+            ${before.length ? `<div class="card p-5"><h3 class="font-semibold text-slate-800 mb-3">Foto Sebelum / Request</h3>${photoGrid(before)}</div>` : ''}
+            ${after.length ? `<div class="card p-5"><h3 class="font-semibold text-slate-800 mb-3">Foto Sesudah</h3>${photoGrid(after)}</div>` : ''}
+          </div>
+
+          <div class="space-y-4">
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Informasi Pekerjaan</h3>
+              <div class="space-y-3 text-sm">
+                <div class="flex justify-between gap-2"><span class="text-slate-400">Customer</span><span class="font-medium text-slate-700 text-right">${esc(wo.customer_name)}</span></div>
+                <div class="flex justify-between gap-2"><span class="text-slate-400">Lokasi</span><span class="font-medium text-slate-700 text-right">${esc([wo.customer_address, wo.customer_city].filter(Boolean).join(', ') || '-')}</span></div>
+                <div class="flex justify-between gap-2"><span class="text-slate-400">Equipment</span><span class="font-medium text-slate-700 text-right">${esc(wo.equipment_name || '-')}</span></div>
+                <div class="flex justify-between gap-2"><span class="text-slate-400">Teknisi</span><span class="font-medium text-slate-700 text-right">${esc(wo.technician_name || '-')}</span></div>
+                <div class="flex justify-between gap-2"><span class="text-slate-400">Jadwal</span><span class="font-medium text-slate-700 text-right">${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</span></div>
+                ${wo.started_at ? `<div class="flex justify-between gap-2"><span class="text-slate-400">Dimulai</span><span class="font-medium text-slate-700">${fmtDateTime(wo.started_at)}</span></div>` : ''}
+                ${wo.completed_at ? `<div class="flex justify-between gap-2"><span class="text-slate-400">Selesai</span><span class="font-medium text-slate-700">${fmtDateTime(wo.completed_at)}</span></div>` : ''}
+              </div>
+            </div>
+
+            ${service_report ? `
+            <div class="card p-5 border-2 ${service_report.status === 'SUBMITTED' ? 'border-amber-300' : 'border-slate-200'}">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-slate-800">Service Report</h3>
+                ${statusBadge(service_report.status, REPORT_STATUS)}
+              </div>
+              <p class="text-xs text-slate-400">${service_report.number} · v${service_report.version} · ${fmtDateTime(service_report.created_at)}</p>
+              <div class="mt-3 space-y-2 text-sm">
+                <div><p class="text-xs text-slate-400 mb-0.5">Ringkasan</p><p class="text-slate-700 whitespace-pre-wrap">${esc(service_report.summary || '-')}</p></div>
+                ${service_report.technician_note ? `<div><p class="text-xs text-slate-400 mb-0.5">Catatan Teknisi</p><p class="text-slate-600 whitespace-pre-wrap">${esc(service_report.technician_note)}</p></div>` : ''}
+                ${service_report.approved_at ? `<div><p class="text-xs text-slate-400 mb-0.5">Disetujui</p><p class="text-slate-700">${fmtDateTime(service_report.approved_at)}</p></div>` : ''}
+              </div>
+              ${service_report.status === 'SUBMITTED' ? `
+                <div class="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                  <div>
+                    <label class="label">Biaya Jasa (Rp)</label>
+                    <input id="ap-labor" type="number" min="0" class="input" value="500000" step="50000">
+                  </div>
+                  <div>
+                    <label class="label">Jatuh Tempo (hari)</label>
+                    <select id="ap-due" class="input"><option value="7">7 hari</option><option value="14" selected>14 hari</option><option value="30">30 hari</option></select>
+                  </div>
+                  <button id="btn-approve" class="btn-primary w-full"><i data-lucide="check-circle" class="w-4 h-4"></i> Setujui & Buat Invoice</button>
+                  <button id="btn-reject" class="btn-secondary w-full"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Minta Revisi</button>
+                </div>` : ''}
+            </div>` : ''}
+          </div>
+        </div>`;
+      refreshIcons();
+      bindLightbox(content);
+
+      const btnDlChecklist = document.getElementById('btn-dl-checklist');
+      if (btnDlChecklist) btnDlChecklist.addEventListener('click', async () => {
+        let company = {};
+        try { company = (await api.get('/api/auth/me')).settings || {}; } catch {}
+        downloadChecklist({
+          checklist, work_order: wo, ticket: { number: wo.ticket_number, problem: wo.problem },
+          customer: { name: wo.customer_name, address: wo.customer_address, city: wo.customer_city },
+          technician: { name: wo.technician_name }, diagnosis, company
+        });
+      });
+
+      const btnProforma = document.getElementById('btn-proforma');
+      if (btnProforma) btnProforma.addEventListener('click', async () => {
+        let settings = { default_labor: 500000 };
+        try { settings = await api.get('/api/invoice-settings'); } catch {}
+        const m = openModal({
+          title: 'Buat Proforma Invoice', size: 'sm',
+          body: `<div class="space-y-4">
+            <p class="text-sm text-slate-500">Proforma invoice untuk <b>${wo.number}</b> akan dikirim ke customer sebagai penagihan, dilampiri foto & checklist teknisi.</p>
+            <div><label class="label">Biaya Jasa (Rp)</label><input id="pf-labor" type="number" min="0" step="1000" class="input" value="${settings.default_labor || 500000}"></div>
+            <div><label class="label">Jatuh Tempo (hari)</label>
+              <select id="pf-due" class="input"><option value="7">7 hari</option><option value="14" selected>14 hari</option><option value="30">30 hari</option></select>
+            </div>
+          </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="pf-submit" class="btn-primary">Buat Proforma</button>`
+        });
+        m.el.querySelector('#pf-submit').addEventListener('click', async () => {
+          try {
+            const res = await api.post('/api/invoices/proforma', {
+              work_order_id: wo.id,
+              labor_cost: Number(m.el.querySelector('#pf-labor').value) || 0,
+              due_days: Number(m.el.querySelector('#pf-due').value) || 14
+            });
+            m.close(); toast(`Proforma ${res.number} dibuat`);
+            setTimeout(() => location.href = '/admin/invoice-detail.html?id=' + res.id, 500);
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      });
+
+      const btnResched = document.getElementById('btn-resched');
+      if (btnResched) btnResched.addEventListener('click', () => {
+        const m = openModal({
+          title: 'Reschedule Work Order', size: 'sm',
+          body: `<div class="space-y-4">
+            <div><label class="label">Tanggal Baru *</label><input id="rs-date" type="date" class="input" value="${wo.scheduled_date || ''}"></div>
+            <div><label class="label">Jendela Waktu</label>
+              <select id="rs-window" class="input">
+                <option value="">-</option>
+                ${['08:00 - 10:00', '09:00 - 12:00', '10:00 - 12:00', '13:00 - 15:00', '13:00 - 16:00', '15:00 - 17:00'].map((w) => `<option ${w === wo.time_window ? 'selected' : ''}>${w}</option>`).join('')}
+              </select></div>
+          </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="rs-submit" class="btn-primary">Simpan Jadwal</button>`
+        });
+        m.el.querySelector('#rs-submit').addEventListener('click', async () => {
+          const d = m.el.querySelector('#rs-date').value;
+          if (!d) return toast('Tanggal wajib diisi', 'error');
+          try {
+            await api.post(`/api/work-orders/${wo.id}/reschedule`, { scheduled_date: d, time_window: m.el.querySelector('#rs-window').value });
+            m.close(); toast('Jadwal diperbarui'); load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      });
+
+      const btnApprove = document.getElementById('btn-approve');
+      if (btnApprove) btnApprove.addEventListener('click', async () => {
+        const labor = Number(document.getElementById('ap-labor').value) || 0;
+        const due = Number(document.getElementById('ap-due').value) || 14;
+        btnApprove.disabled = true;
+        try {
+          const res = await api.post(`/api/service-reports/${service_report.id}/approve`, { labor_cost: labor, due_days: due });
+          toast(`Laporan disetujui — invoice ${res.invoice_number} dibuat`);
+          load();
+        } catch (e) { toast(e.message, 'error'); btnApprove.disabled = false; }
+      });
+
+      const btnReject = document.getElementById('btn-reject');
+      if (btnReject) btnReject.addEventListener('click', () => {
+        const m = openModal({
+          title: 'Minta Revisi Laporan', size: 'sm',
+          body: `<label class="label">Catatan revisi untuk teknisi</label><textarea id="rj-note" class="input" placeholder="Jelaskan apa yang perlu diperbaiki..."></textarea>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="rj-submit" class="btn-danger">Kirim Revisi</button>`
+        });
+        m.el.querySelector('#rj-submit').addEventListener('click', async () => {
+          try {
+            await api.post(`/api/service-reports/${service_report.id}/reject`, { note: m.el.querySelector('#rj-note').value.trim() });
+            m.close(); toast('Revisi dikirim ke teknisi'); load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      });
+
+      (async () => {
+        try {
+          const s = await api.get('/api/invoice-settings');
+          const el = document.getElementById('ap-labor');
+          if (el && s.default_labor) el.value = s.default_labor;
+        } catch {}
+      })();
+    }
+
+    if (woId) load();
+    else content.innerHTML = errorState('Work order ID tidak ditemukan');
+  </script>
+</body>
+</html>

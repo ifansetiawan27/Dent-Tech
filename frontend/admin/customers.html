@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customers — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Customers</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Kelola data customer dan kontak</p>
+        </div>
+        <button id="btn-new" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Tambah Customer</button>
+      </div>
+      <div class="card p-4 mb-4">
+        <input id="f-search" class="input" placeholder="Cari nama / kode / kota...">
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, table, openModal, confirmDialog, toast, refreshIcons } from '/components/ui.js';
+    import { esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('customers');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+
+    async function load() {
+      content.innerHTML = spinner('Memuat customers...');
+      try {
+        const s = document.getElementById('f-search').value.trim();
+        const data = await api.get('/api/customers' + (s ? '?search=' + encodeURIComponent(s) : ''));
+        render(data.customers);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('building-2', 'Belum ada customer', 'Tambahkan customer pertama Anda.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = list.map((c) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-700">${esc(c.name)}</p>
+            <p class="text-xs text-slate-400">${c.code} · ${esc(c.industry || '-')}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600">
+            <p>${esc(c.phone || '-')}</p>
+            <p class="text-xs text-slate-400">${esc(c.email || '')}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600">${esc([c.address, c.city].filter(Boolean).join(', ') || '-')}</td>
+          <td class="px-4 py-3 text-center text-slate-600">${c.equipment_count}</td>
+          <td class="px-4 py-3 text-center">${c.open_tickets > 0 ? `<span class="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">${c.open_tickets}</span>` : '<span class="text-slate-300">0</span>'}</td>
+          <td class="px-4 py-3">
+            <div class="flex gap-1 justify-end">
+              <button class="btn-ghost !p-2" data-edit="${c.id}" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+              <button class="btn-ghost !p-2 hover:!bg-red-50 hover:text-red-600" data-del="${c.id}" data-name="${esc(c.name)}" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>`);
+      content.innerHTML = table(['Customer', 'Kontak', 'Alamat', 'Equipment', 'Ticket Aktif', ''], rows);
+      refreshIcons();
+      content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editModal(list.find((x) => x.id === b.dataset.edit))));
+      content.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+        const ok = await confirmDialog({ title: 'Hapus Customer', message: `Hapus customer "${b.dataset.name}"? Customer dengan riwayat ticket tidak dapat dihapus.`, confirmLabel: 'Hapus', danger: true });
+        if (!ok) return;
+        try { await api.del('/api/customers/' + b.dataset.del); toast('Customer dihapus'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      }));
+    }
+
+    function contactRowsHtml(contacts = []) {
+      return contacts.map((ct, i) => contactRowHtml(ct, i)).join('');
+    }
+    function contactRowHtml(ct = {}, i = 0) {
+      return `<div class="contact-row grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 p-3 rounded-xl bg-slate-50" data-idx="${i}">
+        <input class="input ct-name" placeholder="Nama *" value="${esc(ct.name || '')}">
+        <input class="input ct-role" placeholder="Jabatan" value="${esc(ct.role || '')}">
+        <input class="input ct-phone" placeholder="Telepon" value="${esc(ct.phone || '')}">
+        <button type="button" class="btn-ghost !p-2 text-red-500 ct-remove self-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>`;
+    }
+
+    function bindContactRows(container) {
+      container.querySelectorAll('.ct-remove').forEach((b) => {
+        if (b.dataset.bound) return;
+        b.dataset.bound = '1';
+        b.addEventListener('click', () => b.closest('.contact-row').remove());
+      });
+    }
+
+    function collectContacts(el) {
+      return [...el.querySelectorAll('.contact-row')].map((row) => ({
+        name: row.querySelector('.ct-name').value.trim(),
+        role: row.querySelector('.ct-role').value.trim(),
+        phone: row.querySelector('.ct-phone').value.trim()
+      })).filter((x) => x.name);
+    }
+
+    function formModal(existing) {
+      const isEdit = !!existing;
+      const m = openModal({
+        title: isEdit ? `Edit Customer — ${existing.code}` : 'Tambah Customer',
+        size: 'lg',
+        body: `
+          <div class="space-y-4">
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Nama Customer *</label><input id="c-name" class="input" value="${esc(existing?.name || '')}"></div>
+              <div><label class="label">Industri</label><input id="c-industry" class="input" value="${esc(existing?.industry || '')}" placeholder="cth: Klinik Gigi"></div>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Telepon</label><input id="c-phone" class="input" value="${esc(existing?.phone || '')}"></div>
+              <div><label class="label">Email</label><input id="c-email" class="input" value="${esc(existing?.email || '')}"></div>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Alamat</label><input id="c-address" class="input" value="${esc(existing?.address || '')}"></div>
+              <div><label class="label">Kota</label><input id="c-city" class="input" value="${esc(existing?.city || '')}"></div>
+            </div>
+            ${isEdit ? `<div><label class="label">Status</label><select id="c-status" class="input"><option ${existing.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option ${existing.status === 'INACTIVE' ? 'selected' : ''}>INACTIVE</option></select></div>` : ''}
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="label !mb-0">Kontak</label>
+                <button type="button" id="c-add-contact" class="text-sm text-blue-600 hover:underline">+ Tambah Kontak</button>
+              </div>
+              <div id="c-contacts" class="space-y-2">${contactRowsHtml(existing?.contacts || [])}</div>
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="c-submit" class="btn-primary">${isEdit ? 'Simpan Perubahan' : 'Tambah Customer'}</button>`
+      });
+      const contactsBox = m.el.querySelector('#c-contacts');
+      bindContactRows(contactsBox);
+      m.el.querySelector('#c-add-contact').addEventListener('click', () => {
+        contactsBox.insertAdjacentHTML('beforeend', contactRowHtml({}, contactsBox.children.length));
+        bindContactRows(contactsBox);
+        refreshIcons();
+      });
+      m.el.querySelector('#c-submit').addEventListener('click', async () => {
+        const body = {
+          name: m.el.querySelector('#c-name').value.trim(),
+          industry: m.el.querySelector('#c-industry').value.trim(),
+          phone: m.el.querySelector('#c-phone').value.trim(),
+          email: m.el.querySelector('#c-email').value.trim(),
+          address: m.el.querySelector('#c-address').value.trim(),
+          city: m.el.querySelector('#c-city').value.trim(),
+          contacts: collectContacts(m.el)
+        };
+        if (!body.name) return toast('Nama customer wajib diisi', 'error');
+        try {
+          if (isEdit) {
+            body.status = m.el.querySelector('#c-status').value;
+            await api.put('/api/customers/' + existing.id, body);
+            toast('Customer diperbarui');
+          } else {
+            await api.post('/api/customers', body);
+            toast('Customer ditambahkan');
+          }
+          m.close();
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+      refreshIcons();
+    }
+
+    function editModal(c) { formModal(c); }
+
+    document.getElementById('btn-new').addEventListener('click', () => formModal(null));
+    let searchTimer = null;
+    document.getElementById('f-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(load, 350); });
+    load();
+  </script>
+</body>
+</html>

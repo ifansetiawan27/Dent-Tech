@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request Service — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800">Request Service</h1>
+      <p class="text-sm text-slate-500 mb-5">Lengkapi form di bawah untuk mengajukan service</p>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth, getUser } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, toast, refreshIcons, fileToDataUrl } from '/components/ui.js';
+    import { esc, todayStr } from '/utils/format.js';
+    import { equipmentTypeOptions } from '/utils/constants.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('request', 'customer');
+    lucide.createIcons();
+
+    const user = getUser();
+    const content = document.getElementById('content');
+    content.innerHTML = spinner('Menyiapkan form request...');
+    let pendingPhoto = null;
+
+    try {
+      let defaultAddress = '';
+      try {
+        const { customer } = await api.get('/api/customers/' + user.customer_id);
+        defaultAddress = [customer.address, customer.city].filter(Boolean).join(', ');
+      } catch {}
+      content.innerHTML = `
+        <form id="req-form" class="card p-5 space-y-4" novalidate>
+          <div>
+            <label class="label">Equipment *</label>
+            <select id="rq-eqtype" class="input" required>
+              <option value="">Pilih jenis equipment...</option>
+              ${equipmentTypeOptions()}
+            </select>
+          </div>
+          <div>
+            <label class="label">Merk / Tipe</label>
+            <input id="rq-brand" class="input" placeholder="cth: GNATUS, Durr Dental, W&H...">
+          </div>
+          <div>
+            <label class="label">Jenis Service *</label>
+            <select id="rq-type" class="input" required>
+              <option value="">Pilih jenis service...</option>
+              <option>Repair</option>
+              <option>Preventive Maintenance</option>
+              <option>Installation</option>
+              <option>Inspection</option>
+              <option>Emergency</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Prioritas</label>
+            <select id="rq-priority" class="input">
+              <option value="LOW">Low — tidak mendesak</option>
+              <option value="MEDIUM" selected>Medium — normal</option>
+              <option value="HIGH">High — mengganggu operasional</option>
+              <option value="URGENT">Urgent — darurat / unit mati total</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Masalah *</label>
+            <input id="rq-problem" class="input" placeholder="cth: Unit tidak mau menyala" required>
+          </div>
+          <div>
+            <label class="label">Deskripsi</label>
+            <textarea id="rq-desc" class="input" placeholder="Jelaskan detail masalah, gejala, kapan mulai terjadi..."></textarea>
+          </div>
+          <div>
+            <label class="label">Alamat Service *</label>
+            <textarea id="rq-address" class="input !min-h-[4rem]" placeholder="Alamat lokasi service / kunjungan teknisi" required>${esc(defaultAddress)}</textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="label">Tanggal Preferensi</label><input id="rq-date" type="date" class="input" min="${todayStr()}"></div>
+            <div>
+              <label class="label">Waktu Preferensi</label>
+              <select id="rq-time" class="input">
+                <option value="">-</option>
+                <option>08:00 - 10:00</option><option>09:00 - 12:00</option><option>10:00 - 12:00</option>
+                <option>13:00 - 15:00</option><option>13:00 - 16:00</option><option>15:00 - 17:00</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="label">Nama Kontak</label><input id="rq-contact" class="input" value="${esc(user.name)}"></div>
+            <div><label class="label">Telepon Kontak</label><input id="rq-phone" class="input" value="${esc(user.phone || '')}"></div>
+          </div>
+          <div>
+            <label class="label">Foto Masalah (opsional)</label>
+            <div id="rq-photo-box" class="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors">
+              <i data-lucide="image-plus" class="w-6 h-6 text-slate-300 mx-auto"></i>
+              <p class="text-sm text-slate-400 mt-1">Ketuk untuk upload foto</p>
+            </div>
+            <input type="file" id="rq-photo-file" accept="image/*" class="hidden">
+            <div id="rq-photo-preview" class="hidden mt-2 relative">
+              <img id="rq-photo-img" class="w-full h-40 object-cover rounded-xl border border-slate-200" alt="preview">
+              <button type="button" id="rq-photo-remove" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/70 text-white flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+          <button type="submit" id="rq-submit" class="btn-primary w-full !py-3"><i data-lucide="send" class="w-4 h-4"></i> Kirim Request</button>
+        </form>`;
+      refreshIcons();
+
+      const photoBox = document.getElementById('rq-photo-box');
+      const photoFile = document.getElementById('rq-photo-file');
+      const preview = document.getElementById('rq-photo-preview');
+      photoBox.addEventListener('click', () => photoFile.click());
+      photoFile.addEventListener('change', async () => {
+        const f = photoFile.files[0];
+        if (!f) return;
+        try {
+          pendingPhoto = await fileToDataUrl(f);
+          document.getElementById('rq-photo-img').src = pendingPhoto;
+          preview.classList.remove('hidden');
+          photoBox.classList.add('hidden');
+          refreshIcons();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+      document.getElementById('rq-photo-remove').addEventListener('click', () => {
+        pendingPhoto = null;
+        photoFile.value = '';
+        preview.classList.add('hidden');
+        photoBox.classList.remove('hidden');
+      });
+
+      document.getElementById('req-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          equipment_type: document.getElementById('rq-eqtype').value,
+          equipment_brand: document.getElementById('rq-brand').value.trim(),
+          service_address: document.getElementById('rq-address').value.trim(),
+          service_type: document.getElementById('rq-type').value,
+          priority: document.getElementById('rq-priority').value,
+          problem: document.getElementById('rq-problem').value.trim(),
+          description: document.getElementById('rq-desc').value.trim(),
+          preferred_date: document.getElementById('rq-date').value,
+          preferred_time: document.getElementById('rq-time').value,
+          contact_name: document.getElementById('rq-contact').value.trim(),
+          contact_phone: document.getElementById('rq-phone').value.trim()
+        };
+        if (!body.equipment_type) return toast('Pilih jenis equipment', 'error');
+        if (!body.service_type) return toast('Pilih jenis service', 'error');
+        if (!body.problem) return toast('Deskripsi masalah wajib diisi', 'error');
+        if (!body.service_address) return toast('Alamat service wajib diisi', 'error');
+        const btn = document.getElementById('rq-submit');
+        btn.disabled = true;
+        try {
+          const res = await api.post('/api/tickets', body);
+          if (pendingPhoto) {
+            try { await api.post('/api/files', { dataUrl: pendingPhoto, kind: 'request', ticket_id: res.id, caption: 'Foto masalah dari customer' }); } catch {}
+          }
+          toast(`Request ${res.number} berhasil dikirim`);
+          setTimeout(() => location.href = '/customer/ticket-detail.html?id=' + res.id, 600);
+        } catch (err) {
+          toast(err.message, 'error');
+          btn.disabled = false;
+        }
+      });
+    } catch (e) {
+      content.innerHTML = errorState(e.message);
+      refreshIcons();
+    }
+  </script>
+</body>
+</html>

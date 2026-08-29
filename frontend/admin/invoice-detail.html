@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Invoice — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="no-print">
+        <a href="/admin/invoices.html" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"><i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali ke Invoices</a>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, openModal, toast, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
+    import { fmtIDR, fmtDate, fmtDateTime, esc } from '/utils/format.js';
+    import { downloadInvoice } from '/utils/invoice-doc.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('invoices');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const invId = new URLSearchParams(location.search).get('id');
+    let data = null;
+
+    async function load() {
+      content.innerHTML = spinner('Memuat invoice...');
+      try {
+        data = await api.get('/api/invoices/' + invId);
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      const { invoice: inv, totals, items, customer, payments, work_order, ticket } = data;
+      content.innerHTML = `
+        <div class="no-print flex flex-wrap justify-end gap-2 mb-4">
+          ${inv.status !== 'PAID' ? `<button id="btn-edit" class="btn-secondary"><i data-lucide="pencil" class="w-4 h-4"></i> Edit Biaya</button>` : ''}
+          ${inv.status !== 'PAID' ? `<button id="btn-pay" class="btn-primary"><i data-lucide="credit-card" class="w-4 h-4"></i> Tandai Dibayar</button>` : ''}
+          <button id="btn-download" class="btn-secondary"><i data-lucide="download" class="w-4 h-4"></i> Download Invoice (PDF)</button>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="bg-slate-900 text-white px-8 py-6 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><i data-lucide="wrench" class="w-4 h-4 text-white"></i></div>
+                <p class="font-bold">Dent Tech</p>
+              </div>
+              <p class="text-slate-400 text-xs">Service Management System</p>
+            </div>
+            <div class="text-right">
+              <p class="text-xs uppercase tracking-widest text-slate-400">Invoice</p>
+              <p class="text-xl font-bold">${inv.number}</p>
+              <div class="mt-1 flex items-center gap-2 flex-wrap">
+                ${statusBadge(inv.status, INVOICE_STATUS)}
+                ${inv.type === 'PROFORMA' ? '<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset bg-violet-50 text-violet-700 ring-violet-200">Proforma Invoice</span>' : ''}
+              </div>
+            </div>
+          </div>
+          <div class="px-8 py-6 grid sm:grid-cols-2 gap-6 border-b border-slate-100">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400 mb-1">Ditagihkan Kepada</p>
+              <p class="font-semibold text-slate-800">${esc(customer?.name || '-')}</p>
+              <p class="text-sm text-slate-500">${esc([customer?.address, customer?.city].filter(Boolean).join(', '))}</p>
+              <p class="text-sm text-slate-500">${esc(customer?.phone || '')}</p>
+            </div>
+            <div class="sm:text-right text-sm space-y-1">
+              <p class="text-slate-500">Diterbitkan: <b class="text-slate-700">${fmtDate(inv.issued_at)}</b></p>
+              <p class="text-slate-500">Jatuh tempo: <b class="text-slate-700">${inv.due_at ? fmtDate(inv.due_at) : '-'}</b></p>
+              ${ticket ? `<p class="text-slate-500">Ref: <b class="text-slate-700">${ticket.number}</b> (${esc(ticket.service_type || '')})</p>` : ''}
+              ${work_order ? `<p class="text-slate-500">Work Order: <b class="text-slate-700">${work_order.number}</b></p>` : ''}
+            </div>
+          </div>
+          <div class="px-8 py-6">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200">
+                  <th class="py-2 pr-4">Deskripsi</th><th class="py-2 pr-4 text-center">Qty</th><th class="py-2 pr-4 text-right">Harga</th><th class="py-2 text-right">Jumlah</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr>
+                  <td class="py-3 pr-4 text-slate-700">Biaya Jasa — ${esc(ticket?.problem || 'Service')}</td>
+                  <td class="py-3 pr-4 text-center text-slate-600">1</td>
+                  <td class="py-3 pr-4 text-right text-slate-600">${fmtIDR(inv.labor_cost)}</td>
+                  <td class="py-3 text-right font-medium text-slate-700">${fmtIDR(inv.labor_cost)}</td>
+                </tr>
+                ${items.map((it) => `
+                  <tr>
+                    <td class="py-3 pr-4 text-slate-700">Spare Part: ${esc(it.part_name)} <span class="text-xs text-slate-400">(${it.part_code})</span></td>
+                    <td class="py-3 pr-4 text-center text-slate-600">${it.qty} ${esc(it.unit)}</td>
+                    <td class="py-3 pr-4 text-right text-slate-600">${fmtIDR(it.unit_price)}</td>
+                    <td class="py-3 text-right font-medium text-slate-700">${fmtIDR(it.qty * it.unit_price)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+            <div class="mt-6 flex justify-end">
+              <div class="w-full sm:w-72 space-y-2 text-sm">
+                <div class="flex justify-between text-slate-500"><span>Subtotal</span><span>${fmtIDR(totals.labor_cost + totals.parts_total)}</span></div>
+                ${totals.discount > 0 ? `<div class="flex justify-between text-slate-500"><span>Diskon</span><span>-${fmtIDR(totals.discount)}</span></div>` : ''}
+                <div class="flex justify-between text-slate-500"><span>PPN ${totals.tax_rate}%</span><span>${fmtIDR(totals.tax)}</span></div>
+                <div class="flex justify-between font-bold text-slate-800 text-base border-t border-slate-200 pt-2"><span>Total</span><span>${fmtIDR(totals.total)}</span></div>
+              </div>
+            </div>
+          </div>
+          ${payments.length ? `
+          <div class="px-8 py-5 bg-emerald-50/50 border-t border-emerald-100">
+            <p class="text-xs uppercase tracking-wide text-emerald-700 font-bold mb-2">Pembayaran</p>
+            ${payments.map((p) => `<p class="text-sm text-slate-600">${fmtIDR(p.amount)} via ${esc(p.method)} ${p.reference ? '(' + esc(p.reference) + ')' : ''} — ${fmtDateTime(p.paid_at)}</p>`).join('')}
+          </div>` : ''}
+        </div>`;
+      refreshIcons();
+
+      const btnDownload = document.getElementById('btn-download');
+      if (btnDownload) btnDownload.addEventListener('click', async () => {
+        let company = {};
+        try { const me = await api.get('/api/auth/me'); company = me.settings || {}; } catch {}
+        downloadInvoice({ ...data, company });
+      });
+
+      const btnEdit = document.getElementById('btn-edit');
+      if (btnEdit) btnEdit.addEventListener('click', () => {
+        const m = openModal({
+          title: 'Edit Biaya Invoice', size: 'sm',
+          body: `
+            <div class="space-y-4">
+              <div><label class="label">Biaya Jasa (Rp)</label><input id="ed-labor" type="number" min="0" class="input" value="${inv.labor_cost}"></div>
+              <div><label class="label">Diskon (Rp)</label><input id="ed-disc" type="number" min="0" class="input" value="${inv.discount}"></div>
+              <div><label class="label">PPN (%)</label><input id="ed-tax" type="number" min="0" class="input" value="${inv.tax_rate}"></div>
+              <div><label class="label">Jatuh Tempo</label><input id="ed-due" type="date" class="input" value="${inv.due_at || ''}"></div>
+            </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="ed-submit" class="btn-primary">Simpan</button>`
+        });
+        m.el.querySelector('#ed-submit').addEventListener('click', async () => {
+          try {
+            await api.put('/api/invoices/' + inv.id, {
+              labor_cost: Number(m.el.querySelector('#ed-labor').value) || 0,
+              discount: Number(m.el.querySelector('#ed-disc').value) || 0,
+              tax_rate: Number(m.el.querySelector('#ed-tax').value) || 0,
+              due_at: m.el.querySelector('#ed-due').value
+            });
+            m.close(); toast('Invoice diperbarui'); load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      });
+
+      const btnPay = document.getElementById('btn-pay');
+      if (btnPay) btnPay.addEventListener('click', () => {
+        const m = openModal({
+          title: 'Tandai Invoice Dibayar', size: 'sm',
+          body: `
+            <p class="text-sm text-slate-600 mb-4">Total tagihan: <b>${fmtIDR(totals.total)}</b></p>
+            <div class="space-y-4">
+              <div><label class="label">Metode</label>
+                <select id="pay-method" class="input"><option>TRANSFER</option><option>CASH</option><option>QRIS</option><option>GIRO</option></select>
+              </div>
+              <div><label class="label">Referensi</label><input id="pay-ref" class="input" placeholder="cth: TRF-BCA-12345"></div>
+            </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="pay-submit" class="btn-primary">Konfirmasi Pembayaran</button>`
+        });
+        m.el.querySelector('#pay-submit').addEventListener('click', async () => {
+          try {
+            await api.post(`/api/invoices/${inv.id}/pay`, { method: m.el.querySelector('#pay-method').value, reference: m.el.querySelector('#pay-ref').value.trim() });
+            m.close(); toast('Pembayaran dicatat'); load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      });
+    }
+
+    if (invId) load();
+    else content.innerHTML = errorState('Invoice ID tidak ditemukan');
+  </script>
+</body>
+</html>

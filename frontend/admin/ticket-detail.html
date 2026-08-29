@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Ticket — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <a href="/admin/tickets.html" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"><i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali ke Tickets</a>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, openModal, confirmDialog, toast, refreshIcons, PRIORITY, WO_STATUS, REPORT_STATUS, INVOICE_STATUS, photoGrid, bindLightbox } from '/components/ui.js';
+    import { fmtDate, fmtDateTime, esc } from '/utils/format.js';
+    import { openTicketEditModal } from '/components/ticket-edit.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('tickets');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const ticketId = new URLSearchParams(location.search).get('id');
+    if (!ticketId) { content.innerHTML = errorState('Ticket ID tidak ditemukan'); }
+
+    let detail = null;
+
+    const TL_ICONS = { REQUEST: 'file-plus-2', STATUS: 'refresh-cw', ASSIGNMENT: 'user-check', SCHEDULE: 'calendar-days', DIAGNOSIS: 'stethoscope', APPROVAL: 'check-circle', PAYMENT: 'credit-card', COMMENT: 'message-square', NOTE: 'lock' };
+
+    async function load() {
+      content.innerHTML = spinner('Memuat detail ticket...');
+      try {
+        detail = await api.get('/api/tickets/' + ticketId);
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function actionButtons(t) {
+      const btns = [];
+      btns.push(`<button id="btn-edit" class="btn-secondary"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>`);
+      if (['OPEN', 'REVIEWING'].includes(t.status)) {
+        btns.push(`<button id="btn-assign" class="btn-primary"><i data-lucide="user-check" class="w-4 h-4"></i> Tugaskan Teknisi</button>`);
+      }
+      if (t.status === 'OPEN') btns.push(`<button id="btn-review" class="btn-secondary"><i data-lucide="eye" class="w-4 h-4"></i> Review</button>`);
+      if (['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS'].includes(t.status)) {
+        btns.push(`<button id="btn-cancel" class="btn-danger"><i data-lucide="x-circle" class="w-4 h-4"></i> Batalkan</button>`);
+      }
+      return btns.join('');
+    }
+
+    function render() {
+      const { ticket: t, timeline, attachments, work_orders, service_report, invoice } = detail;
+      content.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
+          <div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <h1 class="text-2xl font-bold text-slate-800">${t.number}</h1>
+              ${statusBadge(t.status)}
+              ${statusBadge(t.priority, PRIORITY)}
+            </div>
+            <p class="text-slate-600 mt-1">${esc(t.problem)}</p>
+          </div>
+          <div class="flex gap-2 flex-wrap">${actionButtons(t)}</div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="lg:col-span-2 space-y-4">
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-4">Informasi Request</h3>
+              <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div><p class="text-slate-400 text-xs">Customer</p><p class="font-medium text-slate-700">${esc(t.customer_name)}</p></div>
+                <div><p class="text-slate-400 text-xs">Equipment</p><p class="font-medium text-slate-700">${esc(t.equipment_name || ([t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ') || '-'))}</p></div>
+                <div><p class="text-slate-400 text-xs">Jenis Service</p><p class="font-medium text-slate-700">${esc(t.service_type || '-')}</p></div>
+                <div><p class="text-slate-400 text-xs">Preferensi Jadwal</p><p class="font-medium text-slate-700">${t.preferred_date ? fmtDate(t.preferred_date) + (t.preferred_time ? ' · ' + esc(t.preferred_time) : '') : '-'}</p></div>
+                <div><p class="text-slate-400 text-xs">Kontak</p><p class="font-medium text-slate-700">${esc(t.contact_name || '-')} ${t.contact_phone ? '(' + esc(t.contact_phone) + ')' : ''}</p></div>
+                <div><p class="text-slate-400 text-xs">Dibuat</p><p class="font-medium text-slate-700">${fmtDateTime(t.created_at)}</p></div>
+                ${t.service_address ? `<div class="sm:col-span-2"><p class="text-slate-400 text-xs">Alamat Service</p><p class="font-medium text-slate-700 whitespace-pre-wrap">${esc(t.service_address)}</p></div>` : ''}
+                ${t.equipment_serial ? `<div><p class="text-slate-400 text-xs">Serial Number</p><p class="font-medium text-slate-700">${esc(t.equipment_serial)}</p></div>` : ''}
+                ${t.equipment_location ? `<div><p class="text-slate-400 text-xs">Lokasi Unit</p><p class="font-medium text-slate-700">${esc(t.equipment_location)}</p></div>` : ''}
+              </div>
+              ${t.description ? `<div class="mt-4 pt-4 border-t border-slate-100"><p class="text-slate-400 text-xs mb-1">Deskripsi</p><p class="text-sm text-slate-600 whitespace-pre-wrap">${esc(t.description)}</p></div>` : ''}
+              ${attachments.length ? `<div class="mt-4 pt-4 border-t border-slate-100"><p class="text-slate-400 text-xs mb-2">Lampiran Request</p>${photoGrid(attachments)}</div>` : ''}
+            </div>
+
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-4">Work Orders</h3>
+              ${work_orders.length ? `<div class="space-y-2">
+                ${work_orders.map((w) => `
+                  <a href="/admin/workorder-detail.html?id=${w.id}" class="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/40 transition-colors">
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-slate-700">${w.number}</p>
+                      <p class="text-xs text-slate-400 mt-0.5"><i data-lucide="hard-hat" class="w-3 h-3 inline -mt-0.5"></i> ${esc(w.technician_name || '-')} · <i data-lucide="calendar" class="w-3 h-3 inline -mt-0.5"></i> ${fmtDate(w.scheduled_date)} ${esc(w.time_window || '')}</p>
+                    </div>
+                    ${statusBadge(w.status, WO_STATUS)}
+                  </a>`).join('')}
+              </div>` : '<p class="text-sm text-slate-400">Belum ada work order. Tugaskan teknisi untuk membuat work order.</p>'}
+            </div>
+
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-4">Timeline Service</h3>
+              <div class="relative space-y-0">
+                ${timeline.map((ev, i) => `
+                  <div class="flex gap-3 ${i < timeline.length - 1 ? 'pb-5' : ''}">
+                    <div class="flex flex-col items-center">
+                      <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${ev.visibility === 'INTERNAL' ? 'bg-slate-200 text-slate-500' : 'bg-blue-50 text-blue-600'}">
+                        <i data-lucide="${TL_ICONS[ev.type] || 'circle'}" class="w-4 h-4"></i>
+                      </div>
+                      ${i < timeline.length - 1 ? '<div class="w-px flex-1 bg-slate-200 mt-1"></div>' : ''}
+                    </div>
+                    <div class="min-w-0 flex-1 pt-1">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <p class="text-sm font-medium text-slate-700">${esc(ev.title)}</p>
+                        ${ev.visibility === 'INTERNAL' ? '<span class="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">INTERNAL</span>' : ''}
+                      </div>
+                      ${ev.description ? `<p class="text-sm text-slate-500 mt-0.5 whitespace-pre-wrap">${esc(ev.description)}</p>` : ''}
+                      <p class="text-[11px] text-slate-400 mt-1">${fmtDateTime(ev.created_at)}</p>
+                    </div>
+                  </div>`).join('')}
+              </div>
+              <div class="mt-5 pt-4 border-t border-slate-100 space-y-3">
+                <div>
+                  <label class="label">Kirim pesan ke customer</label>
+                  <div class="flex gap-2">
+                    <input id="comment-input" class="input" placeholder="Tulis pesan...">
+                    <button id="btn-comment" class="btn-primary shrink-0"><i data-lucide="send" class="w-4 h-4"></i></button>
+                  </div>
+                </div>
+                <div>
+                  <label class="label"><i data-lucide="lock" class="w-3 h-3 inline -mt-0.5"></i> Catatan internal (tidak terlihat customer)</label>
+                  <div class="flex gap-2">
+                    <input id="note-input" class="input" placeholder="Catatan internal...">
+                    <button id="btn-note" class="btn-secondary shrink-0"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            ${service_report ? `
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Service Report</h3>
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-medium text-slate-700">${service_report.number || ''}</p>
+                ${statusBadge(service_report.status, REPORT_STATUS)}
+              </div>
+              ${service_report.status === 'APPROVED' && service_report.summary ? `<p class="text-sm text-slate-500 mt-2 line-clamp-3">${esc(service_report.summary)}</p>` : ''}
+              ${work_orders[0] ? `<a href="/admin/workorder-detail.html?id=${work_orders[work_orders.length - 1].id}" class="btn-secondary w-full mt-3 text-sm">Lihat Work Order</a>` : ''}
+            </div>` : ''}
+            ${invoice ? `
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Invoice</h3>
+              <div class="flex items-center justify-between gap-2">
+                <a href="/admin/invoice-detail.html?id=${invoice.id}" class="text-sm font-medium text-blue-600 hover:underline">${invoice.number}</a>
+                ${statusBadge(invoice.status, INVOICE_STATUS)}
+              </div>
+              <p class="text-xs text-slate-400 mt-2">Diterbitkan ${fmtDate(invoice.issued_at)}${invoice.due_at ? ' · Jatuh tempo ' + fmtDate(invoice.due_at) : ''}</p>
+            </div>` : ''}
+            <div class="card p-5">
+              <h3 class="font-semibold text-slate-800 mb-3">Riwayat Status</h3>
+              <div class="space-y-2.5">
+                ${(detail.status_history || []).map((h) => `
+                  <div class="flex items-center gap-2 text-sm">
+                    ${statusBadge(h.to_status)}
+                  </div>
+                  <p class="text-[11px] text-slate-400 -mt-1.5 ml-1">${fmtDateTime(h.created_at)}${h.note ? ' · ' + esc(h.note) : ''}</p>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      refreshIcons();
+      bindLightbox(content);
+      bindActions(t);
+    }
+
+    function bindActions(t) {
+      const btnEdit = document.getElementById('btn-edit');
+      if (btnEdit) btnEdit.addEventListener('click', () => openTicketEditModal(t, load));
+      const btnReview = document.getElementById('btn-review');
+      if (btnReview) btnReview.addEventListener('click', async () => {
+        try { await api.post(`/api/tickets/${t.id}/status`, { status: 'REVIEWING', note: 'Ticket direview admin' }); toast('Ticket masuk review'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+      const btnCancel = document.getElementById('btn-cancel');
+      if (btnCancel) btnCancel.addEventListener('click', async () => {
+        const ok = await confirmDialog({ title: 'Batalkan Ticket', message: 'Ticket akan dibatalkan. Aksi ini tidak dapat dibatalkan.', confirmLabel: 'Batalkan Ticket', danger: true });
+        if (!ok) return;
+        try { await api.post(`/api/tickets/${t.id}/status`, { status: 'CANCELLED', note: 'Dibatalkan oleh admin' }); toast('Ticket dibatalkan'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+      const btnAssign = document.getElementById('btn-assign');
+      if (btnAssign) btnAssign.addEventListener('click', () => assignModal(t));
+      const btnComment = document.getElementById('btn-comment');
+      if (btnComment) btnComment.addEventListener('click', async () => {
+        const input = document.getElementById('comment-input');
+        if (!input.value.trim()) return;
+        try { await api.post(`/api/tickets/${t.id}/comments`, { message: input.value.trim() }); input.value = ''; toast('Pesan terkirim'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+      const btnNote = document.getElementById('btn-note');
+      if (btnNote) btnNote.addEventListener('click', async () => {
+        const input = document.getElementById('note-input');
+        if (!input.value.trim()) return;
+        try { await api.post(`/api/tickets/${t.id}/internal-notes`, { message: input.value.trim() }); input.value = ''; toast('Catatan internal tersimpan'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    async function assignModal(t) {
+      try {
+        const [techData, tplData] = await Promise.all([
+          api.get('/api/users?role=technician'),
+          api.get('/api/checklist-templates')
+        ]);
+        const techs = techData.users.filter((u) => u.active);
+        const m = openModal({
+          title: `Tugaskan Teknisi — ${t.number}`,
+          size: 'md',
+          body: `
+            <div class="space-y-4">
+              <div>
+                <label class="label">Teknisi *</label>
+                <select id="as-tech" class="input">
+                  <option value="">Pilih teknisi...</option>
+                  ${techs.map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div><label class="label">Tanggal *</label><input id="as-date" type="date" class="input"></div>
+                <div>
+                  <label class="label">Jendela Waktu</label>
+                  <select id="as-window" class="input">
+                    <option value="">-</option>
+                    <option>08:00 - 10:00</option><option>09:00 - 12:00</option><option>10:00 - 12:00</option>
+                    <option>13:00 - 15:00</option><option>13:00 - 16:00</option><option>15:00 - 17:00</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label class="label">Checklist Template</label>
+                <select id="as-tpl" class="input">
+                  <option value="">Otomatis (sesuai jenis service)</option>
+                  ${tplData.templates.filter((x) => x.status === 'ACTIVE').map((x) => `<option value="${x.id}">${esc(x.name)} v${esc(x.version)} (${esc(x.service_type || 'Semua')})</option>`).join('')}
+                </select>
+              </div>
+            </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="as-submit" class="btn-primary">Tugaskan</button>`
+        });
+        m.el.querySelector('#as-submit').addEventListener('click', async () => {
+          const body = {
+            technician_id: m.el.querySelector('#as-tech').value,
+            scheduled_date: m.el.querySelector('#as-date').value,
+            time_window: m.el.querySelector('#as-window').value,
+            checklist_template_id: m.el.querySelector('#as-tpl').value || null
+          };
+          if (!body.technician_id) return toast('Pilih teknisi', 'error');
+          if (!body.scheduled_date) return toast('Tanggal jadwal wajib diisi', 'error');
+          try {
+            const res = await api.post(`/api/tickets/${t.id}/assign`, body);
+            m.close();
+            toast(`Work order ${res.number} dibuat`);
+            load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    if (ticketId) load();
+  </script>
+</body>
+</html>

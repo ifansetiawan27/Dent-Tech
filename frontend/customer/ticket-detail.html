@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Service — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <a href="/customer/tickets.html" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"><i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali</a>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, toast, refreshIcons, TICKET_STATUS, PRIORITY, INVOICE_STATUS, photoGrid, bindLightbox } from '/components/ui.js';
+    import { fmtDate, fmtDateTime, esc, timeAgo } from '/utils/format.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('tickets', 'customer');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const ticketId = new URLSearchParams(location.search).get('id');
+    let detail = null;
+
+    const STEPS = [
+      { key: 'OPEN', label: 'Request' },
+      { key: 'REVIEWING', label: 'Review' },
+      { key: 'ASSIGNED', label: 'Dijadwalkan' },
+      { key: 'IN_PROGRESS', label: 'Dikerjakan' },
+      { key: 'COMPLETED', label: 'Selesai' },
+      { key: 'CLOSED', label: 'Closed' }
+    ];
+
+    function stepIndex(status) {
+      if (status === 'CANCELLED') return -1;
+      const i = STEPS.findIndex((s) => s.key === status);
+      return i;
+    }
+
+    async function load() {
+      content.innerHTML = spinner('Memuat detail service...');
+      try {
+        detail = await api.get('/api/tickets/' + ticketId);
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      const { ticket: t, timeline, attachments, work_orders, service_report, invoice } = detail;
+      const wo = work_orders.length ? work_orders[work_orders.length - 1] : null;
+      const idx = stepIndex(t.status);
+
+      content.innerHTML = `
+        <div class="card p-5 mb-4">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="text-xs font-bold text-slate-400">${t.number}</span>
+            <div class="flex gap-1.5">${statusBadge(t.priority, PRIORITY)}${statusBadge(t.status)}</div>
+          </div>
+          <h1 class="text-lg font-bold text-slate-800 mt-2">${esc(t.problem)}</h1>
+          <p class="text-sm text-slate-500 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' · ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ')) : ''}</p>
+          ${t.service_address ? `<p class="text-xs text-slate-400 mt-1 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> ${esc(t.service_address)}</p>` : ''}
+
+          ${t.status === 'CANCELLED' ? `
+            <div class="mt-4 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+              <i data-lucide="x-circle" class="w-4 h-4 shrink-0"></i> Ticket ini dibatalkan
+            </div>` : `
+            <div class="mt-5">
+              <div class="flex items-center">
+                ${STEPS.map((s, i) => `
+                  <div class="flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}">
+                    <div class="flex flex-col items-center">
+                      <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${i <= idx ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}">
+                        ${i < idx ? '<i data-lucide="check" class="w-3 h-3"></i>' : i + 1}
+                      </div>
+                    </div>
+                    ${i < STEPS.length - 1 ? `<div class="flex-1 h-0.5 mx-1 ${i < idx ? 'bg-blue-600' : 'bg-slate-100'}"></div>` : ''}
+                  </div>`).join('')}
+              </div>
+              <div class="flex justify-between mt-1.5 text-[9px] text-slate-400 font-medium">
+                ${STEPS.map((s, i) => `<span class="${i <= idx ? 'text-blue-600' : ''}">${s.label}</span>`).join('')}
+              </div>
+            </div>`}
+        </div>
+
+        ${wo && wo.technician_name ? `
+        <div class="card p-4 mb-4 flex items-center gap-3">
+          <div class="w-11 h-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">${esc(wo.technician_name.split(' ').map(x => x[0]).slice(0,2).join(''))}</div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-slate-700">${esc(wo.technician_name)}</p>
+            <p class="text-xs text-slate-400">Teknisi Anda · ${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</p>
+          </div>
+          <i data-lucide="hard-hat" class="w-5 h-5 text-slate-300"></i>
+        </div>` : ''}
+
+        ${service_report && service_report.status === 'APPROVED' && service_report.summary ? `
+        <div class="card p-5 mb-4 border-2 border-emerald-200">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="file-check-2" class="w-5 h-5 text-emerald-600"></i>
+            <h3 class="font-semibold text-slate-800">Laporan Service</h3>
+            <span class="text-xs text-slate-400 ml-auto">${service_report.number || ''}</span>
+          </div>
+          <p class="text-sm text-slate-600 whitespace-pre-wrap">${esc(service_report.summary)}</p>
+          ${service_report.approved_at ? `<p class="text-xs text-slate-400 mt-2">Disetujui ${fmtDateTime(service_report.approved_at)}</p>` : ''}
+        </div>` : (service_report && service_report.status !== 'APPROVED' ? `
+        <div class="card p-4 mb-4 bg-amber-50/60 border border-amber-100 flex items-center gap-3">
+          <i data-lucide="hourglass" class="w-5 h-5 text-amber-500 shrink-0"></i>
+          <p class="text-sm text-slate-600">Laporan service sedang diproses. Laporan akan tersedia setelah disetujui.</p>
+        </div>` : '')}
+
+        ${attachments.length ? `
+        <div class="card p-5 mb-4">
+          <h3 class="font-semibold text-slate-800 mb-3">Foto</h3>
+          ${photoGrid(attachments)}
+        </div>` : ''}
+
+        <div id="cust-checklist"></div>
+
+        ${invoice ? `
+        <a href="/customer/invoice-detail.html?id=${invoice.id}" class="card p-4 mb-4 flex items-center gap-3 hover:border-blue-300 transition-colors">
+          <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><i data-lucide="receipt" class="w-5 h-5"></i></div>
+          <div class="flex-1">
+            <p class="font-semibold text-slate-700 text-sm">${invoice.number}</p>
+            <p class="text-xs text-slate-400">Invoice service</p>
+          </div>
+          ${statusBadge(invoice.status, INVOICE_STATUS)}
+        </a>` : ''}
+
+        <div class="card p-5 mb-4">
+          <h3 class="font-semibold text-slate-800 mb-4">Progress Service</h3>
+          <div class="relative">
+            ${timeline.map((ev, i) => `
+              <div class="flex gap-3 ${i < timeline.length - 1 ? 'pb-5' : ''}">
+                <div class="flex flex-col items-center">
+                  <div class="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <i data-lucide="${ev.type === 'COMMENT' ? 'message-square' : ev.type === 'APPROVAL' ? 'check-circle' : ev.type === 'ASSIGNMENT' ? 'user-check' : ev.type === 'PAYMENT' ? 'credit-card' : 'activity'}" class="w-3.5 h-3.5"></i>
+                  </div>
+                  ${i < timeline.length - 1 ? '<div class="w-px flex-1 bg-slate-200 mt-1"></div>' : ''}
+                </div>
+                <div class="min-w-0 flex-1 pt-0.5">
+                  <p class="text-sm font-medium text-slate-700">${esc(ev.title)}</p>
+                  ${ev.description ? `<p class="text-sm text-slate-500 mt-0.5 whitespace-pre-wrap">${esc(ev.description)}</p>` : ''}
+                  <p class="text-[11px] text-slate-400 mt-1">${timeAgo(ev.created_at)}</p>
+                </div>
+              </div>`).join('')}
+          </div>
+          ${!['CLOSED', 'CANCELLED'].includes(t.status) ? `
+          <div class="mt-4 pt-4 border-t border-slate-100">
+            <label class="label">Kirim pesan ke admin / teknisi</label>
+            <div class="flex gap-2">
+              <input id="cm-input" class="input" placeholder="Tulis pesan...">
+              <button id="cm-send" class="btn-primary shrink-0 !px-3"><i data-lucide="send" class="w-4 h-4"></i></button>
+            </div>
+          </div>` : ''}
+        </div>`;
+      refreshIcons();
+      bindLightbox(content);
+
+      if (wo && wo.id) loadCustomerChecklist(wo.id);
+
+      const cmSend = document.getElementById('cm-send');
+      if (cmSend) cmSend.addEventListener('click', async () => {
+        const inp = document.getElementById('cm-input');
+        if (!inp.value.trim()) return;
+        try { await api.post(`/api/tickets/${t.id}/comments`, { message: inp.value.trim() }); inp.value = ''; toast('Pesan terkirim'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    const RESULT_CLS = { PASS: 'bg-emerald-50 text-emerald-700', FAIL: 'bg-red-50 text-red-700', NA: 'bg-slate-100 text-slate-500' };
+
+    async function loadCustomerChecklist(woId) {
+      const box = document.getElementById('cust-checklist');
+      if (!box) return;
+      try {
+        const d = await api.get('/api/work-orders/' + woId);
+        const c = d.checklist;
+        if (!c || !c.sections?.length) { box.innerHTML = ''; return; }
+        const sections = c.sections.map((sec) => `
+          <div class="mb-3 last:mb-0">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">${esc(sec.section)}</p>
+            <div class="space-y-1.5">
+              ${sec.items.map((it) => `
+                <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-slate-50">
+                  <p class="text-sm text-slate-600 flex-1">${esc(it.label)}</p>
+                  ${it.result ? `<span class="text-xs font-bold px-2 py-0.5 rounded ${RESULT_CLS[it.result]}">${it.result}</span>` : '<span class="text-xs text-slate-300">—</span>'}
+                </div>
+                ${it.note ? `<p class="text-xs text-slate-500 ml-3 -mt-0.5 mb-1">${esc(it.note)}</p>` : ''}`).join('')}
+            </div>
+          </div>`).join('');
+        const diag = d.diagnosis ? `
+          <div class="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
+            <div><p class="text-xs text-slate-400 mb-0.5">Temuan</p><p class="text-slate-700">${esc(d.diagnosis.findings || '-')}</p></div>
+            ${d.diagnosis.root_cause ? `<div><p class="text-xs text-slate-400 mb-0.5">Akar Masalah</p><p class="text-slate-700">${esc(d.diagnosis.root_cause)}</p></div>` : ''}
+            ${d.diagnosis.recommendation ? `<div><p class="text-xs text-slate-400 mb-0.5">Rekomendasi</p><p class="text-slate-700">${esc(d.diagnosis.recommendation)}</p></div>` : ''}
+          </div>` : '';
+        box.innerHTML = `
+          <div class="card p-5 mb-4">
+            <div class="flex items-center gap-2 mb-3">
+              <i data-lucide="list-checks" class="w-5 h-5 text-blue-600"></i>
+              <h3 class="font-semibold text-slate-800">Checklist Pengecekan Teknisi</h3>
+              <span class="text-xs text-slate-400 ml-auto">${esc(c.template?.name || '')} · ${c.answered_items}/${c.total_items}</span>
+            </div>
+            ${sections}
+            ${diag}
+          </div>`;
+        refreshIcons();
+      } catch { box.innerHTML = ''; }
+    }
+
+    if (ticketId) load();
+    else content.innerHTML = errorState('Ticket ID tidak ditemukan');
+  </script>
+</body>
+</html>

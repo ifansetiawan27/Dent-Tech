@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Invoice — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <a href="/customer/invoices.html" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"><i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali</a>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, statusBadge, openModal, confirmDialog, toast, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
+    import { fmtIDR, fmtDate, fmtDateTime, esc } from '/utils/format.js';
+    import { downloadInvoice } from '/utils/invoice-doc.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('invoices', 'customer');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const invId = new URLSearchParams(location.search).get('id');
+    let data = null;
+
+    async function load() {
+      content.innerHTML = spinner('Memuat invoice...');
+      try {
+        data = await api.get('/api/invoices/' + invId);
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      const { invoice: inv, totals, items, customer, payments, ticket } = data;
+      content.innerHTML = `
+        <div class="card overflow-hidden mb-4">
+          <div class="bg-slate-900 text-white px-6 py-5 flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400">Invoice</p>
+              <p class="text-lg font-bold">${inv.number}</p>
+              <p class="text-xs text-slate-400 mt-0.5">${esc(customer?.name || '')}</p>
+            </div>
+            ${statusBadge(inv.status, INVOICE_STATUS)}
+          </div>
+          <div class="px-6 py-4 text-sm space-y-1 border-b border-slate-100">
+            <p class="text-slate-500">Diterbitkan: <b class="text-slate-700">${fmtDate(inv.issued_at)}</b></p>
+            <p class="text-slate-500">Jatuh tempo: <b class="text-slate-700">${inv.due_at ? fmtDate(inv.due_at) : '-'}</b></p>
+            ${ticket ? `<p class="text-slate-500">Ref: <b class="text-slate-700">${ticket.number}</b></p>` : ''}
+          </div>
+          <div class="px-6 py-4">
+            <div class="space-y-2.5 text-sm">
+              <div class="flex justify-between gap-3">
+                <span class="text-slate-600 flex-1">Biaya Jasa${ticket?.problem ? ' — ' + esc(ticket.problem) : ''}</span>
+                <span class="font-medium text-slate-700 whitespace-nowrap">${fmtIDR(inv.labor_cost)}</span>
+              </div>
+              ${items.map((it) => `
+                <div class="flex justify-between gap-3">
+                  <span class="text-slate-600 flex-1">${esc(it.part_name)} × ${it.qty}</span>
+                  <span class="font-medium text-slate-700 whitespace-nowrap">${fmtIDR(it.qty * it.unit_price)}</span>
+                </div>`).join('')}
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
+              ${totals.discount > 0 ? `<div class="flex justify-between text-slate-500"><span>Diskon</span><span>-${fmtIDR(totals.discount)}</span></div>` : ''}
+              <div class="flex justify-between text-slate-500"><span>PPN ${totals.tax_rate}%</span><span>${fmtIDR(totals.tax)}</span></div>
+              <div class="flex justify-between font-bold text-slate-800 text-base pt-2 border-t border-slate-100"><span>Total</span><span>${fmtIDR(totals.total)}</span></div>
+            </div>
+          </div>
+          ${payments.length ? `
+          <div class="px-6 py-4 bg-emerald-50/60 border-t border-emerald-100">
+            <p class="text-xs uppercase tracking-wide text-emerald-700 font-bold mb-1.5">Pembayaran</p>
+            ${payments.map((p) => `<p class="text-sm text-slate-600">${fmtIDR(p.amount)} via ${esc(p.method)}${p.reference ? ' (' + esc(p.reference) + ')' : ''} · ${fmtDateTime(p.paid_at)}</p>`).join('')}
+          </div>` : ''}
+        </div>
+
+        <div class="space-y-3">
+          <button id="btn-download" class="btn-secondary w-full !py-3.5"><i data-lucide="download" class="w-4 h-4"></i> Download Invoice (PDF)</button>
+          ${inv.status !== 'PAID' ? `
+          <button id="btn-pay" class="btn-primary w-full !py-3.5"><i data-lucide="credit-card" class="w-4 h-4"></i> Konfirmasi Pembayaran</button>
+          <p class="text-xs text-slate-400 text-center">Konfirmasi pembayaran akan diverifikasi oleh admin</p>` : `
+          <div class="card p-4 border-2 border-emerald-200 flex items-center gap-3">
+            <i data-lucide="check-circle" class="w-6 h-6 text-emerald-500 shrink-0"></i>
+            <p class="text-sm text-slate-600">Invoice ini sudah dibayar. Terima kasih!</p>
+          </div>`}
+        </div>`;
+      refreshIcons();
+
+      const btnDownload = document.getElementById('btn-download');
+      if (btnDownload) btnDownload.addEventListener('click', async () => {
+        let company = {};
+        try { const me = await api.get('/api/auth/me'); company = me.settings || {}; } catch {}
+        downloadInvoice({ ...data, company });
+      });
+
+      const btnPay = document.getElementById('btn-pay');
+      if (btnPay) btnPay.addEventListener('click', () => {
+        const m = openModal({
+          title: 'Konfirmasi Pembayaran',
+          size: 'sm',
+          body: `
+            <p class="text-sm text-slate-600 mb-4">Total yang dibayar: <b>${fmtIDR(totals.total)}</b></p>
+            <div class="space-y-4">
+              <div><label class="label">Metode Pembayaran</label>
+                <select id="cp-method" class="input"><option>TRANSFER</option><option>CASH</option><option>QRIS</option></select>
+              </div>
+              <div><label class="label">Nomor Referensi</label><input id="cp-ref" class="input" placeholder="cth: TRF-BCA-12345"></div>
+            </div>`,
+          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="cp-submit" class="btn-primary">Konfirmasi</button>`
+        });
+        m.el.querySelector('#cp-submit').addEventListener('click', async () => {
+          try {
+            await api.post(`/api/invoices/${inv.id}/pay`, { method: m.el.querySelector('#cp-method').value, reference: m.el.querySelector('#cp-ref').value.trim() });
+            m.close();
+            toast('Pembayaran berhasil dicatat');
+            load();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      });
+    }
+
+    if (invId) load();
+    else content.innerHTML = errorState('Invoice ID tidak ditemukan');
+  </script>
+</body>
+</html>

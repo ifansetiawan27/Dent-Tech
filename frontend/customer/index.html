@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beranda — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <div class="mb-5">
+        <h1 class="text-xl font-bold text-slate-800" id="greeting">Halo</h1>
+        <p class="text-sm text-slate-500">Pantau service equipment Anda</p>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth, getUser } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, refreshIcons, TICKET_STATUS, WO_STATUS } from '/components/ui.js';
+    import { esc, fmtDate, timeAgo } from '/utils/format.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('home', 'customer');
+    lucide.createIcons();
+
+    const user = getUser();
+    document.getElementById('greeting').textContent = 'Halo, ' + user.name.split(' ')[0];
+
+    const content = document.getElementById('content');
+    content.innerHTML = spinner('Memuat data...');
+
+    try {
+      const d = await api.get('/api/dashboard');
+      const at = d.active_ticket;
+      content.innerHTML = `
+        ${at ? `
+        <div class="card p-5 mb-5 border-2 border-blue-200 bg-gradient-to-br from-blue-50/60 to-white">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-blue-600">Service Aktif</p>
+            ${statusBadge(at.status)}
+          </div>
+          <p class="font-bold text-slate-800 mt-2">${esc(at.problem)}</p>
+          <p class="text-sm text-slate-500 mt-1">${at.number} · ${esc(at.service_type || '')}</p>
+          ${at.technician_name ? `
+            <div class="mt-3 flex items-center gap-2 text-sm text-slate-600 bg-white rounded-xl px-3 py-2.5 border border-slate-100">
+              <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">${esc(at.technician_name.split(' ').map(x => x[0]).slice(0,2).join(''))}</div>
+              <div class="flex-1">
+                <p class="font-medium text-slate-700">${esc(at.technician_name)}</p>
+                <p class="text-xs text-slate-400">Teknisi Anda</p>
+              </div>
+              ${at.scheduled_date ? `<span class="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">${fmtDate(at.scheduled_date)} ${esc(at.time_window || '')}</span>` : ''}
+            </div>` : ''}
+          <a href="/customer/ticket-detail.html?id=${at.id}" class="btn-primary w-full mt-4">Lihat Progress Service</a>
+        </div>` : ''}
+
+        <div class="grid grid-cols-3 gap-3 mb-6">
+          <a href="/customer/tickets.html" class="card p-4 text-center hover:border-blue-300"><p class="text-2xl font-bold text-blue-600">${d.stats.active_tickets}</p><p class="text-xs text-slate-400 mt-0.5">Service Aktif</p></a>
+          <a href="/customer/equipment.html" class="card p-4 text-center hover:border-blue-300"><p class="text-2xl font-bold text-slate-700">${d.stats.equipment}</p><p class="text-xs text-slate-400 mt-0.5">Equipment</p></a>
+          <a href="/customer/invoices.html" class="card p-4 text-center hover:border-blue-300"><p class="text-2xl font-bold ${d.stats.unpaid_invoices > 0 ? 'text-amber-600' : 'text-emerald-600'}">${d.stats.unpaid_invoices}</p><p class="text-xs text-slate-400 mt-0.5">Invoice Belum Bayar</p></a>
+        </div>
+
+        <a href="/customer/request.html" class="card p-5 mb-6 flex items-center gap-4 border-2 border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 transition-colors">
+          <div class="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0"><i data-lucide="plus" class="w-6 h-6"></i></div>
+          <div>
+            <p class="font-bold text-slate-800">Butuh service?</p>
+            <p class="text-sm text-slate-500">Ajukan request service untuk equipment Anda</p>
+          </div>
+        </a>
+
+        <h2 class="text-sm font-bold uppercase tracking-wide text-slate-400 mb-3">Service Terakhir</h2>
+        ${d.recent_tickets.length ? `
+          <div class="space-y-2.5">
+            ${d.recent_tickets.map((t) => `
+              <a href="/customer/ticket-detail.html?id=${t.id}" class="card p-4 flex items-center gap-3 hover:border-blue-300 transition-colors">
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-slate-700 truncate">${esc(t.problem)}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">${t.number}${t.equipment_name ? ' · ' + esc(t.equipment_name) : ''} · ${timeAgo(t.created_at)}</p>
+                </div>
+                ${statusBadge(t.status)}
+              </a>`).join('')}
+          </div>` : `<div class="card">${emptyState('inbox', 'Belum ada service', 'Ajukan request service pertama Anda.')}</div>`}`;
+      refreshIcons();
+    } catch (e) {
+      content.innerHTML = errorState(e.message);
+      refreshIcons();
+    }
+  </script>
+</body>
+</html>

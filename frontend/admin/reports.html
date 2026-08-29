@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Reports & Analytics</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Rekapan operasional service — filter per tanggal/bulan/tahun</p>
+        </div>
+        <button id="btn-download-report" class="btn-primary"><i data-lucide="file-down" class="w-4 h-4"></i> Download Laporan (PDF)</button>
+      </div>
+
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+        <div>
+          <label class="label">Preset</label>
+          <select id="f-preset" class="input">
+            <option value="">Semua periode</option>
+            <option value="today">Hari ini</option>
+            <option value="month">Bulan ini</option>
+            <option value="year">Tahun ini</option>
+            <option value="custom">Rentang tanggal…</option>
+          </select>
+        </div>
+        <div><label class="label">Dari Tanggal</label><input id="f-from" type="date" class="input"></div>
+        <div><label class="label">Sampai Tanggal</label><input id="f-to" type="date" class="input"></div>
+        <button id="btn-apply" class="btn-secondary"><i data-lucide="filter" class="w-4 h-4"></i> Terapkan</button>
+        <button id="btn-reset" class="btn-secondary"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset</button>
+      </div>
+
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, refreshIcons, toast } from '/components/ui.js';
+    import { fmtIDR, esc, todayStr } from '/utils/format.js';
+    import { downloadReport } from '/utils/report-doc.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('reports');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    let lastAnalytics = null;
+    let lastPeriodLabel = 'Semua periode';
+    let charts = [];
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function applyPreset() {
+      const p = document.getElementById('f-preset').value;
+      const fromEl = document.getElementById('f-from');
+      const toEl = document.getElementById('f-to');
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
+      if (p === 'today') { fromEl.value = `${y}-${pad(m)}-${pad(d)}`; toEl.value = `${y}-${pad(m)}-${pad(d)}`; }
+      else if (p === 'month') { fromEl.value = `${y}-${pad(m)}-01`; toEl.value = `${y}-${pad(m)}-${pad(d)}`; }
+      else if (p === 'year') { fromEl.value = `${y}-01-01`; toEl.value = `${y}-${pad(m)}-${pad(d)}`; }
+      else if (p === '') { fromEl.value = ''; toEl.value = ''; }
+    }
+    document.getElementById('f-preset').addEventListener('change', applyPreset);
+
+    async function load() {
+      content.innerHTML = spinner('Memuat analitik...');
+      const from = document.getElementById('f-from').value;
+      const to = document.getElementById('f-to').value;
+      const q = new URLSearchParams();
+      if (from) q.set('from', from);
+      if (to) q.set('to', to);
+      lastPeriodLabel = (from || to) ? `${from || '…'} s/d ${to || '…'}` : 'Semua periode';
+      try {
+        const an = await api.get('/api/reports/analytics' + (q.toString() ? '?' + q.toString() : ''));
+        lastAnalytics = an;
+        render(an);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(an) {
+      const s = an.summary || {};
+      charts.forEach((c) => { try { c.destroy(); } catch {} });
+      charts = [];
+
+      content.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+          <div class="card p-5"><p class="text-sm text-slate-500">Total Ticket</p><p class="text-2xl font-bold text-slate-800 mt-1">${s.total_tickets ?? 0}</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Selesai</p><p class="text-2xl font-bold text-emerald-600 mt-1">${s.completed_tickets ?? 0}</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Berjalan / Open</p><p class="text-2xl font-bold text-blue-600 mt-1">${s.open_tickets ?? 0}</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Pendapatan</p><p class="text-xl font-bold text-emerald-600 mt-1">${fmtIDR(s.total_revenue ?? 0)}</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Belum Dibayar</p><p class="text-xl font-bold text-amber-600 mt-1">${fmtIDR(s.outstanding ?? 0)}</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="card p-5"><h3 class="font-semibold text-slate-800 mb-4">Ticket per Bulan</h3><div class="h-64"><canvas id="ch-tickets"></canvas></div></div>
+          <div class="card p-5"><h3 class="font-semibold text-slate-800 mb-4">Pendapatan per Bulan</h3><div class="h-64"><canvas id="ch-revenue"></canvas></div></div>
+          <div class="card p-5"><h3 class="font-semibold text-slate-800 mb-4">Ticket per Jenis Service</h3><div class="h-64"><canvas id="ch-type"></canvas></div></div>
+          <div class="card p-5"><h3 class="font-semibold text-slate-800 mb-4">Ticket per Jenis Equipment</h3><div class="h-64 overflow-y-auto">${equipmentList(an.by_equipment_type)}</div></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <div class="card p-5">
+            <h3 class="font-semibold text-slate-800 mb-4">Performa Teknisi</h3>
+            <div class="space-y-3">
+              ${an.technician_performance.map((t) => `
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0">${esc(t.name.split(' ').map(x => x[0]).slice(0,2).join(''))}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex justify-between text-sm"><span class="font-medium text-slate-700">${esc(t.name)}</span><span class="text-slate-400">${t.completed}/${t.total_wo} selesai</span></div>
+                    <div class="h-1.5 rounded bg-slate-100 mt-1.5"><div class="h-1.5 rounded bg-emerald-500" style="width:${t.total_wo ? Math.round(t.completed / t.total_wo * 100) : 0}%"></div></div>
+                  </div>
+                </div>`).join('') || '<p class="text-sm text-slate-400">Belum ada data</p>'}
+            </div>
+          </div>
+          <div class="card p-5">
+            <h3 class="font-semibold text-slate-800 mb-4">Spare Part Terbanyak Dipakai</h3>
+            <div class="space-y-2.5">
+              ${an.top_parts.map((p) => `
+                <div class="flex items-center justify-between gap-3 text-sm p-2.5 rounded-lg bg-slate-50">
+                  <span class="text-slate-700 flex-1 truncate">${esc(p.name)}</span>
+                  <span class="text-slate-500 whitespace-nowrap">${p.qty} ${esc(p.unit)}</span>
+                  <span class="font-medium text-slate-700 whitespace-nowrap">${fmtIDR(p.value)}</span>
+                </div>`).join('') || '<p class="text-sm text-slate-400">Belum ada data</p>'}
+            </div>
+          </div>
+        </div>`;
+      refreshIcons();
+
+      charts.push(new Chart(document.getElementById('ch-tickets'), {
+        type: 'line',
+        data: { labels: an.tickets_by_month.map((x) => x.label), datasets: [{ data: an.tickets_by_month.map((x) => x.count), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.08)', fill: true, tension: .35, pointRadius: 3 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#f1f5f9' } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } } }
+      }));
+      charts.push(new Chart(document.getElementById('ch-revenue'), {
+        type: 'bar',
+        data: { labels: an.revenue_by_month.map((x) => x.label), datasets: [{ data: an.revenue_by_month.map((x) => x.revenue), backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 26 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => 'Rp ' + (v / 1000000).toFixed(1) + ' jt', font: { size: 10 } }, grid: { color: '#f1f5f9' } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } } }
+      }));
+      charts.push(new Chart(document.getElementById('ch-type'), {
+        type: 'doughnut',
+        data: { labels: an.by_service_type.map((x) => x.label), datasets: [{ data: an.by_service_type.map((x) => x.count), backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9'], borderWidth: 0 }] },
+        options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }, cutout: '58%' }
+      }));
+    }
+
+    function equipmentList(rows) {
+      if (!rows || !rows.length) return '<p class="text-sm text-slate-400">Belum ada data</p>';
+      return `<div class="space-y-2">${rows.map((r) => `
+        <div class="flex items-center justify-between text-sm p-2.5 rounded-lg bg-slate-50">
+          <span class="text-slate-700">${esc(r.label)}</span>
+          <span class="font-semibold text-slate-800">${r.count}</span>
+        </div>`).join('')}</div>`;
+    }
+
+    document.getElementById('btn-apply').addEventListener('click', load);
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      document.getElementById('f-preset').value = '';
+      document.getElementById('f-from').value = '';
+      document.getElementById('f-to').value = '';
+      load();
+    });
+    document.getElementById('btn-download-report').addEventListener('click', async () => {
+      if (!lastAnalytics) { toast('Data belum dimuat', 'error'); return; }
+      let company = {};
+      try { company = (await api.get('/api/auth/me')).settings || {}; } catch {}
+      downloadReport(lastAnalytics, company, lastPeriodLabel);
+    });
+
+    load();
+  </script>
+</body>
+</html>

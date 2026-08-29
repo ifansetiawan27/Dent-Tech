@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spare Parts — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Spare Parts</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Manajemen stok dan harga spare part</p>
+        </div>
+        <button id="btn-new" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Tambah Part</button>
+      </div>
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input id="f-search" class="input sm:col-span-2" placeholder="Cari nama / kode part...">
+        <label class="flex items-center gap-2 text-sm text-slate-600 px-2">
+          <input id="f-low" type="checkbox" class="w-4 h-4 accent-blue-600"> Hanya stok menipis
+        </label>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, table, openModal, toast, refreshIcons } from '/components/ui.js';
+    import { fmtIDR, esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('inventory');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+
+    async function load() {
+      content.innerHTML = spinner('Memuat spare parts...');
+      try {
+        const q = new URLSearchParams();
+        const s = document.getElementById('f-search').value.trim();
+        if (s) q.set('search', s);
+        if (document.getElementById('f-low').checked) q.set('low', '1');
+        const data = await api.get('/api/parts?' + q.toString());
+        render(data.parts);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function stockBadge(p) {
+      if (p.stock <= 0) return `<span class="text-xs font-bold px-2 py-1 rounded-full bg-red-50 text-red-700">Habis</span>`;
+      if (p.stock <= p.min_stock) return `<span class="text-xs font-bold px-2 py-1 rounded-full bg-amber-50 text-amber-700">Menipis · ${p.stock}</span>`;
+      return `<span class="text-sm font-semibold text-slate-700">${p.stock} <span class="text-xs font-normal text-slate-400">${esc(p.unit)}</span></span>`;
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('package', 'Belum ada spare part', 'Tambahkan spare part untuk pelacakan stok.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = list.map((p) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-700">${esc(p.name)}</p>
+            <p class="text-xs text-slate-400">${p.code} · ${esc(p.category || '-')}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600 text-sm">${fmtIDR(p.price)}</td>
+          <td class="px-4 py-3">${stockBadge(p)}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm text-center">${p.min_stock}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm text-center">${p.used_total}</td>
+          <td class="px-4 py-3">
+            <div class="flex gap-1 justify-end">
+              <button class="btn-ghost !p-2" data-adjust="${p.id}" data-name="${esc(p.name)}" data-stock="${p.stock}" title="Penyesuaian stok"><i data-lucide="package-plus" class="w-4 h-4"></i></button>
+              <button class="btn-ghost !p-2" data-edit="${p.id}" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>`);
+      content.innerHTML = table(['Part', 'Harga', 'Stok', 'Min. Stok', 'Terpakai', ''], rows);
+      refreshIcons();
+      content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editModal(list.find((x) => x.id === b.dataset.edit))));
+      content.querySelectorAll('[data-adjust]').forEach((b) => b.addEventListener('click', () => adjustModal(b.dataset)));
+    }
+
+    function adjustModal(d) {
+      const m = openModal({
+        title: 'Penyesuaian Stok',
+        size: 'sm',
+        body: `
+          <p class="text-sm text-slate-600 mb-4">${esc(d.name)} — stok saat ini: <b>${d.stock}</b></p>
+          <label class="label">Perubahan (+masuk / -keluar)</label>
+          <input id="adj-delta" type="number" class="input" placeholder="cth: 5 atau -2">
+          <label class="label mt-3">Alasan</label>
+          <input id="adj-reason" class="input" placeholder="cth: pembelian baru / stok opname">`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="adj-submit" class="btn-primary">Simpan Stok</button>`
+      });
+      m.el.querySelector('#adj-submit').addEventListener('click', async () => {
+        const delta = Number(m.el.querySelector('#adj-delta').value);
+        if (!delta) return toast('Masukkan jumlah perubahan', 'error');
+        try {
+          const res = await api.post(`/api/parts/${d.adjust}/adjust`, { delta });
+          m.close();
+          toast(`Stok diperbarui menjadi ${res.stock}`);
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    function editModal(p) {
+      const isEdit = !!p;
+      const m = openModal({
+        title: isEdit ? `Edit Part — ${p.code}` : 'Tambah Spare Part',
+        size: 'md',
+        body: `
+          <div class="space-y-4">
+            <div><label class="label">Nama Part *</label><input id="p-name" class="input" value="${esc(p?.name || '')}"></div>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="label">Kategori</label><input id="p-category" class="input" value="${esc(p?.category || '')}"></div>
+              <div><label class="label">Satuan</label><input id="p-unit" class="input" value="${esc(p?.unit || 'pcs')}"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+              <div><label class="label">Harga (Rp)</label><input id="p-price" type="number" min="0" class="input" value="${p?.price ?? 0}"></div>
+              <div><label class="label">${isEdit ? 'Stok' : 'Stok Awal'}</label><input id="p-stock" type="number" min="0" class="input" value="${p?.stock ?? 0}" ${isEdit ? 'disabled title="Gunakan penyesuaian stok"' : ''}></div>
+              <div><label class="label">Min. Stok</label><input id="p-min" type="number" min="0" class="input" value="${p?.min_stock ?? 0}"></div>
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="p-submit" class="btn-primary">${isEdit ? 'Simpan' : 'Tambah'}</button>`
+      });
+      m.el.querySelector('#p-submit').addEventListener('click', async () => {
+        const body = {
+          name: m.el.querySelector('#p-name').value.trim(),
+          category: m.el.querySelector('#p-category').value.trim(),
+          unit: m.el.querySelector('#p-unit').value.trim() || 'pcs',
+          price: Number(m.el.querySelector('#p-price').value) || 0,
+          stock: Number(m.el.querySelector('#p-stock').value) || 0,
+          min_stock: Number(m.el.querySelector('#p-min').value) || 0
+        };
+        if (!body.name) return toast('Nama part wajib diisi', 'error');
+        try {
+          if (isEdit) { await api.put('/api/parts/' + p.id, body); toast('Part diperbarui'); }
+          else { await api.post('/api/parts', body); toast('Part ditambahkan'); }
+          m.close();
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    document.getElementById('btn-new').addEventListener('click', () => editModal(null));
+    document.getElementById('f-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+    document.getElementById('f-low').addEventListener('change', load);
+    load();
+  </script>
+</body>
+</html>

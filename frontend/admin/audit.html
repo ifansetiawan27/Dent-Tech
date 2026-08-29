@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audit Log — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">Audit Log</h1>
+        <p class="text-sm text-slate-500 mt-0.5">Jejak seluruh aktivitas penting dalam sistem</p>
+      </div>
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input id="f-search" class="input sm:col-span-2" placeholder="Cari aktivitas / user...">
+        <select id="f-entity" class="input">
+          <option value="">Semua Entitas</option>
+          <option>ticket</option><option>work_order</option><option>service_report</option>
+          <option>invoice</option><option>customer</option><option>equipment</option>
+          <option>part</option><option>user</option><option>auth</option>
+        </select>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, refreshIcons } from '/components/ui.js';
+    import { fmtDateTime, esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('audit');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const ACTION_CLS = { CREATE: 'bg-emerald-50 text-emerald-700', UPDATE: 'bg-blue-50 text-blue-700', DELETE: 'bg-red-50 text-red-700', LOGIN: 'bg-slate-100 text-slate-600' };
+
+    async function load() {
+      content.innerHTML = spinner('Memuat audit log...');
+      try {
+        const q = new URLSearchParams();
+        const s = document.getElementById('f-search').value.trim();
+        const e = document.getElementById('f-entity').value;
+        if (s) q.set('search', s);
+        if (e) q.set('entity', e);
+        const data = await api.get('/api/audit?' + q.toString());
+        render(data.logs);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(logs) {
+      if (!logs.length) {
+        content.innerHTML = `<div class="card">${emptyState('shield-check', 'Belum ada log', 'Aktivitas sistem akan tercatat di sini.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      content.innerHTML = `
+        <div class="card divide-y divide-slate-100">
+          ${logs.map((l) => `
+            <div class="px-5 py-3.5 flex items-start gap-4">
+              <span class="text-[10px] font-bold px-2 py-1 rounded-full mt-0.5 shrink-0 ${ACTION_CLS[l.action] || 'bg-slate-100 text-slate-600'}">${esc(l.action)}</span>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-slate-700">${esc(l.details)}</p>
+                <p class="text-xs text-slate-400 mt-0.5">${esc(l.user_name || 'System')} · ${esc(l.role || '-')} · entitas: ${esc(l.entity || '-')}</p>
+              </div>
+              <span class="text-xs text-slate-400 whitespace-nowrap mt-0.5">${fmtDateTime(l.created_at)}</span>
+            </div>`).join('')}
+        </div>`;
+      refreshIcons();
+    }
+
+    document.getElementById('f-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+    document.getElementById('f-entity').addEventListener('change', load);
+    load();
+  </script>
+</body>
+</html>

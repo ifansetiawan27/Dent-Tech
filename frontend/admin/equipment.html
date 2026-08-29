@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Equipment</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Daftar unit equipment milik customer</p>
+        </div>
+        <button id="btn-new" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Tambah Equipment</button>
+      </div>
+      <div class="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input id="f-search" class="input sm:col-span-2" placeholder="Cari nama / serial / model...">
+        <select id="f-customer" class="input"><option value="">Semua Customer</option></select>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, table, openModal, confirmDialog, toast, refreshIcons, statusBadge, EQUIPMENT_STATUS } from '/components/ui.js';
+    import { fmtDate, esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('equipment');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    let customers = [];
+
+    async function load() {
+      content.innerHTML = spinner('Memuat equipment...');
+      try {
+        const q = new URLSearchParams();
+        const s = document.getElementById('f-search').value.trim();
+        const c = document.getElementById('f-customer').value;
+        if (s) q.set('search', s);
+        if (c) q.set('customer_id', c);
+        const data = await api.get('/api/equipment?' + q.toString());
+        render(data.equipment);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('cog', 'Belum ada equipment', 'Tambahkan equipment untuk memulai pelacakan riwayat service.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      const rows = list.map((e) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-700">${esc(e.name)}</p>
+            <p class="text-xs text-slate-400">${esc(e.category || '-')} · ${esc(e.model || '-')}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-600 text-sm">${esc(e.serial_number || '-')}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm">${esc(e.customer_name)}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm">${esc(e.location || '-')}</td>
+          <td class="px-4 py-3 text-slate-600 text-sm whitespace-nowrap">${e.warranty_until ? fmtDate(e.warranty_until) : '-'}</td>
+          <td class="px-4 py-3 text-center text-slate-600">${e.service_count}</td>
+          <td class="px-4 py-3">${statusBadge(e.status, EQUIPMENT_STATUS)}</td>
+          <td class="px-4 py-3">
+            <div class="flex gap-1 justify-end">
+              <button class="btn-ghost !p-2" data-edit="${e.id}" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+              <button class="btn-ghost !p-2 hover:!bg-red-50 hover:text-red-600" data-del="${e.id}" data-name="${esc(e.name)}" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>`);
+      content.innerHTML = table(['Equipment', 'Serial', 'Customer', 'Lokasi', 'Garansi', 'Service', 'Status', ''], rows);
+      refreshIcons();
+      content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => formModal(list.find((x) => x.id === b.dataset.edit))));
+      content.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+        const ok = await confirmDialog({ title: 'Hapus Equipment', message: `Hapus equipment "${b.dataset.name}"? Equipment dengan riwayat service tidak dapat dihapus.`, confirmLabel: 'Hapus', danger: true });
+        if (!ok) return;
+        try { await api.del('/api/equipment/' + b.dataset.del); toast('Equipment dihapus'); load(); }
+        catch (e2) { toast(e2.message, 'error'); }
+      }));
+    }
+
+    function formModal(existing) {
+      const isEdit = !!existing;
+      const m = openModal({
+        title: isEdit ? 'Edit Equipment' : 'Tambah Equipment',
+        size: 'lg',
+        body: `
+          <div class="space-y-4">
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Customer *</label>
+                <select id="e-customer" class="input" ${isEdit ? 'disabled' : ''}>
+                  <option value="">Pilih customer...</option>
+                  ${customers.map((c) => `<option value="${c.id}" ${existing?.customer_id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+                </select>
+              </div>
+              <div><label class="label">Nama Equipment *</label><input id="e-name" class="input" value="${esc(existing?.name || '')}" placeholder="cth: Dental Chair Unit 1"></div>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Kategori</label><input id="e-category" class="input" value="${esc(existing?.category || '')}" placeholder="cth: Dental Chair"></div>
+              <div><label class="label">Model</label><input id="e-model" class="input" value="${esc(existing?.model || '')}"></div>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Serial Number</label><input id="e-serial" class="input" value="${esc(existing?.serial_number || '')}"></div>
+              <div><label class="label">Lokasi</label><input id="e-location" class="input" value="${esc(existing?.location || '')}" placeholder="cth: Ruang Praktik 1"></div>
+            </div>
+            <div class="grid sm:grid-cols-3 gap-4">
+              <div><label class="label">Tanggal Instalasi</label><input id="e-install" type="date" class="input" value="${existing?.install_date || ''}"></div>
+              <div><label class="label">Garansi Hingga</label><input id="e-warranty" type="date" class="input" value="${existing?.warranty_until || ''}"></div>
+              <div><label class="label">Status</label>
+                <select id="e-status" class="input">
+                  ${['OPERATIONAL', 'UNDER_REPAIR', 'MAINTENANCE', 'RETIRED'].map((s) => `<option ${(existing?.status || 'OPERATIONAL') === s ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="e-submit" class="btn-primary">${isEdit ? 'Simpan Perubahan' : 'Tambah Equipment'}</button>`
+      });
+      m.el.querySelector('#e-submit').addEventListener('click', async () => {
+        const body = {
+          customer_id: m.el.querySelector('#e-customer').value,
+          name: m.el.querySelector('#e-name').value.trim(),
+          category: m.el.querySelector('#e-category').value.trim(),
+          model: m.el.querySelector('#e-model').value.trim(),
+          serial_number: m.el.querySelector('#e-serial').value.trim(),
+          location: m.el.querySelector('#e-location').value.trim(),
+          install_date: m.el.querySelector('#e-install').value,
+          warranty_until: m.el.querySelector('#e-warranty').value,
+          status: m.el.querySelector('#e-status').value
+        };
+        if (!body.name) return toast('Nama equipment wajib diisi', 'error');
+        if (!isEdit && !body.customer_id) return toast('Pilih customer', 'error');
+        try {
+          if (isEdit) { await api.put('/api/equipment/' + existing.id, body); toast('Equipment diperbarui'); }
+          else { await api.post('/api/equipment', body); toast('Equipment ditambahkan'); }
+          m.close();
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    (async () => {
+      try {
+        const data = await api.get('/api/customers');
+        customers = data.customers;
+        document.getElementById('f-customer').innerHTML += customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+      } catch {}
+    })();
+
+    document.getElementById('btn-new').addEventListener('click', () => formModal(null));
+    document.getElementById('f-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+    document.getElementById('f-customer').addEventListener('change', load);
+    load();
+  </script>
+</body>
+</html>

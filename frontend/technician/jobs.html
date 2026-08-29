@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jobs — Technician</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold text-slate-800 mb-4">Work Orders Saya</h1>
+      <div class="flex gap-2 mb-4">
+        <button id="tab-active" class="tab-btn px-4 py-2 rounded-full text-sm font-semibold bg-blue-600 text-white">Aktif</button>
+        <button id="tab-done" class="tab-btn px-4 py-2 rounded-full text-sm font-semibold bg-white text-slate-500 border border-slate-200">Selesai</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, statusBadge, refreshIcons, WO_STATUS, PRIORITY } from '/components/ui.js';
+    import { esc, fmtDate } from '/utils/format.js';
+
+    requireAuth(['technician']);
+    initMobileLayout('jobs', 'technician');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    let all = [];
+    let tab = 'active';
+
+    async function load() {
+      content.innerHTML = spinner('Memuat jobs...');
+      try {
+        const d = await api.get('/api/work-orders');
+        all = d.work_orders;
+        render();
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render() {
+      const activeStatuses = ['ASSIGNED', 'STARTED'];
+      const list = all.filter((w) => tab === 'active' ? activeStatuses.includes(w.status) : !activeStatuses.includes(w.status));
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('clipboard-list', tab === 'active' ? 'Tidak ada job aktif' : 'Belum ada job selesai', tab === 'active' ? 'Job yang ditugaskan akan tampil di sini.' : 'Job yang sudah selesai akan diarsipkan di sini.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      content.innerHTML = `<div class="space-y-3">
+        ${list.map((j) => `
+          <a href="/technician/job-detail.html?id=${j.id}" class="card p-4 block hover:border-blue-300 transition-colors">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-slate-400">${j.number}</span>
+              <div class="flex gap-1.5">${statusBadge(j.priority, PRIORITY)}${statusBadge(j.status, WO_STATUS)}</div>
+            </div>
+            <p class="font-semibold text-slate-800 mt-2">${esc(j.problem)}</p>
+            <p class="text-sm text-slate-500 mt-0.5">${esc(j.customer_name)}${j.equipment_name ? ' · ' + esc(j.equipment_name) : ''}</p>
+            <p class="text-xs text-slate-400 mt-2"><i data-lucide="calendar" class="w-3.5 h-3.5 inline -mt-0.5"></i> ${fmtDate(j.scheduled_date)} ${esc(j.time_window || '')}</p>
+          </a>`).join('')}
+      </div>`;
+      refreshIcons();
+    }
+
+    const tabActive = document.getElementById('tab-active');
+    const tabDone = document.getElementById('tab-done');
+    function setTab(t) {
+      tab = t;
+      tabActive.className = 'tab-btn px-4 py-2 rounded-full text-sm font-semibold ' + (t === 'active' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200');
+      tabDone.className = 'tab-btn px-4 py-2 rounded-full text-sm font-semibold ' + (t === 'done' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200');
+      render();
+    }
+    tabActive.addEventListener('click', () => setTab('active'));
+    tabDone.addEventListener('click', () => setTab('done'));
+
+    load();
+  </script>
+</body>
+</html>

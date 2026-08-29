@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checklist Library — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Checklist Library</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Template checklist standar per jenis service — dengan versioning</p>
+        </div>
+        <button id="btn-new" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Template Baru</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, openModal, confirmDialog, toast, refreshIcons } from '/components/ui.js';
+    import { esc } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('checklists');
+    lucide.createIcons();
+
+    const content = document.getElementById('content');
+    const SECTIONS = ['Electrical', 'Mechanical', 'Safety', 'Cleaning', 'Testing', 'Final Inspection', 'Assessment', 'Repair'];
+
+    async function load() {
+      content.innerHTML = spinner('Memuat template...');
+      try {
+        const data = await api.get('/api/checklist-templates');
+        render(data.templates);
+      } catch (e) {
+        content.innerHTML = errorState(e.message);
+        refreshIcons();
+      }
+    }
+
+    function render(list) {
+      if (!list.length) {
+        content.innerHTML = `<div class="card">${emptyState('list-checks', 'Belum ada template', 'Buat template checklist pertama Anda.')}</div>`;
+        refreshIcons();
+        return;
+      }
+      content.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${list.map((t) => `
+            <div class="card p-5 fade-up">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <p class="font-semibold text-slate-800">${esc(t.name)}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">v${esc(t.version)} · ${esc(t.service_type || 'Semua jenis')} · ${esc(t.equipment_category || 'Semua kategori')}</p>
+                </div>
+                <span class="text-xs font-bold px-2 py-1 rounded-full ${t.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${t.status}</span>
+              </div>
+              <p class="text-sm text-slate-500 mt-3"><i data-lucide="list-checks" class="w-4 h-4 inline -mt-0.5"></i> ${t.item_count} item checklist</p>
+              <div class="flex gap-2 mt-4">
+                <button class="btn-secondary text-sm flex-1" data-view="${t.id}"><i data-lucide="eye" class="w-4 h-4"></i> Detail</button>
+                <button class="btn-secondary text-sm flex-1" data-dup="${t.id}" data-name="${esc(t.name)}"><i data-lucide="copy" class="w-4 h-4"></i> Versi Baru</button>
+                <button class="btn-ghost !p-2.5" data-status="${t.id}" data-cur="${t.status}" title="${t.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}"><i data-lucide="${t.status === 'ACTIVE' ? 'toggle-right' : 'toggle-left'}" class="w-4 h-4"></i></button>
+              </div>
+            </div>`).join('')}
+        </div>`;
+      refreshIcons();
+      content.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => viewModal(b.dataset.view)));
+      content.querySelectorAll('[data-dup]').forEach((b) => b.addEventListener('click', async () => {
+        const ok = await confirmDialog({ title: 'Buat Versi Baru', message: `Duplikasi "${b.dataset.name}" menjadi versi berikutnya? Item checklist akan disalin.`, confirmLabel: 'Duplikasi' });
+        if (!ok) return;
+        try { const res = await api.post(`/api/checklist-templates/${b.dataset.dup}/duplicate`); toast(`Versi ${res.version} dibuat`); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      }));
+      content.querySelectorAll('[data-status]').forEach((b) => b.addEventListener('click', async () => {
+        try { await api.put('/api/checklist-templates/' + b.dataset.status, { status: b.dataset.cur === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      }));
+    }
+
+    async function viewModal(id) {
+      try {
+        const { template: t } = await api.get('/api/checklist-templates/' + id);
+        const sections = {};
+        for (const it of t.items) { (sections[it.section] = sections[it.section] || []).push(it); }
+        openModal({
+          title: `${esc(t.name)} <span class="text-sm font-normal text-slate-400">v${esc(t.version)}</span>`,
+          size: 'lg',
+          body: Object.entries(sections).map(([sec, items]) => `
+            <div class="mb-4 last:mb-0">
+              <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">${esc(sec)}</p>
+              <div class="space-y-1.5">
+                ${items.map((it) => `<div class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 text-sm text-slate-600"><i data-lucide="square" class="w-3.5 h-3.5 text-slate-300"></i> ${esc(it.label)}${it.required ? ' <span class="text-red-400">*</span>' : ''}</div>`).join('')}
+              </div>
+            </div>`).join('')
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function sectionEditorHtml(sections = [{ section: SECTIONS[0], items: [{ label: '' }] }]) {
+      return sections.map((sec, si) => `
+        <div class="tpl-section border border-slate-200 rounded-xl p-4" data-si="${si}">
+          <div class="flex items-center gap-2 mb-3">
+            <select class="input sec-name !w-auto flex-1">
+              ${SECTIONS.map((s) => `<option ${s === sec.section ? 'selected' : ''}>${s}</option>`).join('')}
+              <option value="__custom" ${!SECTIONS.includes(sec.section) ? 'selected' : ''}>Lainnya...</option>
+            </select>
+            ${!SECTIONS.includes(sec.section) ? `<input class="input sec-custom flex-1" value="${esc(sec.section)}" placeholder="Nama section">` : ''}
+            <button type="button" class="btn-ghost !p-2 text-red-500 sec-remove"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </div>
+          <div class="sec-items space-y-2">
+            ${sec.items.map((it) => itemRowHtml(it)).join('')}
+          </div>
+          <button type="button" class="text-sm text-blue-600 hover:underline mt-2 sec-add-item">+ Tambah item</button>
+        </div>`).join('');
+    }
+
+    function itemRowHtml(it = { label: '' }) {
+      return `<div class="item-row flex items-center gap-2">
+        <input class="input item-label flex-1" placeholder="Item checklist..." value="${esc(it.label || '')}">
+        <label class="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap"><input type="checkbox" class="item-required w-4 h-4 accent-blue-600" ${it.required !== false ? 'checked' : ''}> Wajib</label>
+        <button type="button" class="btn-ghost !p-2 text-red-500 item-remove"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>`;
+    }
+
+    function bindEditor(box) {
+      box.querySelectorAll('.sec-name').forEach((sel) => {
+        if (sel.dataset.bound) return;
+        sel.dataset.bound = '1';
+        sel.addEventListener('change', () => {
+          const section = sel.closest('.tpl-section');
+          const existing = section.querySelector('.sec-custom');
+          if (sel.value === '__custom' && !existing) {
+            sel.insertAdjacentHTML('afterend', '<input class="input sec-custom flex-1" placeholder="Nama section">');
+          } else if (sel.value !== '__custom' && existing) existing.remove();
+        });
+      });
+      box.querySelectorAll('.sec-remove').forEach((b) => {
+        if (b.dataset.bound) return;
+        b.dataset.bound = '1';
+        b.addEventListener('click', () => b.closest('.tpl-section').remove());
+      });
+      box.querySelectorAll('.sec-add-item').forEach((b) => {
+        if (b.dataset.bound) return;
+        b.dataset.bound = '1';
+        b.addEventListener('click', () => {
+          b.closest('.tpl-section').querySelector('.sec-items').insertAdjacentHTML('beforeend', itemRowHtml());
+          bindEditor(box);
+          refreshIcons();
+        });
+      });
+      box.querySelectorAll('.item-remove').forEach((b) => {
+        if (b.dataset.bound) return;
+        b.dataset.bound = '1';
+        b.addEventListener('click', () => b.closest('.item-row').remove());
+      });
+    }
+
+    function collectSections(box) {
+      return [...box.querySelectorAll('.tpl-section')].map((sec) => {
+        const sel = sec.querySelector('.sec-name');
+        const custom = sec.querySelector('.sec-custom');
+        const name = sel.value === '__custom' ? (custom?.value.trim() || 'Umum') : sel.value;
+        return {
+          section: name,
+          items: [...sec.querySelectorAll('.item-row')].map((row) => ({
+            label: row.querySelector('.item-label').value.trim(),
+            required: row.querySelector('.item-required').checked
+          })).filter((x) => x.label)
+        };
+      }).filter((s) => s.items.length);
+    }
+
+    document.getElementById('btn-new').addEventListener('click', () => {
+      const m = openModal({
+        title: 'Template Checklist Baru',
+        size: 'lg',
+        body: `
+          <div class="space-y-4">
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Nama Template *</label><input id="t-name" class="input" placeholder="cth: Dental Chair Maintenance"></div>
+              <div><label class="label">Versi</label><input id="t-version" class="input" value="1.0"></div>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div><label class="label">Jenis Service</label>
+                <select id="t-type" class="input">
+                  <option value="">Semua jenis</option>
+                  <option>Repair</option><option>Preventive Maintenance</option><option>Installation</option><option>Inspection</option><option>Emergency</option>
+                </select>
+              </div>
+              <div><label class="label">Kategori Equipment</label><input id="t-category" class="input" placeholder="ALL untuk semua"></div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="label !mb-0">Sections & Items</label>
+                <button type="button" id="t-add-section" class="text-sm text-blue-600 hover:underline">+ Tambah section</button>
+              </div>
+              <div id="t-sections" class="space-y-3">${sectionEditorHtml()}</div>
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="t-submit" class="btn-primary">Simpan Template</button>`
+      });
+      const box = m.el.querySelector('#t-sections');
+      bindEditor(box);
+      m.el.querySelector('#t-add-section').addEventListener('click', () => {
+        box.insertAdjacentHTML('beforeend', sectionEditorHtml([{ section: SECTIONS[0], items: [{ label: '' }] }]));
+        bindEditor(box);
+        refreshIcons();
+      });
+      m.el.querySelector('#t-submit').addEventListener('click', async () => {
+        const body = {
+          name: m.el.querySelector('#t-name').value.trim(),
+          version: m.el.querySelector('#t-version').value.trim() || '1.0',
+          service_type: m.el.querySelector('#t-type').value,
+          equipment_category: m.el.querySelector('#t-category').value.trim() || 'ALL',
+          sections: collectSections(box)
+        };
+        if (!body.name) return toast('Nama template wajib diisi', 'error');
+        if (!body.sections.length) return toast('Tambahkan minimal satu section dengan item', 'error');
+        try {
+          await api.post('/api/checklist-templates', body);
+          m.close();
+          toast('Template disimpan');
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+      refreshIcons();
+    });
+
+    load();
+  </script>
+</body>
+</html>
