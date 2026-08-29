@@ -47,7 +47,17 @@
     }
 
     function render() {
-      const { invoice: inv, totals, items, customer, payments, ticket } = data;
+      const { invoice: inv, totals, items, customer, payments, ticket, payment_account: pa } = data;
+      const bankPanel = (inv.status !== 'PAID' && pa && (pa.bank_name || pa.bank_account_name || pa.bank_account_number)) ? `
+          <div class="px-6 py-4 bg-blue-50/60 border-t border-blue-100">
+            <p class="text-xs uppercase tracking-wide text-blue-700 font-bold mb-1">Rekening Pembayaran</p>
+            <p class="text-xs text-slate-400 mb-2">Silakan transfer ke rekening berikut:</p>
+            <div class="space-y-1 text-sm">
+              ${pa.bank_name ? `<p><span class="text-slate-400 inline-block w-24">Nama Bank</span><b class="text-slate-700">${esc(pa.bank_name)}</b></p>` : ''}
+              ${pa.bank_account_number ? `<p><span class="text-slate-400 inline-block w-24">No. Rekening</span><b class="text-slate-700">${esc(pa.bank_account_number)}</b></p>` : ''}
+              ${pa.bank_account_name ? `<p><span class="text-slate-400 inline-block w-24">Atas Nama</span><b class="text-slate-700">${esc(pa.bank_account_name)}</b></p>` : ''}
+            </div>
+          </div>` : '';
       content.innerHTML = `
         <div class="card overflow-hidden mb-4">
           <div class="bg-slate-900 text-white px-6 py-5 flex items-start justify-between gap-3">
@@ -81,6 +91,7 @@
               <div class="flex justify-between font-bold text-slate-800 text-base pt-2 border-t border-slate-100"><span>Total</span><span>${fmtIDR(totals.total)}</span></div>
             </div>
           </div>
+          ${bankPanel}
           ${payments.length ? `
           <div class="px-6 py-4 bg-emerald-50/60 border-t border-emerald-100">
             <p class="text-xs uppercase tracking-wide text-emerald-700 font-bold mb-1.5">Pembayaran</p>

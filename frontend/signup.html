@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daftar — Service Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body class="min-h-screen bg-slate-50 font-sans antialiased">
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div class="w-full max-w-lg fade-up">
+      <div class="flex items-center gap-3 mb-8 justify-center">
+        <img src="/assets/logo.png" alt="Logo" class="w-11 h-11 object-contain">
+        <div>
+          <p class="font-extrabold text-slate-800 leading-tight" id="brand-name">Dent Tech</p>
+          <p class="text-slate-400 text-xs">Service Management System</p>
+        </div>
+      </div>
+
+      <div class="card p-8 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-800">Daftarkan Klinik Anda</h2>
+        <p class="text-sm text-slate-500 mt-1">Buat akun dengan email Gmail untuk mulai menggunakan layanan service.</p>
+
+        <div id="signup-error" class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 flex items-start gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 mt-0.5 shrink-0"></i><span id="signup-error-msg"></span>
+        </div>
+
+        <form id="signup-form" class="mt-6 space-y-4" novalidate>
+          <div>
+            <label class="label" for="name">Nama Lengkap <span class="text-red-500">*</span></label>
+            <input class="input" type="text" id="name" placeholder="Nama penanggung jawab" autocomplete="name" required>
+          </div>
+          <div>
+            <label class="label" for="email">Email Gmail <span class="text-red-500">*</span></label>
+            <input class="input" type="email" id="email" placeholder="nama@gmail.com" autocomplete="email" required>
+            <p class="text-xs text-slate-400 mt-1">Hanya email Gmail (@gmail.com) yang dapat terdaftar.</p>
+          </div>
+          <div>
+            <label class="label" for="password">Password <span class="text-red-500">*</span></label>
+            <div class="relative">
+              <input class="input pr-11" type="password" id="password" placeholder="Minimal 6 karakter" autocomplete="new-password" required>
+              <button type="button" id="toggle-pw" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+          <div>
+            <label class="label" for="clinic_name">Nama Klinik / RS <span class="text-red-500">*</span></label>
+            <input class="input" type="text" id="clinic_name" placeholder="Contoh: Klinik Gigi Sehat" required>
+          </div>
+          <div>
+            <label class="label" for="phone">Nomor WhatsApp Aktif <span class="text-red-500">*</span></label>
+            <input class="input" type="tel" id="phone" placeholder="08xxxxxxxxxx" autocomplete="tel" required>
+          </div>
+          <div>
+            <label class="label" for="address">Alamat Klinik / RS <span class="text-red-500">*</span></label>
+            <textarea class="input" id="address" rows="2" placeholder="Jalan, nomor, kelurahan, kecamatan" required></textarea>
+          </div>
+          <div>
+            <label class="label" for="city">Kota / Kabupaten</label>
+            <input class="input" type="text" id="city" placeholder="Contoh: Jakarta Selatan">
+          </div>
+          <button type="submit" id="signup-btn" class="btn-primary w-full !py-3">
+            <span id="signup-btn-label">Daftar Sekarang</span>
+          </button>
+        </form>
+
+        <p class="text-sm text-slate-500 text-center mt-6">Sudah punya akun? <a href="/" class="font-semibold text-blue-600 hover:underline">Masuk di sini</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { setToken, setUser, getToken, getUser, portalHome } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+
+    lucide.createIcons();
+
+    if (getToken() && getUser()) window.location.href = portalHome(getUser().role);
+
+    (async () => {
+      try {
+        const { settings } = await api.get('/api/public/settings');
+        if (settings.company_name) document.getElementById('brand-name').textContent = settings.company_name;
+      } catch {}
+    })();
+
+    const errBox = document.getElementById('signup-error');
+    const errMsg = document.getElementById('signup-error-msg');
+    const btn = document.getElementById('signup-btn');
+    const btnLabel = document.getElementById('signup-btn-label');
+
+    document.getElementById('toggle-pw').addEventListener('click', () => {
+      const pw = document.getElementById('password');
+      pw.type = pw.type === 'password' ? 'text' : 'password';
+    });
+
+    async function doSignup(payload) {
+      btn.disabled = true;
+      btnLabel.textContent = 'Memproses...';
+      errBox.classList.add('hidden');
+      try {
+        const data = await api.post('/api/auth/signup', payload);
+        setToken(data.token);
+        setUser(data.user);
+        window.location.href = portalHome(data.user.role);
+      } catch (e) {
+        errMsg.textContent = e.message;
+        errBox.classList.remove('hidden');
+        btn.disabled = false;
+        btnLabel.textContent = 'Daftar Sekarang';
+      }
+    }
+
+    document.getElementById('signup-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const get = (id) => document.getElementById(id).value.trim();
+      const payload = {
+        name: get('name'),
+        email: get('email'),
+        password: document.getElementById('password').value,
+        clinic_name: get('clinic_name'),
+        phone: get('phone'),
+        address: get('address'),
+        city: get('city')
+      };
+      const missing = ['name', 'email', 'password', 'clinic_name', 'phone', 'address'].filter((k) => !payload[k]);
+      if (missing.length) {
+        errMsg.textContent = 'Semua kolom bertanda * wajib diisi';
+        errBox.classList.remove('hidden');
+        return;
+      }
+      if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(payload.email)) {
+        errMsg.textContent = 'Email harus berakhiran @gmail.com';
+        errBox.classList.remove('hidden');
+        return;
+      }
+      if (payload.password.length < 6) {
+        errMsg.textContent = 'Password minimal 6 karakter';
+        errBox.classList.remove('hidden');
+        return;
+      }
+      doSignup(payload);
+    });
+  </script>
+</body>
+</html>

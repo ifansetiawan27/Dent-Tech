@@ -123,6 +123,24 @@
                 <input id="set-labor" type="number" min="0" step="1000" class="input" value="${s.default_labor}">
                 <p class="text-xs text-slate-400 mt-1">Dipakai sebagai nilai awal saat approve laporan / membuat proforma.</p>
               </div>
+              <div class="border-t border-slate-100 pt-4">
+                <p class="text-sm font-semibold text-slate-700 mb-1">Rekening Pembayaran</p>
+                <p class="text-xs text-slate-400 mb-3">Ditampilkan di Invoice &amp; Proforma Invoice agar customer tahu tujuan pembayaran.</p>
+                <div class="space-y-3">
+                  <div>
+                    <label class="label">Nama Bank</label>
+                    <input id="set-bank" class="input" placeholder="cth: BCA" value="${esc(s.bank_name || '')}">
+                  </div>
+                  <div>
+                    <label class="label">Nama Rekening</label>
+                    <input id="set-bank-name" class="input" placeholder="cth: PT Dent Tech Indonesia" value="${esc(s.bank_account_name || '')}">
+                  </div>
+                  <div>
+                    <label class="label">No. Rekening</label>
+                    <input id="set-bank-number" class="input" placeholder="cth: 1234567890" value="${esc(s.bank_account_number || '')}">
+                  </div>
+                </div>
+              </div>
             </div>`,
           footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="set-submit" class="btn-primary">Simpan Pengaturan</button>`
         });
@@ -130,7 +148,10 @@
           try {
             await api.put('/api/invoice-settings', {
               tax_mode: m.el.querySelector('#set-tax').value,
-              default_labor: Number(m.el.querySelector('#set-labor').value) || 0
+              default_labor: Number(m.el.querySelector('#set-labor').value) || 0,
+              bank_name: m.el.querySelector('#set-bank').value.trim(),
+              bank_account_name: m.el.querySelector('#set-bank-name').value.trim(),
+              bank_account_number: m.el.querySelector('#set-bank-number').value.trim()
             });
             m.close(); toast('Pengaturan invoice disimpan');
           } catch (e) { toast(e.message, 'error'); }

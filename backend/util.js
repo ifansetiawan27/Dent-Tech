@@ -45,34 +45,24 @@ function readBody(req, limitBytes = 20 * 1024 * 1024) {
   });
 }
 
-function hashPassword(pw) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(String(pw), salt, 64).toString('hex');
-  return `${salt}:${hash}`;
+async function nextNumber(prefix) {
+  const rows = await db.query('SELECT next_number($1) AS n', [prefix]);
+  return rows[0].n;
 }
 
-function verifyPassword(pw, stored) {
-  try {
-    const [salt, hash] = String(stored).split(':');
-    const check = crypto.scryptSync(String(pw), salt, 64).toString('hex');
-    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
-  } catch {
-    return false;
-  }
-}
-
-function nextNumber(prefix) {
-  const year = new Date().getFullYear();
-  const key = `seq:${prefix}:${year}`;
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
-  const n = (row ? parseInt(row.value, 10) : 0) + 1;
-  if (row) db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(String(n), key);
-  else db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, String(n));
-  return `${prefix}-${year}-${String(n).padStart(6, '0')}`;
+let _secret = null;
+async function loadSecret() {
+  if (_secret) return _secret;
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'app_secret'").get();
+  if (row) { _secret = row.value; return _secret; }
+  const secret = crypto.randomBytes(32).toString('hex');
+  await db.prepare("INSERT INTO settings (key, value) VALUES ('app_secret', ?) ON CONFLICT (key) DO NOTHING").run(secret);
+  _secret = secret;
+  return _secret;
 }
 
 function fileSig(fileId, ttlMinutes = 24 * 60) {
-  const secret = getSecret();
+  const secret = _secret || 'dent-tech-fallback-secret';
   const exp = Date.now() + ttlMinutes * 60 * 1000;
   const sig = crypto.createHmac('sha256', secret).update(`${fileId}.${exp}`).digest('hex');
   return { exp, sig };
@@ -81,7 +71,7 @@ function fileSig(fileId, ttlMinutes = 24 * 60) {
 function verifyFileSig(fileId, exp, sig) {
   if (!exp || !sig) return false;
   if (Date.now() > Number(exp)) return false;
-  const secret = getSecret();
+  const secret = _secret || 'dent-tech-fallback-secret';
   const expected = crypto.createHmac('sha256', secret).update(`${fileId}.${exp}`).digest('hex');
   try {
     return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(String(sig), 'hex'));
@@ -90,23 +80,14 @@ function verifyFileSig(fileId, exp, sig) {
   }
 }
 
-function getSecret() {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'app_secret'").get();
-  if (row) return row.value;
-  const secret = crypto.randomBytes(32).toString('hex');
-  db.prepare("INSERT INTO settings (key, value) VALUES ('app_secret', ?)").run(secret);
-  return secret;
-}
-
-function getSetting(key, def = '') {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+async function getSetting(key, def = '') {
+  const row = await db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : def;
 }
 
-function setSetting(key, value) {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
-  if (row) db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(String(value), key);
-  else db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, String(value));
+async function setSetting(key, value) {
+  await db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = ?')
+    .run(key, String(value), String(value));
 }
 
 function publicUser(u) {
@@ -121,6 +102,6 @@ function publicUser(u) {
 }
 
 module.exports = {
-  uid, now, localDate, localMonthKey, sendJSON, readBody, hashPassword, verifyPassword,
-  nextNumber, fileSig, verifyFileSig, getSetting, setSetting, publicUser
+  uid, now, localDate, localMonthKey, sendJSON, readBody,
+  nextNumber, loadSecret, fileSig, verifyFileSig, getSetting, setSetting, publicUser
 };

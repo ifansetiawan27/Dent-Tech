@@ -1,8 +1,9 @@
 'use strict';
+require('dotenv').config();
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { sendJSON, readBody } = require('./util');
+const { sendJSON, readBody, loadSecret } = require('./util');
 const auth = require('./auth');
 const { seed } = require('./seed');
 
@@ -14,8 +15,6 @@ const reportsH = require('./handlers/reports');
 const invoicesH = require('./handlers/invoices');
 const dashH = require('./handlers/dashboard');
 const filesH = require('./handlers/files');
-
-seed();
 
 const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
 const PORT = Number(process.env.PORT) || 3000;
@@ -45,6 +44,7 @@ function matchRoute(method, pathname) {
 // ---------------- API route table ----------------
 // roles: null = public, [] = any authenticated, otherwise specific roles
 route('POST', '/api/auth/login', null, authH.loginHandler);
+route('POST', '/api/auth/signup', null, authH.signupHandler);
 route('GET', '/api/public/settings', null, authH.publicSettingsHandler);
 route('POST', '/api/auth/logout', [], authH.logoutHandler);
 route('GET', '/api/auth/me', [], authH.meHandler);
@@ -155,10 +155,10 @@ const server = http.createServer(async (req, res) => {
     if (!matched) return sendJSON(res, 404, { error: 'Endpoint tidak ditemukan' });
     const { route: r, params } = matched;
     try {
-      const user = auth.currentUser(req);
+      const user = await auth.currentUser(req);
       if (r.roles !== null && !user) return sendJSON(res, 401, { error: 'Silakan login terlebih dahulu' });
-      if (r.roles && r.roles.length > 0 && user && !r.roles.includes(user.role)) {
-        return sendJSON(res, 403, { error: 'Anda tidak memiliki akses untuk aksi ini' });
+      if (user && r.roles && r.roles.length && !r.roles.includes(user.role)) {
+        return sendJSON(res, 403, { error: 'Anda tidak memiliki akses ke endpoint ini' });
       }
       const query = Object.fromEntries(url.searchParams.entries());
       let body = {};
@@ -177,9 +177,19 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res, pathname);
 });
 
-server.listen(PORT, () => {
-  console.log('====================================================');
-  console.log('  Service Management System - Dent Tech');
-  console.log(`  Server berjalan di http://localhost:${PORT}`);
-  console.log('====================================================');
-});
+(async () => {
+  try {
+    await loadSecret();
+    const seeded = await seed();
+    if (seeded) console.log('[SEED] Data demo berhasil dibuat di Supabase');
+  } catch (e) {
+    console.error('[STARTUP ERROR]', e);
+  }
+  server.listen(PORT, () => {
+    console.log('====================================================');
+    console.log('  Service Management System - Dent Tech');
+    console.log('  Database: Supabase (PostgreSQL) · Auth: Supabase JWT');
+    console.log(`  Server berjalan di http://localhost:${PORT}`);
+    console.log('====================================================');
+  });
+})();

@@ -43,8 +43,22 @@ function checklistHtml(evidence) {
     ${rows}`;
 }
 
+function bankInfoHtml(bank) {
+  if (!bank || (!bank.bank_name && !bank.bank_account_name && !bank.bank_account_number)) return '';
+  return `
+  <div class="bank">
+    <h4>Informasi Pembayaran</h4>
+    <div class="muted" style="margin-bottom:4px">Silakan lakukan pembayaran melalui transfer ke rekening berikut:</div>
+    <table class="bank-table">
+      ${bank.bank_name ? `<tr><td>Nama Bank</td><td><b>${esc(bank.bank_name)}</b></td></tr>` : ''}
+      ${bank.bank_account_number ? `<tr><td>No. Rekening</td><td><b>${esc(bank.bank_account_number)}</b></td></tr>` : ''}
+      ${bank.bank_account_name ? `<tr><td>Atas Nama</td><td><b>${esc(bank.bank_account_name)}</b></td></tr>` : ''}
+    </table>
+  </div>`;
+}
+
 export function buildInvoiceHtml(data) {
-  const { invoice: inv, totals, items, customer, ticket, work_order, payments, company, evidence } = data;
+  const { invoice: inv, totals, items, customer, ticket, work_order, payments, company, evidence, payment_account } = data;
   const isProforma = inv.type === 'PROFORMA';
   const docLabel = isProforma ? 'Proforma Invoice' : 'Invoice';
 
@@ -76,6 +90,11 @@ ${DOC_BASE_CSS}
 .totals .grand { border-top: 2px solid #e2e8f0; margin-top: 6px; padding-top: 10px; font-weight: 700; font-size: 16px; color: #1e293b; }
 .pay { margin-top: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 16px; }
 .pay h4 { color: #065f46; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; }
+.bank { margin-top: 20px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; }
+.bank h4 { color: #1e40af; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; }
+.bank-table td { padding: 2px 0; font-size: 12px; color: #475569; }
+.bank-table td:first-child { width: 120px; color: #64748b; }
+.bank-table b { color: #1e293b; font-size: 12px; }
 </style></head><body>
   ${watermarkHtml(inv)}
   <div class="head">
@@ -126,6 +145,8 @@ ${DOC_BASE_CSS}
     ${taxRow}
     <div class="row grand"><span>Total</span><span>${fmtIDR(totals.total)}</span></div>
   </div>
+
+  ${inv.status !== 'PAID' ? bankInfoHtml(payment_account) : ''}
 
   ${(payments && payments.length) ? `
   <div class="pay"><h4>Pembayaran</h4>

@@ -49,7 +49,17 @@
     }
 
     function render() {
-      const { invoice: inv, totals, items, customer, payments, work_order, ticket } = data;
+      const { invoice: inv, totals, items, customer, payments, work_order, ticket, payment_account: pa } = data;
+      const bankPanel = (inv.status !== 'PAID' && pa && (pa.bank_name || pa.bank_account_name || pa.bank_account_number)) ? `
+          <div class="px-8 py-5 bg-blue-50/60 border-t border-blue-100">
+            <p class="text-xs uppercase tracking-wide text-blue-700 font-bold mb-2">Rekening Pembayaran</p>
+            <p class="text-xs text-slate-400 mb-2">Tujuan pembayaran untuk invoice ini:</p>
+            <div class="space-y-1 text-sm">
+              ${pa.bank_name ? `<p><span class="text-slate-400 inline-block w-28">Nama Bank</span><b class="text-slate-700">${esc(pa.bank_name)}</b></p>` : ''}
+              ${pa.bank_account_number ? `<p><span class="text-slate-400 inline-block w-28">No. Rekening</span><b class="text-slate-700">${esc(pa.bank_account_number)}</b></p>` : ''}
+              ${pa.bank_account_name ? `<p><span class="text-slate-400 inline-block w-28">Atas Nama</span><b class="text-slate-700">${esc(pa.bank_account_name)}</b></p>` : ''}
+            </div>
+          </div>` : '';
       content.innerHTML = `
         <div class="no-print flex flex-wrap justify-end gap-2 mb-4">
           ${inv.status !== 'PAID' ? `<button id="btn-edit" class="btn-secondary"><i data-lucide="pencil" class="w-4 h-4"></i> Edit Biaya</button>` : ''}
@@ -121,6 +131,7 @@
               </div>
             </div>
           </div>
+          ${bankPanel}
           ${payments.length ? `
           <div class="px-8 py-5 bg-emerald-50/50 border-t border-emerald-100">
             <p class="text-xs uppercase tracking-wide text-emerald-700 font-bold mb-2">Pembayaran</p>

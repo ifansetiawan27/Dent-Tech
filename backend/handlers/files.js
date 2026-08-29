@@ -26,16 +26,16 @@ async function uploadFileHandler(ctx) {
 
   let resolvedTicketId = ticket_id;
   if (work_order_id) {
-    const wo = getWorkOrder(work_order_id);
+    const wo = await getWorkOrder(work_order_id);
     if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
-    if (!canAccessWorkOrder(ctx.user, wo)) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses' });
+    if (!await canAccessWorkOrder(ctx.user, wo)) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses' });
     if (ctx.user.role === 'technician' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
     if (!['ASSIGNED', 'STARTED'].includes(wo.status) && ctx.user.role === 'technician') return sendJSON(ctx.res, 400, { error: 'Work order sudah selesai' });
     resolvedTicketId = wo.ticket_id;
   } else if (ticket_id) {
-    const t = getTicket(ticket_id);
+    const t = await getTicket(ticket_id);
     if (!t) return sendJSON(ctx.res, 404, { error: 'Ticket tidak ditemukan' });
-    if (!canAccessTicket(ctx.user, t)) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses' });
+    if (!await canAccessTicket(ctx.user, t)) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses' });
   } else {
     return sendJSON(ctx.res, 400, { error: 'ticket_id atau work_order_id wajib diisi' });
   }
@@ -43,27 +43,25 @@ async function uploadFileHandler(ctx) {
   const id = uid();
   const fileName = `${id}${ALLOWED_MIME[mime]}`;
   fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buf);
-  db.prepare(`INSERT INTO attachments (id, ticket_id, work_order_id, kind, file_path, file_name, mime, size, caption, visibility, created_by, created_at)
+  await db.prepare(`INSERT INTO attachments (id, ticket_id, work_order_id, kind, file_path, file_name, mime, size, caption, visibility, created_by, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, resolvedTicketId, work_order_id, kind, fileName, file_name || fileName, mime, buf.length, caption, visibility, ctx.user.id, now());
+    .run(id, resolvedTicketId || null, work_order_id || null, kind, fileName, file_name || fileName, mime, buf.length, caption, visibility, ctx.user.id, now());
   audit(ctx.user, 'CREATE', 'attachment', id, `Upload ${kind} (${mime})`, ctx.ip);
   sendJSON(ctx.res, 201, { id, file_name: fileName });
 }
 
 async function getFileHandler(ctx) {
-  const id = ctx.params.id;
-  const a = db.prepare('SELECT * FROM attachments WHERE id = ?').get(id);
+  const a = await db.prepare('SELECT * FROM attachments WHERE id = ?').get(ctx.params.id);
   if (!a) return sendJSON(ctx.res, 404, { error: 'File tidak ditemukan' });
-
-  let allowed = verifyFileSig(id, ctx.query.exp, ctx.query.sig);
+  let allowed = verifyFileSig(a.id, ctx.query.exp, ctx.query.sig);
   if (!allowed && ctx.user) {
     if (ctx.user.role === 'admin') allowed = true;
     else if (a.work_order_id) {
-      const wo = getWorkOrder(a.work_order_id);
-      allowed = !!wo && canAccessWorkOrder(ctx.user, wo) && (ctx.user.role !== 'customer' || a.visibility !== 'INTERNAL');
+      const wo = await getWorkOrder(a.work_order_id);
+      allowed = !!wo && await canAccessWorkOrder(ctx.user, wo) && (ctx.user.role !== 'customer' || a.visibility !== 'INTERNAL');
     } else if (a.ticket_id) {
-      const t = getTicket(a.ticket_id);
-      allowed = !!t && canAccessTicket(ctx.user, t) && (ctx.user.role !== 'customer' || a.visibility !== 'INTERNAL');
+      const t = await getTicket(a.ticket_id);
+      allowed = !!t && await canAccessTicket(ctx.user, t) && (ctx.user.role !== 'customer' || a.visibility !== 'INTERNAL');
     }
   }
   if (!allowed) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses ke file ini' });
