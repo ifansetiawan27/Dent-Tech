@@ -147,7 +147,7 @@ export function initAdminLayout(activeKey) {
   sidebar.className = 'hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col bg-slate-900 text-slate-300 z-40';
   sidebar.innerHTML = `
     <div class="flex items-center gap-3 px-5 h-16 border-b border-slate-800">
-      <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center"><i data-lucide="wrench" class="w-5 h-5 text-white"></i></div>
+      <img src="/assets/logo.png" alt="Logo" class="w-9 h-9 object-contain">
       <div>
         <p class="text-white font-bold leading-tight">Dent Tech</p>
         <p class="text-[11px] text-slate-400 leading-tight">Admin Portal</p>
@@ -175,7 +175,7 @@ export function initAdminLayout(activeKey) {
   topbar.innerHTML = `
     <button id="mobile-menu-btn" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600"><i data-lucide="menu" class="w-5 h-5"></i></button>
     <div class="lg:hidden flex items-center gap-2">
-      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><i data-lucide="wrench" class="w-4 h-4 text-white"></i></div>
+      <img src="/assets/logo.png" alt="Logo" class="w-8 h-8 object-contain">
       <span class="font-bold text-slate-800">Dent Tech</span>
     </div>
     <div class="flex-1"></div>
@@ -198,7 +198,7 @@ export function initAdminLayout(activeKey) {
     <div class="absolute inset-y-0 left-0 w-72 bg-slate-900 text-slate-300 flex flex-col">
       <div class="flex items-center justify-between px-5 h-16 border-b border-slate-800">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><i data-lucide="wrench" class="w-4 h-4 text-white"></i></div>
+          <img src="/assets/logo.png" alt="Logo" class="w-8 h-8 object-contain">
           <span class="text-white font-bold">Dent Tech</span>
         </div>
         <button data-drawer-close class="p-2 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -241,7 +241,7 @@ export function initMobileLayout(activeKey, role) {
   const topbar = document.createElement('header');
   topbar.className = 'sticky top-0 z-30 h-16 bg-white/95 backdrop-blur border-b border-slate-200 flex items-center gap-3 px-4';
   topbar.innerHTML = `
-    <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center"><i data-lucide="wrench" class="w-5 h-5 text-white"></i></div>
+    <img src="/assets/logo.png" alt="Logo" class="w-9 h-9 object-contain">
     <div>
       <p class="font-bold text-slate-800 leading-tight">Dent Tech</p>
       <p class="text-[11px] text-slate-400 leading-tight">${portalLabel}</p>

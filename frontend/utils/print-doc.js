@@ -40,7 +40,7 @@ export const DOC_BASE_CSS = `
   body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 32px; font-size: 13px; position: relative; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2563eb; padding-bottom: 16px; }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .logo { width: 40px; height: 40px; border-radius: 10px; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
+  .logo { width: 48px; height: 48px; object-fit: contain; }
   .co { font-weight: 700; font-size: 18px; }
   .co-sub { color: #64748b; font-size: 11px; }
   .doc-title { text-align: right; }

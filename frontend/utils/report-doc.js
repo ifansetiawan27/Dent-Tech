@@ -29,7 +29,7 @@ ${DOC_BASE_CSS}
 .two-col > div { flex: 1; }
 </style></head><body>
   <div class="head">
-    <div class="brand"><div class="logo">DT</div>
+    <div class="brand"><img class="logo" src="/assets/logo.png" alt="Logo">
       <div><div class="co">${esc(company?.company_name || 'Dent Tech')}</div>
       <div class="co-sub">${esc(company?.company_address || '')}</div>
       <div class="co-sub">${esc(company?.company_phone || '')}</div></div>

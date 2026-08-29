@@ -80,7 +80,7 @@ ${DOC_BASE_CSS}
   ${watermarkHtml(inv)}
   <div class="head">
     <div>
-      <div class="brand"><div class="logo">DT</div>
+      <div class="brand"><img class="logo" src="/assets/logo.png" alt="Logo">
         <div><div class="co">${esc(company?.company_name || 'Dent Tech')}</div>
         <div class="co-sub">${esc(company?.company_address || '')}</div>
         <div class="co-sub">${esc(company?.company_phone || '')} · ${esc(company?.company_email || '')}</div></div>
