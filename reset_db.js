@@ -1,9 +1,8 @@
 'use strict';
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const { db, supabase, DATA_DIR } = require('./backend/db');
+const { db, supabase } = require('./backend/db');
 const { seed } = require('./backend/seed');
+const { BUCKET } = require('./backend/storage');
 
 const TABLES = ['users','tokens','customers','customer_contacts','equipment','tickets','ticket_status_history','ticket_timeline','work_orders','checklist_templates','checklist_template_items','checklist_responses','diagnoses','work_performed','parts','part_usages','attachments','service_reports','invoices','payments','notifications','audit_logs','settings'];
 
@@ -28,10 +27,18 @@ const TABLES = ['users','tokens','customers','customer_contacts','equipment','ti
   }
   console.log('      deleted', deleted, 'auth users');
 
-  console.log('[3/4] Cleaning uploads dir...');
-  const up = path.join(DATA_DIR, 'uploads');
-  try { for (const f of fs.readdirSync(up)) fs.unlinkSync(path.join(up, f)); } catch {}
-  console.log('      done');
+  console.log('[3/4] Cleaning Supabase Storage bucket...');
+  try {
+    const { data: files } = await supabase.storage.from(BUCKET).list();
+    if (files && files.length) {
+      await supabase.storage.from(BUCKET).remove(files.map((f) => f.name));
+      console.log('      removed', files.length, 'files');
+    } else {
+      console.log('      bucket empty');
+    }
+  } catch (e) {
+    console.log('      warn:', e.message);
+  }
 
   console.log('[4/4] Reseeding...');
   const seeded = await seed();

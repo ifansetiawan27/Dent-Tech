@@ -1,7 +1,7 @@
 'use strict';
-const fs = require('fs');
 const path = require('path');
-const { db, UPLOADS_DIR } = require('../db');
+const { db } = require('../db');
+const { saveFile, readFile } = require('../storage');
 const { uid, now, sendJSON, verifyFileSig } = require('../util');
 const { audit, getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder } = require('./_common');
 
@@ -42,7 +42,7 @@ async function uploadFileHandler(ctx) {
 
   const id = uid();
   const fileName = `${id}${ALLOWED_MIME[mime]}`;
-  fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buf);
+  await saveFile(fileName, buf, mime);
   await db.prepare(`INSERT INTO attachments (id, ticket_id, work_order_id, kind, file_path, file_name, mime, size, caption, visibility, created_by, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, resolvedTicketId || null, work_order_id || null, kind, fileName, file_name || fileName, mime, buf.length, caption, visibility, ctx.user.id, now());
@@ -66,9 +66,8 @@ async function getFileHandler(ctx) {
   }
   if (!allowed) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses ke file ini' });
 
-  const filePath = path.join(UPLOADS_DIR, path.basename(a.file_path));
-  if (!fs.existsSync(filePath)) return sendJSON(ctx.res, 404, { error: 'File tidak ditemukan di storage' });
-  const data = fs.readFileSync(filePath);
+  const data = await readFile(path.basename(a.file_path));
+  if (!data) return sendJSON(ctx.res, 404, { error: 'File tidak ditemukan di storage' });
   ctx.res.writeHead(200, {
     'Content-Type': a.mime || 'application/octet-stream',
     'Content-Length': data.length,

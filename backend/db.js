@@ -1,6 +1,4 @@
 ﻿'use strict';
-const path = require('path');
-const fs = require('fs');
 const { Pool, types } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -8,9 +6,8 @@ const { createClient } = require('@supabase/supabase-js');
 // dikembalikan sebagai string oleh node-postgres; konversi ke number.
 types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// File disimpan di Supabase Storage (lihat storage.js), bukan disk lokal,
+// agar persisten di serverless (Vercel) maupun lokal.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
@@ -48,4 +45,4 @@ const db = {
   query: async (sql, params = []) => (await pool.query(sql, params)).rows
 };
 
-module.exports = { db, supabase, DATA_DIR, UPLOADS_DIR };
+module.exports = { db, supabase };

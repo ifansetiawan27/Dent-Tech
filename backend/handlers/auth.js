@@ -1,7 +1,7 @@
 'use strict';
-const fs = require('fs');
 const path = require('path');
-const { db, supabase, UPLOADS_DIR } = require('../db');
+const { db, supabase } = require('../db');
+const { saveFile, readFile } = require('../storage');
 const { uid, now, sendJSON, publicUser, fileSig, verifyFileSig, nextNumber } = require('../util');
 const auth = require('../auth');
 const { audit } = require('./_common');
@@ -178,7 +178,7 @@ async function uploadPhotoHandler(ctx) {
   const buf = Buffer.from(m[2], 'base64');
   if (buf.length > 5 * 1024 * 1024) return sendJSON(ctx.res, 400, { error: 'Ukuran foto maksimal 5MB' });
   const fileName = `avatar_${ctx.user.id}${AVATAR_MIME[mime]}`;
-  fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buf);
+  await saveFile(fileName, buf, mime);
   await db.prepare('UPDATE users SET photo_path = ?, photo_mime = ? WHERE id = ?').run(fileName, mime, ctx.user.id);
   const row = await db.prepare('SELECT * FROM users WHERE id = ?').get(ctx.user.id);
   audit(ctx.user, 'UPDATE', 'user', ctx.user.id, 'Mengubah foto profil', ctx.ip);
@@ -194,9 +194,8 @@ async function getPhotoHandler(ctx) {
   if (!allowed) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses' });
   const u = await db.prepare('SELECT photo_path, photo_mime FROM users WHERE id = ?').get(userId);
   if (!u || !u.photo_path) return sendJSON(ctx.res, 404, { error: 'Foto tidak ditemukan' });
-  const filePath = path.join(UPLOADS_DIR, path.basename(u.photo_path));
-  if (!fs.existsSync(filePath)) return sendJSON(ctx.res, 404, { error: 'Foto tidak ditemukan' });
-  const data = fs.readFileSync(filePath);
+  const data = await readFile(path.basename(u.photo_path));
+  if (!data) return sendJSON(ctx.res, 404, { error: 'Foto tidak ditemukan' });
   ctx.res.writeHead(200, { 'Content-Type': u.photo_mime || 'image/jpeg', 'Content-Length': data.length, 'Cache-Control': 'private, max-age=3600' });
   ctx.res.end(data);
 }

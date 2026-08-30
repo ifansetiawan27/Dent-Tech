@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/admin/", "destination": "/frontend/admin/index.html" },
+    { "source": "/technician/", "destination": "/frontend/technician/index.html" },
+    { "source": "/customer/", "destination": "/frontend/customer/index.html" },
+    { "source": "/((?!api/).+)", "destination": "/frontend/$1" }
+  ]
+}

@@ -1,7 +1,6 @@
 'use strict';
-const fs = require('fs');
-const path = require('path');
-const { db, supabase, UPLOADS_DIR } = require('./db');
+const { db, supabase } = require('./db');
+const { saveFile } = require('./storage');
 const { uid, localDate } = require('./util');
 const { CHECKLIST_TEMPLATES } = require('./checklist-data');
 
@@ -31,10 +30,11 @@ function placeholderSvg(fileId, label, color) {
 async function addAttachment({ ticket_id, work_order_id, kind, caption, visibility, created_by, created_at, label, color }) {
   const id = uid();
   const fileName = `${id}.svg`;
-  fs.writeFileSync(path.join(UPLOADS_DIR, fileName), placeholderSvg(id, label || kind.toUpperCase(), color || '#334155'));
+  const svgBuf = Buffer.from(placeholderSvg(id, label || kind.toUpperCase(), color || '#334155'), 'utf8');
+  await saveFile(fileName, svgBuf, 'image/svg+xml');
   await db.prepare(`INSERT INTO attachments (id, ticket_id, work_order_id, kind, file_path, file_name, mime, size, caption, visibility, created_by, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'image/svg+xml', ?, ?, ?, ?, ?)`)
-    .run(id, ticket_id || null, work_order_id || null, kind, fileName, fileName, 2048, caption || '', visibility || 'CUSTOMER_VISIBLE', created_by || null, created_at);
+    .run(id, ticket_id || null, work_order_id || null, kind, fileName, fileName, svgBuf.length, caption || '', visibility || 'CUSTOMER_VISIBLE', created_by || null, created_at);
   return id;
 }
 

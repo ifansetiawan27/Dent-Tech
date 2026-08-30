@@ -7,120 +7,12 @@ const { sendJSON, readBody, loadSecret } = require('./util');
 const auth = require('./auth');
 const { seed } = require('./seed');
 
-const authH = require('./handlers/auth');
-const masterH = require('./handlers/master');
-const ticketsH = require('./handlers/tickets');
-const woH = require('./handlers/workorders');
-const reportsH = require('./handlers/reports');
-const invoicesH = require('./handlers/invoices');
-const dashH = require('./handlers/dashboard');
-const filesH = require('./handlers/files');
+const { matchRoute } = require('./router');
 
 const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
 const PORT = Number(process.env.PORT) || 3000;
 
-// ---------------- Router ----------------
-const routes = [];
-function route(method, pattern, roles, handler) {
-  routes.push({ method, segs: pattern.split('/').filter(Boolean), roles, handler });
-}
-
-function matchRoute(method, pathname) {
-  const pSegs = pathname.split('/').filter(Boolean);
-  for (const r of routes) {
-    if (r.method !== method) continue;
-    if (r.segs.length !== pSegs.length) continue;
-    const params = {};
-    let ok = true;
-    for (let i = 0; i < r.segs.length; i++) {
-      if (r.segs[i].startsWith(':')) params[r.segs[i].slice(1)] = decodeURIComponent(pSegs[i]);
-      else if (r.segs[i] !== pSegs[i]) { ok = false; break; }
-    }
-    if (ok) return { route: r, params };
-  }
-  return null;
-}
-
-// ---------------- API route table ----------------
-// roles: null = public, [] = any authenticated, otherwise specific roles
-route('POST', '/api/auth/login', null, authH.loginHandler);
-route('POST', '/api/auth/signup', null, authH.signupHandler);
-route('GET', '/api/public/settings', null, authH.publicSettingsHandler);
-route('POST', '/api/auth/logout', [], authH.logoutHandler);
-route('GET', '/api/auth/me', [], authH.meHandler);
-route('PUT', '/api/auth/password', [], authH.changePasswordHandler);
-route('POST', '/api/auth/photo', [], authH.uploadPhotoHandler);
-route('GET', '/api/auth/photo', null, authH.getPhotoHandler);
-route('GET', '/api/users', ['admin'], authH.listUsersHandler);
-route('POST', '/api/users', ['admin'], authH.createUserHandler);
-route('PUT', '/api/users/:id', ['admin'], authH.updateUserHandler);
-
-route('GET', '/api/customers', ['admin'], masterH.listCustomersHandler);
-route('POST', '/api/customers', ['admin'], masterH.createCustomerHandler);
-route('GET', '/api/customers/:id', ['admin', 'customer'], masterH.getCustomerHandler);
-route('PUT', '/api/customers/:id', ['admin'], masterH.updateCustomerHandler);
-route('DELETE', '/api/customers/:id', ['admin'], masterH.deleteCustomerHandler);
-
-route('GET', '/api/equipment', ['admin', 'customer'], masterH.listEquipmentHandler);
-route('POST', '/api/equipment', ['admin'], masterH.createEquipmentHandler);
-route('GET', '/api/equipment/:id', ['admin', 'customer'], masterH.getEquipmentHandler);
-route('PUT', '/api/equipment/:id', ['admin'], masterH.updateEquipmentHandler);
-route('DELETE', '/api/equipment/:id', ['admin'], masterH.deleteEquipmentHandler);
-
-route('GET', '/api/parts', ['admin', 'technician'], masterH.listPartsHandler);
-route('POST', '/api/parts', ['admin'], masterH.createPartHandler);
-route('PUT', '/api/parts/:id', ['admin'], masterH.updatePartHandler);
-route('POST', '/api/parts/:id/adjust', ['admin'], masterH.adjustStockHandler);
-
-route('GET', '/api/checklist-templates', ['admin', 'technician'], masterH.listTemplatesHandler);
-route('GET', '/api/checklist-templates/:id', ['admin', 'technician'], masterH.getTemplateHandler);
-route('POST', '/api/checklist-templates', ['admin'], masterH.createTemplateHandler);
-route('PUT', '/api/checklist-templates/:id', ['admin'], masterH.updateTemplateHandler);
-route('POST', '/api/checklist-templates/:id/duplicate', ['admin'], masterH.duplicateTemplateHandler);
-
-route('GET', '/api/tickets', [], ticketsH.listTicketsHandler);
-route('POST', '/api/tickets', ['admin', 'customer'], ticketsH.createTicketHandler);
-route('GET', '/api/tickets/:id', [], ticketsH.getTicketHandler);
-route('PUT', '/api/tickets/:id', ['admin'], ticketsH.updateTicketHandler);
-route('POST', '/api/tickets/:id/status', ['admin'], ticketsH.changeStatusHandler);
-route('POST', '/api/tickets/:id/assign', ['admin'], ticketsH.assignTicketHandler);
-route('POST', '/api/tickets/:id/comments', [], ticketsH.commentHandler);
-route('POST', '/api/tickets/:id/internal-notes', ['admin', 'technician'], ticketsH.internalNoteHandler);
-
-route('GET', '/api/work-orders', ['admin', 'technician'], woH.listWorkOrdersHandler);
-route('GET', '/api/work-orders/:id', [], woH.getWorkOrderHandler);
-route('POST', '/api/work-orders/:id/start', ['admin', 'technician'], woH.startWorkOrderHandler);
-route('POST', '/api/work-orders/:id/checklist', ['admin', 'technician'], woH.saveChecklistHandler);
-route('POST', '/api/work-orders/:id/diagnosis', ['admin', 'technician'], woH.saveDiagnosisHandler);
-route('POST', '/api/work-orders/:id/work-performed', ['admin', 'technician'], woH.addWorkPerformedHandler);
-route('POST', '/api/work-orders/:id/parts', ['admin', 'technician'], woH.addPartUsageHandler);
-route('DELETE', '/api/work-orders/:id/parts/:usageId', ['admin', 'technician'], woH.removePartUsageHandler);
-route('POST', '/api/work-orders/:id/reschedule', ['admin'], woH.rescheduleHandler);
-route('POST', '/api/work-orders/:id/complete', ['admin', 'technician'], woH.completeWorkOrderHandler);
-
-route('GET', '/api/service-reports', [], reportsH.listReportsHandler);
-route('GET', '/api/service-reports/:id', [], reportsH.getReportHandler);
-route('POST', '/api/service-reports/:id/approve', ['admin'], reportsH.approveReportHandler);
-route('POST', '/api/service-reports/:id/reject', ['admin'], reportsH.rejectReportHandler);
-route('POST', '/api/service-reports/:id/resubmit', ['admin', 'technician'], reportsH.resubmitReportHandler);
-route('GET', '/api/reports/analytics', ['admin'], reportsH.analyticsHandler);
-
-route('GET', '/api/invoices', ['admin', 'customer'], invoicesH.listInvoicesHandler);
-route('GET', '/api/invoice-settings', ['admin'], invoicesH.getInvoiceSettingsHandler);
-route('PUT', '/api/invoice-settings', ['admin'], invoicesH.updateInvoiceSettingsHandler);
-route('POST', '/api/invoices/proforma', ['admin'], invoicesH.createProformaHandler);
-route('GET', '/api/invoices/:id', ['admin', 'customer'], invoicesH.getInvoiceHandler);
-route('PUT', '/api/invoices/:id', ['admin'], invoicesH.updateInvoiceHandler);
-route('POST', '/api/invoices/:id/pay', ['admin', 'customer'], invoicesH.payInvoiceHandler);
-
-route('GET', '/api/dashboard', [], dashH.dashboardHandler);
-route('GET', '/api/notifications', [], dashH.listNotificationsHandler);
-route('POST', '/api/notifications/:id/read', [], dashH.readNotificationHandler);
-route('POST', '/api/notifications/read-all', [], dashH.readAllNotificationsHandler);
-route('GET', '/api/audit', ['admin'], dashH.auditLogsHandler);
-
-route('POST', '/api/files', [], filesH.uploadFileHandler);
-route('GET', '/api/files/:id', null, filesH.getFileHandler);
+// ---------------- Router & tabel route: lihat backend/router.js ----------------
 
 // ---------------- Static ----------------
 const MIME = {
