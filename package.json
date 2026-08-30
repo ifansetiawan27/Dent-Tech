@@ -11,7 +11,8 @@
     "test:portal": "node test_newfeatures.js",
     "test:features": "node test_features2.js",
     "test:visual": "node visual_audit.js",
-    "audit": "node audit.js"
+    "audit": "node audit.js",
+    "reset": "node reset_db.js"
   },
   "keywords": [
     "service-management",

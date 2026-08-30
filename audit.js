@@ -39,11 +39,9 @@ async function waitHttpUp(ms = 10000) {
 }
 
 function wipeDb() {
-  for (const f of ['sms.db', 'sms.db-wal', 'sms.db-shm']) {
-    try { fs.unlinkSync(path.join(DATA, f)); } catch {}
-  }
-  const up = path.join(DATA, 'uploads');
-  try { for (const f of fs.readdirSync(up)) fs.unlinkSync(path.join(up, f)); } catch {}
+  // Database is Supabase (PostgreSQL), not SQLite. Reset = truncate all tables,
+  // delete Supabase auth users, clean uploads, then reseed. reset_db.js does all of it.
+  execFileSync(process.execPath, ['reset_db.js'], { cwd: ROOT, stdio: 'inherit' });
 }
 
 function startServer() {

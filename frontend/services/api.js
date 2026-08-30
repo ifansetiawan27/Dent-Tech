@@ -20,7 +20,7 @@ async function request(method, path, body) {
   }
   if (res.status === 401) {
     clearSession();
-    window.location.href = '/';
+    window.location.href = '/login.html';
     throw new Error('Sesi berakhir, silakan login kembali');
   }
   let data = null;

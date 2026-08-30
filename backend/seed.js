@@ -52,7 +52,7 @@ async function seed() {
 
   await db.prepare("INSERT INTO settings (key, value) VALUES ('company_name', 'Dent Tech') ON CONFLICT (key) DO NOTHING").run();
   await db.prepare("INSERT INTO settings (key, value) VALUES ('company_address', 'Jl. Raya Serpong No. 88, Tangerang Selatan') ON CONFLICT (key) DO NOTHING").run();
-  await db.prepare("INSERT INTO settings (key, value) VALUES ('company_phone', '+62 21 5555 0188') ON CONFLICT (key) DO NOTHING").run();
+  await db.prepare("INSERT INTO settings (key, value) VALUES ('company_phone', '08953-2744-5799') ON CONFLICT (key) DO NOTHING").run();
   await db.prepare("INSERT INTO settings (key, value) VALUES ('company_email', 'support@denttech.id') ON CONFLICT (key) DO NOTHING").run();
 
   const insUser = (id, email, name, role, phone, customer_id, created_at) =>

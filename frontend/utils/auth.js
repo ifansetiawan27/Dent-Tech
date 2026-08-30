@@ -18,7 +18,7 @@ export function portalHome(role) {
 export function requireAuth(expectedRoles) {
   const token = getToken();
   const user = getUser();
-  if (!token || !user) { window.location.href = '/'; return null; }
+  if (!token || !user) { window.location.href = '/login.html'; return null; }
   if (expectedRoles && !expectedRoles.includes(user.role)) { window.location.href = portalHome(user.role); return null; }
   return user;
 }
@@ -26,5 +26,5 @@ export function requireAuth(expectedRoles) {
 export async function logout() {
   try { await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: ('Bear' + 'er ') + getToken() } }); } catch {}
   clearSession();
-  window.location.href = '/';
+  window.location.href = '/login.html';
 }

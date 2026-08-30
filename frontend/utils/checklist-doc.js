@@ -24,7 +24,7 @@ export function buildChecklistHtml(data) {
   return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Checklist ${esc(work_order?.number || '')}</title>
 <style>${DOC_BASE_CSS}</style></head><body>
   <div class="head">
-    <div class="brand"><img class="logo" src="/assets/logo.png" alt="Logo">
+    <div class="brand"><img class="logo" src="/assets/logo.png?v=2" alt="Logo">
       <div><div class="co">${esc(company?.company_name || 'Dent Tech')}</div>
       <div class="co-sub">${esc(company?.company_address || '')}</div>
       <div class="co-sub">${esc(company?.company_phone || '')}</div></div>

@@ -30,7 +30,7 @@ async function collectErrors(page, label, navFn) {
 }
 
 async function login(page, email, password) {
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/login.html', { waitUntil: 'networkidle' });
   await page.fill('#email', email);
   await page.fill('#password', password);
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.click('#login-btn')]);
