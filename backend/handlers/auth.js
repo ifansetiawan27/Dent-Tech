@@ -1,6 +1,6 @@
 'use strict';
 const path = require('path');
-const { db, supabase } = require('../db');
+const { db, supabaseAdmin, createAuthClient } = require('../db');
 const { saveFile, readFile } = require('../storage');
 const { uid, now, sendJSON, publicUser, fileSig, verifyFileSig, nextNumber } = require('../util');
 const auth = require('../auth');
@@ -26,7 +26,7 @@ function normalizePhone(p) {
 }
 
 async function createAuthUser(email, password, name, role) {
-  const { data, error } = await supabase.auth.admin.createUser({
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -95,9 +95,10 @@ async function changePasswordHandler(ctx) {
   const { current_password, new_password } = ctx.body;
   if (!current_password || !new_password) return sendJSON(ctx.res, 400, { error: 'Password lama dan baru wajib diisi' });
   if (String(new_password).length < 6) return sendJSON(ctx.res, 400, { error: 'Password baru minimal 6 karakter' });
-  const { error: verifyErr } = await supabase.auth.signInWithPassword({ email: ctx.user.email, password: current_password });
+  const authClient = createAuthClient();
+  const { error: verifyErr } = await authClient.auth.signInWithPassword({ email: ctx.user.email, password: current_password });
   if (verifyErr) return sendJSON(ctx.res, 400, { error: 'Password lama salah' });
-  const { error } = await supabase.auth.admin.updateUserById(ctx.user.id, { password: new_password });
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(ctx.user.id, { password: new_password });
   if (error) return sendJSON(ctx.res, 500, { error: 'Gagal mengubah password: ' + error.message });
   audit(ctx.user, 'UPDATE', 'user', ctx.user.id, 'Mengubah password sendiri', ctx.ip);
   sendJSON(ctx.res, 200, { ok: true });
@@ -154,7 +155,7 @@ async function updateUserHandler(ctx) {
   if (active !== undefined) await db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, target.id);
   if (password) {
     if (String(password).length < 6) return sendJSON(ctx.res, 400, { error: 'Password minimal 6 karakter' });
-    const { error } = await supabase.auth.admin.updateUserById(target.id, { password });
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(target.id, { password });
     if (error) return sendJSON(ctx.res, 500, { error: 'Gagal mengubah password: ' + error.message });
   }
   audit(ctx.user, 'UPDATE', 'user', target.id, `Memperbarui user ${target.name}`, ctx.ip);

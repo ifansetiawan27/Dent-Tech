@@ -11,6 +11,8 @@
     "test:portal": "node test_newfeatures.js",
     "test:features": "node test_features2.js",
     "test:visual": "node visual_audit.js",
+    "test:finance": "node test_finance.js",
+    "test:rupiah": "node test_rupiah.js",
     "audit": "node audit.js",
     "reset": "node reset_db.js"
   },

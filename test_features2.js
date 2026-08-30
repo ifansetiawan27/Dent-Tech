@@ -115,7 +115,13 @@ async function apiCall(page, method, path, body) {
   await login(page, 'admin@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/workorder-detail.html?id=' + woId, { waitUntil: 'networkidle' });
   if (await page.$('#btn-dl-checklist')) ok('Download Checklist (PDF) button present'); else bad('missing checklist download button');
-  if (await page.$('#btn-proforma')) ok('Buat Proforma Invoice button present'); else bad('missing proforma button');
+  if (await page.$('#btn-proforma')) {
+    ok('Buat Proforma Invoice button present');
+    await page.click('#btn-proforma');
+    await page.waitForTimeout(200);
+    if ((await page.inputValue('#pf-labor')).includes('.')) ok('proforma labor input uses Rupiah separators'); else bad('proforma labor input not formatted');
+    await page.click('[data-modal-close]');
+  } else bad('missing proforma button');
   await page.goto(BASE + '/admin/tickets.html', { waitUntil: 'networkidle' });
   if (await page.$('[data-edit]')) ok('Edit button present on tickets list'); else bad('missing edit button on tickets');
   await page.goto(BASE + '/admin/ticket-detail.html?id=' + newTicketId, { waitUntil: 'networkidle' });
@@ -125,6 +131,14 @@ async function apiCall(page, method, path, body) {
   if (await page.$('#f-preset')) ok('report date filter present'); else bad('missing report date filter');
   await page.goto(BASE + '/admin/invoice-detail.html?id=' + invId, { waitUntil: 'networkidle' });
   if (await page.$('#btn-download')) ok('Download Invoice button present (admin)'); else bad('missing admin invoice download');
+  if (await page.$('#btn-edit')) {
+    await page.click('#btn-edit');
+    await page.waitForTimeout(200);
+    const laborFormatted = (await page.inputValue('#ed-labor')).includes('.');
+    const discountFormatted = /^\d{1,3}(\.\d{3})*$/.test(await page.inputValue('#ed-disc'));
+    if (laborFormatted && discountFormatted) ok('invoice edit inputs use Rupiah separators'); else bad('invoice edit inputs not formatted');
+    await page.click('[data-modal-close]');
+  }
   await page.goto(BASE + '/admin/invoices.html', { waitUntil: 'networkidle' });
   if (await page.$('#btn-settings')) ok('Invoice settings button present'); else bad('missing invoice settings');
   await ctx.close();

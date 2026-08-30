@@ -9,6 +9,7 @@ const reportsH = require('./handlers/reports');
 const invoicesH = require('./handlers/invoices');
 const dashH = require('./handlers/dashboard');
 const filesH = require('./handlers/files');
+const finH = require('./handlers/finance');
 
 const routes = [];
 function route(method, pattern, roles, handler) {
@@ -110,5 +111,11 @@ route('GET', '/api/audit', ['admin'], dashH.auditLogsHandler);
 
 route('POST', '/api/files', [], filesH.uploadFileHandler);
 route('GET', '/api/files/:id', null, filesH.getFileHandler);
+
+route('GET', '/api/finance/summary', ['admin'], finH.financeSummaryHandler);
+route('GET', '/api/finance/income', ['admin'], finH.financeIncomeHandler);
+route('GET', '/api/finance/expenses', ['admin'], finH.listExpensesHandler);
+route('POST', '/api/finance/expenses', ['admin'], finH.createExpenseHandler);
+route('DELETE', '/api/finance/expenses/:id', ['admin'], finH.deleteExpenseHandler);
 
 module.exports = { routes, matchRoute };

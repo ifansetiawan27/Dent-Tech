@@ -57,6 +57,7 @@ async function login(page, email, password) {
     ['admin checklists', '/admin/checklists.html'],
     ['admin inventory', '/admin/inventory.html'],
     ['admin invoices', '/admin/invoices.html'],
+    ['admin finance', '/admin/finance.html'],
     ['admin reports', '/admin/reports.html'],
     ['admin audit', '/admin/audit.html'],
     ['admin settings', '/admin/settings.html']

@@ -140,6 +140,7 @@ export function initAdminLayout(activeKey) {
     { key: 'checklists', label: 'Checklist Library', icon: 'list-checks', href: '/admin/checklists.html' },
     { key: 'inventory', label: 'Spare Parts', icon: 'package', href: '/admin/inventory.html' },
     { key: 'invoices', label: 'Invoices', icon: 'receipt', href: '/admin/invoices.html' },
+    { key: 'finance', label: 'Finance', icon: 'wallet', href: '/admin/finance.html' },
     { key: 'reports', label: 'Reports', icon: 'bar-chart-3', href: '/admin/reports.html' },
     { key: 'audit', label: 'Audit Log', icon: 'shield-check', href: '/admin/audit.html' }
   ];

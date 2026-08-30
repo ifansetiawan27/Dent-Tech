@@ -1,5 +1,5 @@
 'use strict';
-const { db, supabase } = require('./db');
+const { db, supabaseAdmin } = require('./db');
 const { saveFile } = require('./storage');
 const { uid, localDate } = require('./util');
 const { CHECKLIST_TEMPLATES } = require('./checklist-data');
@@ -39,7 +39,7 @@ async function addAttachment({ ticket_id, work_order_id, kind, caption, visibili
 }
 
 async function createAuthUser(email, password, name, role) {
-  const { data, error } = await supabase.auth.admin.createUser({
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email, password, email_confirm: true, user_metadata: { name, role }
   });
   if (error) throw new Error(`Gagal membuat user ${email}: ${error.message}`);

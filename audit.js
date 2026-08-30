@@ -89,10 +89,12 @@ function extractResult(out) {
 (async () => {
   const suites = [
     { name: 'API (27)', cmd: 'powershell', args: ['-ExecutionPolicy', 'Bypass', '-File', 'test_api.ps1'], resetBefore: true },
-    { name: 'Browser pages (31)', cmd: process.execPath, args: ['test_browser.js'], resetBefore: false },
+    { name: 'Browser pages (32)', cmd: process.execPath, args: ['test_browser.js'], resetBefore: false },
+    { name: 'Finance module (9)', cmd: process.execPath, args: ['test_finance.js'], resetBefore: true },
+    { name: 'Rupiah inputs (8)', cmd: process.execPath, args: ['test_rupiah.js'], resetBefore: false },
     { name: 'Lifecycle flow (11)', cmd: process.execPath, args: ['test_flow.js'], resetBefore: true },
     { name: 'Portal features (10)', cmd: process.execPath, args: ['test_newfeatures.js'], resetBefore: true },
-    { name: 'New features (28)', cmd: process.execPath, args: ['test_features2.js'], resetBefore: true },
+    { name: 'New features (30)', cmd: process.execPath, args: ['test_features2.js'], resetBefore: true },
     { name: 'Visual audit (11)', cmd: process.execPath, args: ['visual_audit.js'], resetBefore: true }
   ];
 

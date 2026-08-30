@@ -222,12 +222,12 @@ async function listPartsHandler(ctx) {
 }
 
 async function createPartHandler(ctx) {
-  const { name, category = '', unit = 'pcs', price = 0, stock = 0, min_stock = 0 } = ctx.body;
+  const { name, category = '', unit = 'pcs', price = 0, cost = 0, stock = 0, min_stock = 0 } = ctx.body;
   if (!name) return sendJSON(ctx.res, 400, { error: 'Nama spare part wajib diisi' });
   const id = uid();
   const code = 'PRT-' + String((await nextNumber('PRT')).split('-')[2]);
-  await db.prepare('INSERT INTO parts (id, code, name, category, unit, price, stock, min_stock, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(id, code, name, category, unit, Number(price) || 0, Number(stock) || 0, Number(min_stock) || 0, 'ACTIVE', now());
+  await db.prepare('INSERT INTO parts (id, code, name, category, unit, price, cost, stock, min_stock, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, code, name, category, unit, Number(price) || 0, Number(cost) || 0, Number(stock) || 0, Number(min_stock) || 0, 'ACTIVE', now());
   audit(ctx.user, 'CREATE', 'part', id, `Menambah spare part ${name}`, ctx.ip);
   sendJSON(ctx.res, 201, { id, code });
 }
@@ -235,7 +235,7 @@ async function createPartHandler(ctx) {
 async function updatePartHandler(ctx) {
   const p = await db.prepare('SELECT * FROM parts WHERE id = ?').get(ctx.params.id);
   if (!p) return sendJSON(ctx.res, 404, { error: 'Spare part tidak ditemukan' });
-  const fields = ['name', 'category', 'unit', 'price', 'stock', 'min_stock', 'status'];
+  const fields = ['name', 'category', 'unit', 'price', 'cost', 'stock', 'min_stock', 'status'];
   for (const f of fields) {
     if (ctx.body[f] !== undefined) await db.prepare(`UPDATE parts SET ${f} = ? WHERE id = ?`).run(ctx.body[f], p.id);
   }
@@ -250,9 +250,27 @@ async function adjustStockHandler(ctx) {
   if (!delta) return sendJSON(ctx.res, 400, { error: 'Jumlah penyesuaian tidak valid' });
   const newStock = p.stock + delta;
   if (newStock < 0) return sendJSON(ctx.res, 400, { error: 'Stok tidak boleh negatif' });
-  await db.prepare('UPDATE parts SET stock = ? WHERE id = ?').run(newStock, p.id);
-  audit(ctx.user, 'UPDATE', 'part', p.id, `Penyesuaian stok ${p.name}: ${delta > 0 ? '+' : ''}${delta} → ${newStock}`, ctx.ip);
-  sendJSON(ctx.res, 200, { ok: true, stock: newStock });
+
+  const recordExpense = delta > 0 && ctx.body.record_expense === true;
+  const unitCost = Number(ctx.body.unit_cost) || Number(p.cost) || 0;
+  const expenseDate = ctx.body.expense_date || localDate();
+  const reason = String(ctx.body.reason || '').trim();
+  if (recordExpense && unitCost <= 0) return sendJSON(ctx.res, 400, { error: 'Harga beli wajib diisi untuk mencatat pengeluaran' });
+  if (recordExpense && !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)) return sendJSON(ctx.res, 400, { error: 'Tanggal pembelian tidak valid' });
+
+  let expenseId = null;
+  await db.transaction(async (tx) => {
+    await tx.prepare('UPDATE parts SET stock = ?, cost = CASE WHEN ? THEN ? ELSE cost END WHERE id = ?')
+      .run(newStock, recordExpense, unitCost, p.id);
+    if (recordExpense) {
+      expenseId = uid();
+      const amount = Math.round(delta * unitCost * 100) / 100;
+      await tx.prepare('INSERT INTO expenses (id, category, description, part_id, qty, unit_cost, amount, restocked, expense_date, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+        .run(expenseId, 'SPARE_PART', reason || `Pembelian ${p.name}`, p.id, delta, unitCost, amount, 1, expenseDate, ctx.user.id, now());
+    }
+  });
+  audit(ctx.user, 'UPDATE', 'part', p.id, `Penyesuaian stok ${p.name}: ${delta > 0 ? '+' : ''}${delta} → ${newStock}${expenseId ? ' · tercatat di Finance' : ''}`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, stock: newStock, expense_id: expenseId });
 }
 
 // ---------------- Checklist Templates ----------------

@@ -1,8 +1,9 @@
 'use strict';
-const { db, supabase } = require('./db');
+const { db, createAuthClient } = require('./db');
 const { publicUser } = require('./util');
 
 async function login(email, password) {
+  const supabase = createAuthClient();
   const { data, error } = await supabase.auth.signInWithPassword({
     email: String(email || '').trim(),
     password: String(password || '')
@@ -26,6 +27,7 @@ function bearerToken(req) {
 async function currentUser(req) {
   const token = bearerToken(req);
   if (!token) return null;
+  const supabase = createAuthClient();
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return null;
   const row = await db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(data.user.id);
@@ -36,4 +38,4 @@ function requireRoles(...roles) {
   return (user) => !!user && (roles.length === 0 || roles.includes(user.role));
 }
 
-module.exports = { login, logout, currentUser, bearerToken, requireRoles, supabase };
+module.exports = { login, logout, currentUser, bearerToken, requireRoles };

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance — Admin</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css?v=2">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-6 pb-16 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">Finance</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Uang masuk &amp; uang keluar secara rinci — terhubung dengan spare part</p>
+        </div>
+        <button id="btn-expense" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i> Catat Pengeluaran</button>
+      </div>
+
+      <!-- Filter periode -->
+      <div class="card p-4 mb-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label class="label">Dari Tanggal</label>
+          <input type="date" id="f-from" class="input">
+        </div>
+        <div>
+          <label class="label">Sampai Tanggal</label>
+          <input type="date" id="f-to" class="input">
+        </div>
+        <button id="btn-apply" class="btn-primary"><i data-lucide="filter" class="w-4 h-4"></i> Terapkan</button>
+        <button id="btn-reset" class="btn-secondary">Semua Periode</button>
+      </div>
+
+      <!-- Ringkasan -->
+      <div id="summary" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4"></div>
+
+      <!-- Tren bulanan -->
+      <div class="card p-5 mb-4">
+        <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Tren Bulanan</h3>
+        <div id="trend"></div>
+      </div>
+
+      <!-- Uang masuk & keluar -->
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2"><i data-lucide="arrow-down-circle" class="w-4 h-4 text-emerald-600"></i> Uang Masuk</h3>
+            <span id="income-total" class="text-emerald-600 font-bold"></span>
+          </div>
+          <div id="income-list"></div>
+        </div>
+
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2"><i data-lucide="arrow-up-circle" class="w-4 h-4 text-red-500"></i> Uang Keluar</h3>
+            <span id="expense-total" class="text-red-500 font-bold"></span>
+          </div>
+          <div id="expense-byrev" class="text-xs text-slate-400 mb-3"></div>
+          <div id="expense-list"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initAdminLayout } from '/components/layout.js';
+    import { spinner, emptyState, table, openModal, confirmDialog, toast, refreshIcons } from '/components/ui.js';
+    import { fmtIDR, formatIDRInput, parseIDR, bindIDRInput, fmtDate, esc, todayStr } from '/utils/format.js';
+
+    requireAuth(['admin']);
+    initAdminLayout('finance');
+    lucide.createIcons();
+
+    const $ = (id) => document.getElementById(id);
+    let parts = [];
+
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const CAT = {
+      SPARE_PART: { label: 'Spare Part', cls: 'bg-blue-50 text-blue-700 ring-blue-200' },
+      OPERATIONAL: { label: 'Operasional', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+      OTHER: { label: 'Lainnya', cls: 'bg-slate-100 text-slate-600 ring-slate-200' }
+    };
+    function monthLabel(ym) {
+      const [y, m] = String(ym).split('-').map(Number);
+      return (MONTHS[m - 1] || '') + ' ' + y;
+    }
+    function qstr() {
+      const q = new URLSearchParams();
+      const from = $('f-from').value, to = $('f-to').value;
+      if (from) q.set('from', from);
+      if (to) q.set('to', to);
+      const s = q.toString();
+      return s ? '?' + s : '';
+    }
+
+    async function loadParts() {
+      try { const d = await api.get('/api/parts'); parts = d.parts || []; } catch { parts = []; }
+    }
+
+    function renderSummary(s) {
+      const netCls = s.net >= 0 ? 'text-emerald-600' : 'text-red-500';
+      const netIcon = s.net >= 0 ? 'trending-up' : 'trending-down';
+      $('summary').innerHTML = `
+        <div class="card p-5 border-l-4 border-l-emerald-500">
+          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold">Uang Masuk</p>
+          <p class="text-2xl font-extrabold text-emerald-600 mt-1">${fmtIDR(s.income)}</p>
+          <p class="text-xs text-slate-400 mt-1">${s.income_count} pembayaran diterima</p>
+        </div>
+        <div class="card p-5 border-l-4 border-l-red-400">
+          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold">Uang Keluar</p>
+          <p class="text-2xl font-extrabold text-red-500 mt-1">${fmtIDR(s.expense)}</p>
+          <p class="text-xs text-slate-400 mt-1">${s.expense_count} transaksi pengeluaran</p>
+        </div>
+        <div class="card p-5 border-l-4 border-l-blue-500">
+          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold">Laba / Rugi Bersih</p>
+          <p class="text-2xl font-extrabold ${netCls} mt-1 flex items-center gap-2"><i data-lucide="${netIcon}" class="w-5 h-5"></i>${fmtIDR(s.net)}</p>
+          <p class="text-xs text-slate-400 mt-1">Uang masuk − uang keluar</p>
+        </div>`;
+      refreshIcons();
+    }
+
+    function renderTrend(monthly) {
+      const el = $('trend');
+      if (!monthly || !monthly.length) {
+        el.innerHTML = `<p class="text-sm text-slate-400 py-4 text-center">Belum ada data pada periode ini.</p>`;
+        return;
+      }
+      const maxVal = Math.max(...monthly.map((m) => Math.max(m.income, m.expense)), 1);
+      el.innerHTML = `
+        <div class="flex items-center gap-4 text-xs text-slate-500 mb-3">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Uang Masuk</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-400 inline-block"></span> Uang Keluar</span>
+        </div>
+        ${monthly.map((m) => `
+          <div class="flex items-center gap-3 mb-3">
+            <span class="w-20 shrink-0 text-xs font-medium text-slate-500">${monthLabel(m.month)}</span>
+            <div class="flex-1 space-y-1">
+              <div class="h-3 bg-emerald-500 rounded-full" style="width:${Math.max((m.income / maxVal) * 100, m.income > 0 ? 2 : 0)}%" title="Masuk ${fmtIDR(m.income)}"></div>
+              <div class="h-3 bg-red-400 rounded-full" style="width:${Math.max((m.expense / maxVal) * 100, m.expense > 0 ? 2 : 0)}%" title="Keluar ${fmtIDR(m.expense)}"></div>
+            </div>
+            <div class="w-40 shrink-0 text-right text-xs">
+              <div class="text-emerald-600 font-semibold">${fmtIDR(m.income)}</div>
+              <div class="text-red-500 font-semibold">${fmtIDR(m.expense)}</div>
+            </div>
+          </div>`).join('')}`;
+    }
+
+    function renderIncome(data) {
+      $('income-total').textContent = fmtIDR(data.total);
+      const list = $('income-list');
+      if (!data.payments.length) {
+        list.innerHTML = emptyState('inbox', 'Belum ada uang masuk', 'Pembayaran invoice yang diterima akan tampil di sini.');
+        refreshIcons();
+        return;
+      }
+      const rows = data.payments.map((p) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3 whitespace-nowrap text-slate-600">${fmtDate(p.paid_at)}</td>
+          <td class="px-4 py-3"><span class="font-medium text-slate-700">${esc(p.invoice_number || '-')}</span></td>
+          <td class="px-4 py-3 text-slate-600">${esc(p.customer_name || '-')}</td>
+          <td class="px-4 py-3 text-slate-500">${esc(p.method || '-')}</td>
+          <td class="px-4 py-3 text-right font-semibold text-emerald-600 whitespace-nowrap">+${fmtIDR(p.amount)}</td>
+        </tr>`);
+      list.innerHTML = table(['Tanggal', 'Invoice', 'Customer', 'Metode', 'Jumlah'], rows);
+    }
+
+    function renderExpenses(data) {
+      $('expense-total').textContent = fmtIDR(data.total);
+      const list = $('expense-list');
+      if (!data.expenses.length) {
+        $('expense-byrev').innerHTML = '';
+        list.innerHTML = emptyState('inbox', 'Belum ada pengeluaran', 'Klik "Catat Pengeluaran" untuk menambahkan, misalnya pembelian spare part.');
+        refreshIcons();
+        return;
+      }
+      const rows = data.expenses.map((e) => {
+        const cat = CAT[e.category] || CAT.OTHER;
+        const partInfo = e.part_name ? `${esc(e.part_name)}${e.qty ? ` ×${e.qty}` : ''}` : '-';
+        return `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3 whitespace-nowrap text-slate-600">${fmtDate(e.expense_date)}</td>
+          <td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${cat.cls}">${cat.label}</span></td>
+          <td class="px-4 py-3 text-slate-600 max-w-[180px]"><div class="truncate" title="${esc(e.description)}">${esc(e.description) || '-'}</div><div class="text-[11px] text-slate-400">${partInfo !== '-' ? 'Part: ' + partInfo : ''}</div></td>
+          <td class="px-4 py-3 text-right font-semibold text-red-500 whitespace-nowrap">-${fmtIDR(e.amount)}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap"><button data-del="${e.id}" class="text-slate-400 hover:text-red-500 p-1 rounded" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
+        </tr>`;
+      });
+      list.innerHTML = table(['Tanggal', 'Kategori', 'Keterangan', 'Jumlah', ''], rows);
+      list.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => delExpense(b.dataset.del)));
+      refreshIcons();
+    }
+
+    function renderByCategory(byCat) {
+      const el = $('expense-byrev');
+      if (!byCat || !byCat.length) { el.innerHTML = ''; return; }
+      el.innerHTML = byCat.map((c) => `<span class="inline-flex items-center gap-1 mr-3">${(CAT[c.category] || CAT.OTHER).label}: <b class="text-slate-600">${fmtIDR(c.total)}</b></span>`).join('');
+    }
+
+    async function load() {
+      $('summary').innerHTML = spinner('Menghitung keuangan...');
+      $('income-list').innerHTML = '';
+      $('expense-list').innerHTML = '';
+      try {
+        const q = qstr();
+        const [summary, income, expenses] = await Promise.all([
+          api.get('/api/finance/summary' + q),
+          api.get('/api/finance/income' + q),
+          api.get('/api/finance/expenses' + q)
+        ]);
+        renderSummary(summary);
+        renderTrend(summary.monthly);
+        renderByCategory(summary.by_category);
+        renderIncome(income);
+        renderExpenses(expenses);
+      } catch (e) {
+        $('summary').innerHTML = '';
+        $('income-list').innerHTML = emptyState('alert-circle', 'Gagal memuat data', e.message);
+        refreshIcons();
+      }
+    }
+
+    async function delExpense(id) {
+      const ok = await confirmDialog({ title: 'Hapus Pengeluaran', message: 'Hapus catatan pengeluaran ini? Jika terkait restock spare part, stok part akan dikurangi kembali.', confirmLabel: 'Hapus', danger: true });
+      if (!ok) return;
+      try { await api.del('/api/finance/expenses/' + id); toast('Pengeluaran dihapus'); load(); }
+      catch (e) { toast(e.message, 'error'); }
+    }
+
+    function openExpenseModal() {
+      const partOpts = parts.map((p) => `<option value="${p.id}" data-cost="${p.cost || 0}">${esc(p.code)} — ${esc(p.name)} (stok ${p.stock})</option>`).join('');
+      const m = openModal({
+        title: 'Catat Pengeluaran',
+        size: 'lg',
+        body: `
+          <div class="space-y-4">
+            <div>
+              <label class="label">Kategori *</label>
+              <select id="e-category" class="input">
+                <option value="SPARE_PART">Spare Part</option>
+                <option value="OPERATIONAL">Operasional</option>
+                <option value="OTHER">Lainnya</option>
+              </select>
+            </div>
+            <div id="part-fields" class="space-y-3">
+              <div>
+                <label class="label">Spare Part</label>
+                <select id="e-part" class="input"><option value="">— Pilih part —</option>${partOpts}</select>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div><label class="label">Qty</label><input id="e-qty" type="number" min="0" step="any" class="input" value="1"></div>
+                <div><label class="label">Harga Beli / unit (Rp)</label><input id="e-unit" type="text" inputmode="numeric" class="input" value="0"></div>
+              </div>
+              <label class="flex items-center gap-2 text-sm text-slate-600">
+                <input id="e-restock" type="checkbox" class="w-4 h-4 accent-blue-600" checked> Tambah stok part (restock)
+              </label>
+            </div>
+            <div>
+              <label class="label">Jumlah Pengeluaran (Rp) *</label>
+              <input id="e-amount" type="text" inputmode="numeric" class="input" value="0">
+            </div>
+            <div>
+              <label class="label">Keterangan</label>
+              <input id="e-desc" class="input" placeholder="cth: Pembelian 5 unit handpiece">
+            </div>
+            <div>
+              <label class="label">Tanggal *</label>
+              <input id="e-date" type="date" class="input" value="${todayStr()}">
+            </div>
+          </div>`,
+        footer: `<button class="btn-secondary" data-act="cancel">Batal</button><button class="btn-primary" data-act="save">Simpan</button>`
+      });
+
+      const cat = m.el.querySelector('#e-category');
+      const partFields = m.el.querySelector('#part-fields');
+      const partSel = m.el.querySelector('#e-part');
+      const qty = m.el.querySelector('#e-qty');
+      const unit = bindIDRInput(m.el.querySelector('#e-unit'));
+      const amount = bindIDRInput(m.el.querySelector('#e-amount'));
+
+      function togglePart() { partFields.style.display = cat.value === 'SPARE_PART' ? '' : 'none'; }
+      function recompute() {
+        if (cat.value === 'SPARE_PART') {
+          amount.value = formatIDRInput(Math.round((Number(qty.value) || 0) * parseIDR(unit.value)));
+        }
+      }
+      cat.addEventListener('change', togglePart);
+      partSel.addEventListener('change', () => {
+        const opt = partSel.selectedOptions[0];
+        if (opt && opt.dataset.cost) unit.value = formatIDRInput(opt.dataset.cost);
+        recompute();
+      });
+      qty.addEventListener('input', recompute);
+      unit.addEventListener('input', recompute);
+      togglePart();
+
+      m.el.querySelector('[data-act="cancel"]').addEventListener('click', () => m.close());
+      m.el.querySelector('[data-act="save"]').addEventListener('click', async () => {
+        const isPart = cat.value === 'SPARE_PART';
+        const body = {
+          category: cat.value,
+          description: m.el.querySelector('#e-desc').value.trim(),
+          amount: parseIDR(amount.value),
+          expense_date: m.el.querySelector('#e-date').value || todayStr(),
+          part_id: isPart ? (partSel.value || null) : null,
+          qty: isPart ? (Number(qty.value) || 0) : 0,
+          unit_cost: isPart ? parseIDR(unit.value) : 0,
+          restock: isPart ? m.el.querySelector('#e-restock').checked : false
+        };
+        if (body.amount <= 0) return toast('Jumlah pengeluaran harus lebih dari 0', 'error');
+        if (isPart && !body.part_id) return toast('Pilih spare part terlebih dahulu', 'error');
+        try {
+          await api.post('/api/finance/expenses', body);
+          toast('Pengeluaran dicatat');
+          m.close();
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    }
+
+    $('btn-apply').addEventListener('click', load);
+    $('btn-reset').addEventListener('click', () => { $('f-from').value = ''; $('f-to').value = ''; load(); });
+    $('btn-expense').addEventListener('click', openExpenseModal);
+
+    (async function init() {
+      await loadParts();
+      load();
+    })();
+  </script>
+</body>
+</html>

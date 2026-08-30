@@ -1,10 +1,10 @@
 'use strict';
 require('dotenv').config();
-const { db, supabase } = require('./backend/db');
+const { db, supabaseAdmin } = require('./backend/db');
 const { seed } = require('./backend/seed');
 const { BUCKET } = require('./backend/storage');
 
-const TABLES = ['users','tokens','customers','customer_contacts','equipment','tickets','ticket_status_history','ticket_timeline','work_orders','checklist_templates','checklist_template_items','checklist_responses','diagnoses','work_performed','parts','part_usages','attachments','service_reports','invoices','payments','notifications','audit_logs','settings'];
+const TABLES = ['users','tokens','customers','customer_contacts','equipment','tickets','ticket_status_history','ticket_timeline','work_orders','checklist_templates','checklist_template_items','checklist_responses','diagnoses','work_performed','parts','part_usages','expenses','attachments','service_reports','invoices','payments','notifications','audit_logs','settings'];
 
 (async () => {
   console.log('[1/4] Truncating tables...');
@@ -14,12 +14,12 @@ const TABLES = ['users','tokens','customers','customer_contacts','equipment','ti
   console.log('[2/4] Deleting Supabase auth users...');
   let page = 1, deleted = 0;
   for (;;) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
     if (error) throw new Error('listUsers: ' + error.message);
     const users = data.users || [];
     if (!users.length) break;
     for (const u of users) {
-      const { error: e2 } = await supabase.auth.admin.deleteUser(u.id);
+      const { error: e2 } = await supabaseAdmin.auth.admin.deleteUser(u.id);
       if (e2) console.log('      warn delete', u.email, e2.message); else deleted++;
     }
     if (users.length < 100) break;
@@ -29,9 +29,9 @@ const TABLES = ['users','tokens','customers','customer_contacts','equipment','ti
 
   console.log('[3/4] Cleaning Supabase Storage bucket...');
   try {
-    const { data: files } = await supabase.storage.from(BUCKET).list();
+    const { data: files } = await supabaseAdmin.storage.from(BUCKET).list();
     if (files && files.length) {
-      await supabase.storage.from(BUCKET).remove(files.map((f) => f.name));
+      await supabaseAdmin.storage.from(BUCKET).remove(files.map((f) => f.name));
       console.log('      removed', files.length, 'files');
     } else {
       console.log('      bucket empty');

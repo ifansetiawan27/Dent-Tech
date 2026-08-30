@@ -43,7 +43,7 @@
     import { api } from '/services/api.js';
     import { initAdminLayout } from '/components/layout.js';
     import { spinner, errorState, emptyState, table, statusBadge, refreshIcons, INVOICE_STATUS, openModal, toast } from '/components/ui.js';
-    import { fmtIDR, fmtDate, esc } from '/utils/format.js';
+    import { fmtIDR, formatIDRInput, parseIDR, bindIDRInput, fmtDate, esc } from '/utils/format.js';
 
     requireAuth(['admin']);
     initAdminLayout('invoices');
@@ -120,7 +120,7 @@
               </div>
               <div>
                 <label class="label">Biaya Jasa Default (Rp)</label>
-                <input id="set-labor" type="number" min="0" step="1000" class="input" value="${s.default_labor}">
+                <input id="set-labor" type="text" inputmode="numeric" class="input" value="${formatIDRInput(s.default_labor)}">
                 <p class="text-xs text-slate-400 mt-1">Dipakai sebagai nilai awal saat approve laporan / membuat proforma.</p>
               </div>
               <div class="border-t border-slate-100 pt-4">
@@ -144,11 +144,12 @@
             </div>`,
           footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="set-submit" class="btn-primary">Simpan Pengaturan</button>`
         });
+        const defaultLaborEl = bindIDRInput(m.el.querySelector('#set-labor'));
         m.el.querySelector('#set-submit').addEventListener('click', async () => {
           try {
             await api.put('/api/invoice-settings', {
               tax_mode: m.el.querySelector('#set-tax').value,
-              default_labor: Number(m.el.querySelector('#set-labor').value) || 0,
+              default_labor: parseIDR(defaultLaborEl.value),
               bank_name: m.el.querySelector('#set-bank').value.trim(),
               bank_account_name: m.el.querySelector('#set-bank-name').value.trim(),
               bank_account_number: m.el.querySelector('#set-bank-number').value.trim()

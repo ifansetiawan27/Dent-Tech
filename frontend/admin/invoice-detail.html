@@ -26,7 +26,7 @@
     import { api } from '/services/api.js';
     import { initAdminLayout } from '/components/layout.js';
     import { spinner, errorState, statusBadge, openModal, toast, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
-    import { fmtIDR, fmtDate, fmtDateTime, esc } from '/utils/format.js';
+    import { fmtIDR, formatIDRInput, parseIDR, bindIDRInput, fmtDate, fmtDateTime, esc } from '/utils/format.js';
     import { downloadInvoice } from '/utils/invoice-doc.js';
 
     requireAuth(['admin']);
@@ -153,18 +153,20 @@
           title: 'Edit Biaya Invoice', size: 'sm',
           body: `
             <div class="space-y-4">
-              <div><label class="label">Biaya Jasa (Rp)</label><input id="ed-labor" type="number" min="0" class="input" value="${inv.labor_cost}"></div>
-              <div><label class="label">Diskon (Rp)</label><input id="ed-disc" type="number" min="0" class="input" value="${inv.discount}"></div>
+              <div><label class="label">Biaya Jasa (Rp)</label><input id="ed-labor" type="text" inputmode="numeric" class="input" value="${formatIDRInput(inv.labor_cost)}"></div>
+              <div><label class="label">Diskon (Rp)</label><input id="ed-disc" type="text" inputmode="numeric" class="input" value="${formatIDRInput(inv.discount)}"></div>
               <div><label class="label">PPN (%)</label><input id="ed-tax" type="number" min="0" class="input" value="${inv.tax_rate}"></div>
               <div><label class="label">Jatuh Tempo</label><input id="ed-due" type="date" class="input" value="${inv.due_at || ''}"></div>
             </div>`,
           footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="ed-submit" class="btn-primary">Simpan</button>`
         });
+        const laborEl = bindIDRInput(m.el.querySelector('#ed-labor'));
+        const discountEl = bindIDRInput(m.el.querySelector('#ed-disc'));
         m.el.querySelector('#ed-submit').addEventListener('click', async () => {
           try {
             await api.put('/api/invoices/' + inv.id, {
-              labor_cost: Number(m.el.querySelector('#ed-labor').value) || 0,
-              discount: Number(m.el.querySelector('#ed-disc').value) || 0,
+              labor_cost: parseIDR(laborEl.value),
+              discount: parseIDR(discountEl.value),
               tax_rate: Number(m.el.querySelector('#ed-tax').value) || 0,
               due_at: m.el.querySelector('#ed-due').value
             });

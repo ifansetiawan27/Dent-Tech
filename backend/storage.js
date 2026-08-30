@@ -1,29 +1,35 @@
 'use strict';
 // Abstraksi penyimpanan file berbasis Supabase Storage.
 // Dipakai (bukan disk lokal) agar file persisten di serverless (Vercel) maupun lokal.
-const { supabase } = require('./db');
+const { supabaseAdmin } = require('./db');
 
 const BUCKET = 'uploads';
-let _bucketReady = null;
+let bucketReady = null;
 
 async function ensureBucket() {
-  if (_bucketReady) return _bucketReady;
-  _bucketReady = (async () => {
-    try {
-      const { error } = await supabase.storage.createBucket(BUCKET, { public: false });
+  if (!bucketReady) {
+    bucketReady = (async () => {
+      const { data } = await supabaseAdmin.storage.getBucket(BUCKET);
+      if (data) return;
+      const { error } = await supabaseAdmin.storage.createBucket(BUCKET, {
+        public: false,
+        fileSizeLimit: 10 * 1024 * 1024,
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'application/pdf']
+      });
       if (error && !/already exists|sudah ada|409/i.test(error.message || '')) {
-        console.error('[STORAGE] createBucket:', error.message);
+        throw new Error('Gagal menyiapkan bucket storage: ' + error.message);
       }
-    } catch (e) {
-      console.error('[STORAGE] createBucket exception:', e.message);
-    }
-  })();
-  return _bucketReady;
+    })().catch((e) => {
+      bucketReady = null;
+      throw e;
+    });
+  }
+  return bucketReady;
 }
 
 async function saveFile(fileName, buffer, contentType) {
   await ensureBucket();
-  const { error } = await supabase.storage.from(BUCKET).upload(fileName, buffer, {
+  const { error } = await supabaseAdmin.storage.from(BUCKET).upload(fileName, buffer, {
     contentType: contentType || 'application/octet-stream',
     upsert: true
   });
@@ -32,14 +38,14 @@ async function saveFile(fileName, buffer, contentType) {
 
 async function readFile(fileName) {
   await ensureBucket();
-  const { data, error } = await supabase.storage.from(BUCKET).download(fileName);
+  const { data, error } = await supabaseAdmin.storage.from(BUCKET).download(fileName);
   if (error || !data) return null;
   return Buffer.from(await data.arrayBuffer());
 }
 
 async function deleteFile(fileName) {
   await ensureBucket();
-  await supabase.storage.from(BUCKET).remove([fileName]);
+  await supabaseAdmin.storage.from(BUCKET).remove([fileName]);
 }
 
 module.exports = { saveFile, readFile, deleteFile, BUCKET };

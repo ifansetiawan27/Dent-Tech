@@ -3,4 +3,8 @@ data/
 .env
 *.log
 supabase/.temp/
+.kilo/
 .vercel/
+
+.vercel
+.env*

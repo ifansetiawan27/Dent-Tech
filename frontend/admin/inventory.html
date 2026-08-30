@@ -36,7 +36,7 @@
     import { api } from '/services/api.js';
     import { initAdminLayout } from '/components/layout.js';
     import { spinner, errorState, emptyState, table, openModal, toast, refreshIcons } from '/components/ui.js';
-    import { fmtIDR, esc } from '/utils/format.js';
+    import { fmtIDR, formatIDRInput, parseIDR, bindIDRInput, todayStr, esc } from '/utils/format.js';
 
     requireAuth(['admin']);
     initAdminLayout('inventory');
@@ -78,17 +78,18 @@
             <p class="text-xs text-slate-400">${p.code} · ${esc(p.category || '-')}</p>
           </td>
           <td class="px-4 py-3 text-slate-600 text-sm">${fmtIDR(p.price)}</td>
+          <td class="px-4 py-3 text-slate-500 text-sm">${fmtIDR(p.cost || 0)}</td>
           <td class="px-4 py-3">${stockBadge(p)}</td>
           <td class="px-4 py-3 text-slate-600 text-sm text-center">${p.min_stock}</td>
           <td class="px-4 py-3 text-slate-600 text-sm text-center">${p.used_total}</td>
           <td class="px-4 py-3">
             <div class="flex gap-1 justify-end">
-              <button class="btn-ghost !p-2" data-adjust="${p.id}" data-name="${esc(p.name)}" data-stock="${p.stock}" title="Penyesuaian stok"><i data-lucide="package-plus" class="w-4 h-4"></i></button>
+              <button class="btn-ghost !p-2" data-adjust="${p.id}" data-name="${esc(p.name)}" data-stock="${p.stock}" data-cost="${p.cost || 0}" title="Penyesuaian stok"><i data-lucide="package-plus" class="w-4 h-4"></i></button>
               <button class="btn-ghost !p-2" data-edit="${p.id}" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
             </div>
           </td>
         </tr>`);
-      content.innerHTML = table(['Part', 'Harga', 'Stok', 'Min. Stok', 'Terpakai', ''], rows);
+      content.innerHTML = table(['Part', 'Harga Jual', 'Harga Beli', 'Stok', 'Min. Stok', 'Terpakai', ''], rows);
       refreshIcons();
       content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editModal(list.find((x) => x.id === b.dataset.edit))));
       content.querySelectorAll('[data-adjust]').forEach((b) => b.addEventListener('click', () => adjustModal(b.dataset)));
@@ -103,16 +104,53 @@
           <label class="label">Perubahan (+masuk / -keluar)</label>
           <input id="adj-delta" type="number" class="input" placeholder="cth: 5 atau -2">
           <label class="label mt-3">Alasan</label>
-          <input id="adj-reason" class="input" placeholder="cth: pembelian baru / stok opname">`,
+          <input id="adj-reason" class="input" placeholder="cth: pembelian baru / stok opname">
+          <div id="adj-finance" class="hidden mt-4 rounded-xl bg-blue-50 border border-blue-100 p-3 space-y-3">
+            <label class="flex items-center gap-2 text-sm font-medium text-blue-800">
+              <input id="adj-record-expense" type="checkbox" class="w-4 h-4 accent-blue-600" checked> Catat pembelian ke Finance
+            </label>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="label">Harga Beli / unit (Rp)</label><input id="adj-unit-cost" type="text" inputmode="numeric" class="input" value="0"></div>
+              <div><label class="label">Tanggal Pembelian</label><input id="adj-date" type="date" class="input"></div>
+            </div>
+            <p id="adj-total" class="text-xs font-semibold text-blue-700">Total: Rp 0</p>
+          </div>`,
         footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="adj-submit" class="btn-primary">Simpan Stok</button>`
       });
+      const deltaEl = m.el.querySelector('#adj-delta');
+      const financeEl = m.el.querySelector('#adj-finance');
+      const recordEl = m.el.querySelector('#adj-record-expense');
+      const costEl = bindIDRInput(m.el.querySelector('#adj-unit-cost'));
+      costEl.value = formatIDRInput(d.cost || 0);
+      const dateEl = m.el.querySelector('#adj-date');
+      const totalEl = m.el.querySelector('#adj-total');
+      dateEl.value = todayStr();
+
+      function refreshFinancePanel() {
+        const delta = Number(deltaEl.value) || 0;
+        financeEl.classList.toggle('hidden', delta <= 0);
+        totalEl.textContent = 'Total: ' + fmtIDR(Math.max(delta, 0) * parseIDR(costEl.value));
+      }
+      deltaEl.addEventListener('input', refreshFinancePanel);
+      costEl.addEventListener('input', refreshFinancePanel);
+      refreshFinancePanel();
+
       m.el.querySelector('#adj-submit').addEventListener('click', async () => {
-        const delta = Number(m.el.querySelector('#adj-delta').value);
+        const delta = Number(deltaEl.value);
         if (!delta) return toast('Masukkan jumlah perubahan', 'error');
+        const recordExpense = delta > 0 && recordEl.checked;
+        const unitCost = parseIDR(costEl.value);
+        if (recordExpense && unitCost <= 0) return toast('Harga beli wajib diisi', 'error');
         try {
-          const res = await api.post(`/api/parts/${d.adjust}/adjust`, { delta });
+          const res = await api.post(`/api/parts/${d.adjust}/adjust`, {
+            delta,
+            reason: m.el.querySelector('#adj-reason').value.trim(),
+            record_expense: recordExpense,
+            unit_cost: unitCost,
+            expense_date: dateEl.value
+          });
           m.close();
-          toast(`Stok diperbarui menjadi ${res.stock}`);
+          toast(res.expense_id ? `Stok menjadi ${res.stock} dan pembelian tercatat di Finance` : `Stok diperbarui menjadi ${res.stock}`);
           load();
         } catch (e) { toast(e.message, 'error'); }
       });
@@ -130,20 +168,24 @@
               <div><label class="label">Kategori</label><input id="p-category" class="input" value="${esc(p?.category || '')}"></div>
               <div><label class="label">Satuan</label><input id="p-unit" class="input" value="${esc(p?.unit || 'pcs')}"></div>
             </div>
-            <div class="grid grid-cols-3 gap-4">
-              <div><label class="label">Harga (Rp)</label><input id="p-price" type="number" min="0" class="input" value="${p?.price ?? 0}"></div>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="label">Harga Jual (Rp)</label><input id="p-price" type="text" inputmode="numeric" class="input" value="${formatIDRInput(p?.price ?? 0)}"></div>
+              <div><label class="label">Harga Beli (Rp)</label><input id="p-cost" type="text" inputmode="numeric" class="input" value="${formatIDRInput(p?.cost ?? 0)}"></div>
               <div><label class="label">${isEdit ? 'Stok' : 'Stok Awal'}</label><input id="p-stock" type="number" min="0" class="input" value="${p?.stock ?? 0}" ${isEdit ? 'disabled title="Gunakan penyesuaian stok"' : ''}></div>
               <div><label class="label">Min. Stok</label><input id="p-min" type="number" min="0" class="input" value="${p?.min_stock ?? 0}"></div>
             </div>
           </div>`,
         footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="p-submit" class="btn-primary">${isEdit ? 'Simpan' : 'Tambah'}</button>`
       });
+      const priceEl = bindIDRInput(m.el.querySelector('#p-price'));
+      const costEl = bindIDRInput(m.el.querySelector('#p-cost'));
       m.el.querySelector('#p-submit').addEventListener('click', async () => {
         const body = {
           name: m.el.querySelector('#p-name').value.trim(),
           category: m.el.querySelector('#p-category').value.trim(),
           unit: m.el.querySelector('#p-unit').value.trim() || 'pcs',
-          price: Number(m.el.querySelector('#p-price').value) || 0,
+          price: parseIDR(priceEl.value),
+          cost: parseIDR(costEl.value),
           stock: Number(m.el.querySelector('#p-stock').value) || 0,
           min_stock: Number(m.el.querySelector('#p-min').value) || 0
         };

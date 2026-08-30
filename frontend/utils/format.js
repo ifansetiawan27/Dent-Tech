@@ -3,6 +3,41 @@ export function fmtIDR(n) {
   return 'Rp ' + v.toLocaleString('id-ID', { maximumFractionDigits: 0 });
 }
 
+// Parser/formatter khusus input Rupiah. Tampilan memakai titik ribuan,
+// payload API tetap Number murni (contoh: "1.250.000" -> 1250000).
+export function parseIDR(value) {
+  const digits = String(value ?? '').replace(/[^\d]/g, '');
+  return digits ? Number(digits) : 0;
+}
+
+export function formatIDRInput(value) {
+  const number = typeof value === 'number' ? Math.max(0, Math.trunc(value)) : parseIDR(value);
+  return number.toLocaleString('id-ID', { maximumFractionDigits: 0 });
+}
+
+export function bindIDRInput(input) {
+  if (!input || input.dataset.idrBound === '1') return input;
+  input.dataset.idrBound = '1';
+  input.type = 'text';
+  input.inputMode = 'numeric';
+  input.autocomplete = 'off';
+  input.value = formatIDRInput(input.value);
+  input.addEventListener('input', () => {
+    const raw = input.value;
+    const cursor = input.selectionStart ?? raw.length;
+    const digitsBeforeCursor = raw.slice(0, cursor).replace(/\D/g, '').length;
+    input.value = formatIDRInput(raw);
+    let next = 0;
+    let seen = 0;
+    while (next < input.value.length && seen < digitsBeforeCursor) {
+      if (/\d/.test(input.value[next])) seen++;
+      next++;
+    }
+    input.setSelectionRange(next, next);
+  });
+  return input;
+}
+
 export function fmtDate(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
