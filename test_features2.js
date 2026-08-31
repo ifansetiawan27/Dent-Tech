@@ -1,4 +1,7 @@
+require('dotenv').config();
 const { chromium } = require('playwright-core');
+const { db } = require('./backend/db');
+const { now } = require('./backend/util');
 const BASE = 'http://localhost:3000';
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const AUTH = 'Bear' + 'er ';
@@ -48,6 +51,7 @@ async function apiCall(page, method, path, body) {
   const custCtx = await browser.newContext();
   const custPage = await custCtx.newPage();
   await login(custPage, 'ratna@denttech.id', 'customer123');
+  await db.prepare("UPDATE wallet_accounts SET balance = 100000, updated_at = ? WHERE customer_id = (SELECT customer_id FROM users WHERE email = 'ratna@denttech.id')").run(now());
   const mk = await apiCall(custPage, 'POST', '/api/tickets', {
     equipment_type: 'Autoclave', equipment_brand: 'TUTTNAUER', service_address: 'Jl. Test 1',
     service_type: 'Repair', priority: 'HIGH', problem: 'Autoclave test auto-match', description: 'x',

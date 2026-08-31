@@ -23,7 +23,7 @@
     import { requireAuth } from '/utils/auth.js';
     import { api } from '/services/api.js';
     import { initMobileLayout } from '/components/layout.js';
-    import { spinner, errorState, statusBadge, openModal, confirmDialog, toast, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
+    import { spinner, errorState, statusBadge, toast, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
     import { fmtIDR, fmtDate, fmtDateTime, esc } from '/utils/format.js';
     import { downloadInvoice } from '/utils/invoice-doc.js';
 
@@ -36,6 +36,55 @@
     let data = null;
     let revision = null;
     let polling = false;
+    let paymentPollTimer = null;
+
+    function safeQrSrc(value) {
+      const src = String(value || '');
+      return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
+    }
+
+    function paymentOrderHtml(order) {
+      if (!order) return '';
+      const qr = safeQrSrc(order.qr_data_url);
+      const status = String(order.status || 'PENDING').toUpperCase();
+      return `<section id="payment-order" class="card p-5 mb-4 border-2 ${status === 'COMPLETED' ? 'border-emerald-300 bg-emerald-50' : 'border-blue-200'}" aria-live="polite">
+        <div class="flex items-start justify-between gap-3">
+          <div><p class="font-bold text-slate-800">Pembayaran QRIS Pakasir</p><p class="text-xs text-slate-500 mt-0.5">Order ID: <span class="font-mono">${esc(order.order_id || '-')}</span></p></div>
+          <span class="text-xs font-bold rounded-full px-2.5 py-1 ${status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${esc(status)}</span>
+        </div>
+        ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS pembayaran invoice" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : ''}
+        <dl class="text-sm space-y-2 mt-3">
+          <div class="flex justify-between gap-3"><dt class="text-slate-500">Nominal invoice</dt><dd class="font-semibold">${fmtIDR(order.amount)}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500">Biaya QRIS</dt><dd class="font-semibold">${fmtIDR(order.gateway_fee || 0)}</dd></div>
+          <div class="flex justify-between gap-3 border-t border-slate-200 pt-2"><dt class="font-bold">Total pembayaran</dt><dd class="font-bold text-blue-700">${fmtIDR(order.total_payment ?? order.amount)}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500">Berlaku sampai</dt><dd class="text-right">${order.expired_at ? fmtDateTime(order.expired_at) : '-'}</dd></div>
+        </dl>
+        <p class="text-xs text-slate-500 mt-4">Pembayaran diverifikasi otomatis. Tidak perlu mengirim bukti atau mengonfirmasi manual.</p>
+      </section>`;
+    }
+
+    async function pollPayment(orderId) {
+      if (paymentPollTimer) clearTimeout(paymentPollTimer);
+      try {
+        const result = await api.get(`/api/invoices/${invId}/payment-orders/${encodeURIComponent(orderId)}`);
+        if (result.order?.status === 'COMPLETED') {
+          toast('Pembayaran QRIS telah terverifikasi');
+          await load();
+          return;
+        }
+        if (result.order && ['PENDING'].includes(String(result.order.status).toUpperCase())) {
+          data.payment_options = { ...(data.payment_options || {}), pakasir_qris: result.order };
+          render();
+          paymentPollTimer = setTimeout(() => pollPayment(orderId), 4000);
+          return;
+        }
+        data.payment_options = { ...(data.payment_options || {}), pakasir_qris: result.order };
+        render();
+      } catch (e) {
+        toast(e.message, 'error');
+        paymentPollTimer = setTimeout(() => pollPayment(orderId), 6000);
+      }
+    }
 
     async function load(silent = false) {
       if (!silent) content.innerHTML = spinner('Memuat invoice...');
@@ -62,11 +111,13 @@
     }
 
     function render() {
-      const { invoice: inv, totals, items, customer, payments, ticket, payment_account: pa } = data;
+      const { invoice: inv, totals, items, customer, payments, ticket } = data;
+      const pa = data.payment_options?.bank || data.payment_account;
+      const paymentOrder = data.payment_options?.pakasir_qris;
       const bankPanel = (inv.status !== 'PAID' && pa && (pa.bank_name || pa.bank_account_name || pa.bank_account_number)) ? `
           <div class="px-6 py-4 bg-blue-50/60 border-t border-blue-100">
-            <p class="text-xs uppercase tracking-wide text-blue-700 font-bold mb-1">Rekening Pembayaran</p>
-            <p class="text-xs text-slate-400 mb-2">Silakan transfer ke rekening berikut:</p>
+             <p class="text-xs uppercase tracking-wide text-blue-700 font-bold mb-1">Transfer Bank</p>
+             <p class="text-xs text-slate-500 mb-2">Alternatif pembayaran melalui rekening yang dikonfigurasi admin:</p>
             <div class="space-y-1 text-sm">
               ${pa.bank_name ? `<p><span class="text-slate-400 inline-block w-24">Nama Bank</span><b class="text-slate-700">${esc(pa.bank_name)}</b></p>` : ''}
               ${pa.bank_account_number ? `<p><span class="text-slate-400 inline-block w-24">No. Rekening</span><b class="text-slate-700">${esc(pa.bank_account_number)}</b></p>` : ''}
@@ -116,11 +167,12 @@
           </div>` : ''}
         </div>
 
+        ${inv.status !== 'PAID' && paymentOrder ? paymentOrderHtml(paymentOrder) : ''}
         <div class="space-y-3">
           <button id="btn-download" class="btn-secondary w-full !py-3.5"><i data-lucide="download" class="w-4 h-4"></i> Download Invoice (PDF)</button>
           ${inv.status !== 'PAID' ? `
-          <button id="btn-pay" class="btn-primary w-full !py-3.5"><i data-lucide="credit-card" class="w-4 h-4"></i> Konfirmasi Pembayaran</button>
-          <p class="text-xs text-slate-400 text-center">Konfirmasi akan langsung mencatat invoice sebagai sudah dibayar.</p>` : `
+          <button id="btn-pay" class="btn-primary w-full !py-3.5"><i data-lucide="qr-code" class="w-4 h-4"></i> ${paymentOrder?.status === 'PENDING' ? 'Tampilkan QRIS' : 'Bayar dengan QRIS'}</button>
+          <p class="text-xs text-slate-400 text-center">Status pembayaran diperiksa dan diverifikasi otomatis oleh Pakasir.</p>` : `
           <div class="card p-4 border-2 border-emerald-200 flex items-center gap-3">
             <i data-lucide="check-circle" class="w-6 h-6 text-emerald-500 shrink-0"></i>
             <p class="text-sm text-slate-600">Invoice ini sudah dibayar. Terima kasih!</p>
@@ -141,29 +193,23 @@
       });
 
       const btnPay = document.getElementById('btn-pay');
-      if (btnPay) btnPay.addEventListener('click', () => {
-        const m = openModal({
-          title: 'Konfirmasi Pembayaran',
-          size: 'sm',
-          body: `
-            <p class="text-sm text-slate-600 mb-4">Total yang dibayar: <b>${fmtIDR(totals.total)}</b></p>
-            <div class="space-y-4">
-              <div><label class="label">Metode Pembayaran</label>
-                <select id="cp-method" class="input"><option>TRANSFER</option><option>CASH</option><option>QRIS</option></select>
-              </div>
-              <div><label class="label">Nomor Referensi</label><input id="cp-ref" class="input" placeholder="cth: TRF-BCA-12345"></div>
-            </div>`,
-          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="cp-submit" class="btn-primary">Konfirmasi</button>`
-        });
-        m.el.querySelector('#cp-submit').addEventListener('click', async () => {
-          try {
-            await api.post(`/api/invoices/${inv.id}/pay`, { method: m.el.querySelector('#cp-method').value, reference: m.el.querySelector('#cp-ref').value.trim() });
-            m.close();
-            toast('Pembayaran berhasil dicatat');
-            load();
-          } catch (e) { toast(e.message, 'error'); }
-        });
+      if (btnPay) btnPay.addEventListener('click', async () => {
+        btnPay.disabled = true;
+        try {
+          const result = await api.post(`/api/invoices/${inv.id}/payment-orders`);
+          data.payment_options = { ...(data.payment_options || {}), pakasir_qris: result.order };
+          render();
+          document.getElementById('payment-order')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (result.order?.status === 'PENDING') pollPayment(result.order.id);
+        } catch (e) {
+          toast(e.message, 'error');
+          btnPay.disabled = false;
+        }
       });
+
+      if (paymentOrder?.status === 'PENDING' && paymentOrder.id && !paymentPollTimer) {
+        paymentPollTimer = setTimeout(() => pollPayment(paymentOrder.id), 4000);
+      }
     }
 
     let pollTimer = null;
@@ -172,7 +218,10 @@
       pollTimer = setInterval(() => { if (document.visibilityState === 'visible') load(true); }, 10000);
       window.addEventListener('focus', () => load(true));
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(true); });
-      window.addEventListener('pagehide', () => { if (pollTimer) clearInterval(pollTimer); });
+      window.addEventListener('pagehide', () => {
+        if (pollTimer) clearInterval(pollTimer);
+        if (paymentPollTimer) clearTimeout(paymentPollTimer);
+      });
     } else content.innerHTML = errorState('Invoice ID tidak ditemukan');
   </script>
 </body>

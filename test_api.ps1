@@ -103,9 +103,11 @@ $cdetail = Req 'GET' "$base/api/tickets/$($openTicket.id)" $CT $null
 if ($cdetail.ticket) { Ok "customer sees own ticket" } else { Bad "customer ticket detail" }
 $internalLeak = ($cdetail.timeline | Where-Object { $_.visibility -eq 'INTERNAL' })
 if (-not $internalLeak) { Ok "no INTERNAL timeline leaked to customer" } else { Bad "INTERNAL leaked!" }
-# customer pays invoice
-$pay = Req 'POST' "$base/api/invoices/$INV/pay" $CT @{method='TRANSFER'; reference='TRF-TEST-001'}
-if ($pay.ok) { Ok "invoice paid amount=$($pay.paid_amount)" } else { Bad "pay invoice: $($pay|ConvertTo-Json)" }
+# direct/manual invoice payment is admin-only
+$customerPay = Req 'POST' "$base/api/invoices/$INV/pay" $CT @{method='TRANSFER'; reference='TRF-TEST-001'}
+if ($customerPay.__error -and $customerPay.code -eq 403) { Ok "customer direct payment rejected 403" } else { Bad "customer direct payment should be admin-only" }
+$pay = Req 'POST' "$base/api/invoices/$INV/pay" $AT @{method='TRANSFER'; reference='TRF-TEST-001'}
+if ($pay.ok) { Ok "admin records invoice payment amount=$($pay.paid_amount)" } else { Bad "admin pay invoice: $($pay|ConvertTo-Json)" }
 
 Write-Output "=== 10. ANALYTICS ==="
 $an = Req 'GET' "$base/api/reports/analytics" $AT $null

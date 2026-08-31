@@ -117,6 +117,7 @@ async function login(page, email, password) {
   if (!page.url().includes('/customer/')) bad('customer not redirected (url=' + page.url() + ')');
   for (const [label, p] of [
     ['customer home', '/customer/'],
+    ['customer wallet', '/customer/wallet.html'],
     ['customer request', '/customer/request.html'],
     ['customer tickets', '/customer/tickets.html'],
     ['customer equipment', '/customer/equipment.html'],

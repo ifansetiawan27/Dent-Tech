@@ -75,12 +75,40 @@ async function createTicketHandler(ctx) {
   const id = uid();
   const number = await nextNumber('TKT');
   const ts = now();
-  await db.prepare(`INSERT INTO tickets (id, number, customer_id, equipment_id, equipment_type, equipment_brand, service_address, contact_name, contact_phone, service_type, priority, problem, description, preferred_date, preferred_time, status, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`)
-    .run(id, number, customer_id, equipment_id || null, equipment_type, equipment_brand, service_address, contact_name, contact_phone, service_type, priority, problem, description, preferred_date, preferred_time, ctx.user.id, ts, ts);
-  await db.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)')
-    .run(uid(), id, 'OPEN', ctx.user.id, 'Request dibuat', ts);
-  timeline(id, 'REQUEST', 'Service request dibuat', problem, 'CUSTOMER_VISIBLE', ctx.user.id);
+  try {
+    await db.transaction(async (tx) => {
+      await tx.prepare(`INSERT INTO tickets (id, number, customer_id, equipment_id, equipment_type, equipment_brand, service_address, contact_name, contact_phone, service_type, priority, problem, description, preferred_date, preferred_time, status, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`)
+        .run(id, number, customer_id, equipment_id || null, equipment_type, equipment_brand, service_address, contact_name, contact_phone, service_type, priority, problem, description, preferred_date, preferred_time, ctx.user.id, ts, ts);
+      if (ctx.user.role === 'customer') {
+        const wallet = await tx.prepare('SELECT * FROM wallet_accounts WHERE customer_id = ? FOR UPDATE').get(customer_id);
+        if (!wallet || Number(wallet.balance) < 100000) {
+          const error = new Error('Saldo wallet tidak cukup untuk biaya kunjungan onsite');
+          error.status = 409;
+          error.code = 'INSUFFICIENT_WALLET_BALANCE';
+          error.balance = wallet ? Number(wallet.balance) : 0;
+          throw error;
+        }
+        const balance = Number(wallet.balance) - 100000;
+        await tx.prepare('UPDATE wallet_accounts SET balance = ?, updated_at = ? WHERE id = ?').run(balance, ts, wallet.id);
+        await tx.prepare(`INSERT INTO wallet_transactions
+          (id, wallet_id, customer_id, type, amount, balance_after, ticket_id, description, created_at)
+          VALUES (?, ?, ?, 'DEBIT_ONSITE', 100000, ?, ?, ?, ?)`)
+          .run(uid(), wallet.id, customer_id, balance, id, `Biaya kunjungan onsite ${number}`, ts);
+        await tx.prepare(`INSERT INTO finance_income
+          (id, income_type, amount, customer_id, ticket_id, occurred_at, description, created_at)
+          VALUES (?, 'ONSITE_FEE_REVENUE', 100000, ?, ?, ?, ?, ?)`)
+          .run(uid(), customer_id, id, ts, `Biaya kunjungan onsite ${number}`, ts);
+      }
+      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)')
+        .run(uid(), id, 'OPEN', ctx.user.id, 'Request dibuat', ts);
+      await tx.prepare('INSERT INTO ticket_timeline (id, ticket_id, type, title, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(uid(), id, 'REQUEST', 'Service request dibuat', problem, 'CUSTOMER_VISIBLE', ctx.user.id, ts);
+    });
+  } catch (error) {
+    if (error.status) return sendJSON(ctx.res, error.status, { error: error.message, code: error.code, balance: error.balance, required: 100000 });
+    throw error;
+  }
   notify({ role: 'admin', title: `Ticket baru ${number}`, body: `${problem} (${priority})`, type: 'TICKET', ref_type: 'ticket', ref_id: id });
   audit(ctx.user, 'CREATE', 'ticket', id, `Membuat ticket ${number}`, ctx.ip);
   sendJSON(ctx.res, 201, { id, number });

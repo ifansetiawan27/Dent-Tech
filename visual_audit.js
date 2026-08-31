@@ -1,4 +1,7 @@
+require('dotenv').config();
 const { chromium } = require('playwright-core');
+const { db } = require('./backend/db');
+const { now } = require('./backend/util');
 const BASE = 'http://localhost:3000';
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const AUTH = 'Bear' + 'er ';
@@ -28,6 +31,7 @@ async function apiCall(page, method, path, body) {
   let ctx = await browser.newContext();
   let page = await ctx.newPage();
   await login(page, 'ratna@denttech.id', 'customer123');
+  await db.prepare("UPDATE wallet_accounts SET balance = 100000, updated_at = ? WHERE customer_id = (SELECT customer_id FROM users WHERE email = 'ratna@denttech.id')").run(now());
   const mk = await apiCall(page, 'POST', '/api/tickets', { equipment_type: 'Dental Unit', equipment_brand: 'GNATUS', service_address: 'Jl. Visual 1', service_type: 'Preventive Maintenance', priority: 'MEDIUM', problem: 'Visual audit job', description: 'x', contact_name: 'Ratna', contact_phone: '0812' });
   const ticketId = mk.data.id;
   await ctx.close();

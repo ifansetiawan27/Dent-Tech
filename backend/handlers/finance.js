@@ -19,29 +19,51 @@ async function financeSummaryHandler(ctx) {
   const inc = dateCond('p.paid_at', from, to);
   const exp = dateCond('e.expense_date', from, to);
 
+  const topup = dateCond('f.occurred_at', from, to);
   const incomeAgg = await db.prepare(`SELECT COALESCE(SUM(p.amount),0)::float8 AS total, COUNT(*) AS cnt FROM payments p WHERE 1=1 ${inc.where}`).get(...inc.params);
+  const topupAgg = await db.prepare(`SELECT COALESCE(SUM(f.amount),0)::float8 AS total, COUNT(*) AS cnt FROM finance_income f WHERE f.income_type = 'WALLET_TOPUP_CASH' ${topup.where}`).get(...topup.params);
+  const onsiteAgg = await db.prepare(`SELECT COALESCE(SUM(f.amount),0)::float8 AS total, COUNT(*) AS cnt FROM finance_income f WHERE f.income_type = 'ONSITE_FEE_REVENUE' ${topup.where}`).get(...topup.params);
+  const liabilityAgg = await db.prepare('SELECT COALESCE(SUM(balance),0)::float8 AS total FROM wallet_accounts').get();
   const expenseAgg = await db.prepare(`SELECT COALESCE(SUM(e.amount),0)::float8 AS total, COUNT(*) AS cnt FROM expenses e WHERE 1=1 ${exp.where}`).get(...exp.params);
 
   const byCategory = await db.prepare(`SELECT e.category, COALESCE(SUM(e.amount),0)::float8 AS total, COUNT(*) AS cnt FROM expenses e WHERE 1=1 ${exp.where} GROUP BY e.category ORDER BY total DESC`).all(...exp.params);
 
   const incMonthly = await db.prepare(`SELECT LEFT(p.paid_at,7) AS month, COALESCE(SUM(p.amount),0)::float8 AS income FROM payments p WHERE 1=1 ${inc.where} GROUP BY LEFT(p.paid_at,7)`).all(...inc.params);
+  const onsiteMonthly = await db.prepare(`SELECT LEFT(f.occurred_at,7) AS month, COALESCE(SUM(f.amount),0)::float8 AS onsite FROM finance_income f WHERE f.income_type = 'ONSITE_FEE_REVENUE' ${topup.where} GROUP BY LEFT(f.occurred_at,7)`).all(...topup.params);
+  const topupMonthly = await db.prepare(`SELECT LEFT(f.occurred_at,7) AS month, COALESCE(SUM(f.amount),0)::float8 AS wallet_topups FROM finance_income f WHERE f.income_type = 'WALLET_TOPUP_CASH' ${topup.where} GROUP BY LEFT(f.occurred_at,7)`).all(...topup.params);
   const expMonthly = await db.prepare(`SELECT LEFT(e.expense_date,7) AS month, COALESCE(SUM(e.amount),0)::float8 AS expense FROM expenses e WHERE 1=1 ${exp.where} GROUP BY LEFT(e.expense_date,7)`).all(...exp.params);
   const monthMap = new Map();
-  for (const r of incMonthly) monthMap.set(r.month, { month: r.month, income: r.income, expense: 0 });
+  for (const r of incMonthly) monthMap.set(r.month, { month: r.month, invoice_payments: r.income, onsite_fee_revenue: 0, wallet_topups: 0, income: r.income, cash_inflow: r.income, expense: 0 });
+  for (const r of onsiteMonthly) {
+    const m = monthMap.get(r.month) || { month: r.month, invoice_payments: 0, onsite_fee_revenue: 0, wallet_topups: 0, income: 0, cash_inflow: 0, expense: 0 };
+    m.onsite_fee_revenue = r.onsite; m.income += r.onsite; monthMap.set(r.month, m);
+  }
+  for (const r of topupMonthly) {
+    const m = monthMap.get(r.month) || { month: r.month, invoice_payments: 0, onsite_fee_revenue: 0, wallet_topups: 0, income: 0, cash_inflow: 0, expense: 0 };
+    m.wallet_topups = r.wallet_topups; m.cash_inflow += r.wallet_topups; monthMap.set(r.month, m);
+  }
   for (const r of expMonthly) {
-    const m = monthMap.get(r.month) || { month: r.month, income: 0, expense: 0 };
+    const m = monthMap.get(r.month) || { month: r.month, invoice_payments: 0, onsite_fee_revenue: 0, wallet_topups: 0, income: 0, cash_inflow: 0, expense: 0 };
     m.expense = r.expense;
     monthMap.set(r.month, m);
   }
   const monthly = [...monthMap.values()].sort((a, b) => a.month.localeCompare(b.month));
 
-  const income = Math.round(incomeAgg.total);
+  const invoicePayments = Math.round(incomeAgg.total);
+  const walletTopups = Math.round(topupAgg.total);
+  const onsiteFeeRevenue = Math.round(onsiteAgg.total);
+  const income = invoicePayments + onsiteFeeRevenue;
   const expense = Math.round(expenseAgg.total);
   sendJSON(ctx.res, 200, {
     income,
     expense,
     net: income - expense,
-    income_count: incomeAgg.cnt,
+    invoice_payments: invoicePayments,
+    wallet_topups: walletTopups,
+    onsite_fee_revenue: onsiteFeeRevenue,
+    wallet_liability: Math.round(liabilityAgg.total),
+    total_cash_inflow: invoicePayments + walletTopups,
+    income_count: incomeAgg.cnt + onsiteAgg.cnt,
     expense_count: expenseAgg.cnt,
     by_category: byCategory,
     monthly
@@ -61,8 +83,29 @@ async function financeIncomeHandler(ctx) {
     WHERE 1=1 ${inc.where}
     ORDER BY p.paid_at DESC
   `).all(...inc.params);
-  const total = payments.reduce((s, r) => s + r.amount, 0);
-  sendJSON(ctx.res, 200, { payments, total });
+  const fin = dateCond('f.occurred_at', from, to);
+  const walletRows = await db.prepare(`
+    SELECT f.id, f.income_type AS type, f.amount, f.occurred_at AS paid_at, f.description,
+           f.payment_order_id, f.ticket_id, c.id AS customer_id, c.name AS customer_name, c.code AS customer_code
+    FROM finance_income f LEFT JOIN customers c ON c.id = f.customer_id
+    WHERE 1=1 ${fin.where} ORDER BY f.occurred_at DESC
+  `).all(...fin.params);
+  const rows = [
+    ...payments.map((row) => ({ ...row, type: 'INVOICE_PAYMENT', cash_flow: true, revenue: true })),
+    ...walletRows.map((row) => ({ ...row, cash_flow: row.type === 'WALLET_TOPUP_CASH', revenue: row.type === 'ONSITE_FEE_REVENUE' }))
+  ].sort((a, b) => String(b.paid_at).localeCompare(String(a.paid_at)));
+  const invoicePayments = payments.reduce((s, r) => s + Number(r.amount), 0);
+  const walletTopups = walletRows.filter((r) => r.type === 'WALLET_TOPUP_CASH').reduce((s, r) => s + Number(r.amount), 0);
+  const onsiteFeeRevenue = walletRows.filter((r) => r.type === 'ONSITE_FEE_REVENUE').reduce((s, r) => s + Number(r.amount), 0);
+  sendJSON(ctx.res, 200, {
+    payments,
+    rows,
+    total: invoicePayments + onsiteFeeRevenue,
+    invoice_payments: invoicePayments,
+    wallet_topups: walletTopups,
+    onsite_fee_revenue: onsiteFeeRevenue,
+    total_cash_inflow: invoicePayments + walletTopups
+  });
 }
 
 async function listExpensesHandler(ctx) {

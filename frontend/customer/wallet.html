@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wallet — Customer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css?v=2">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <main class="min-h-screen pt-5 pb-16 px-4">
+    <div class="max-w-2xl mx-auto">
+      <a href="/customer/" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"><i data-lucide="arrow-left" class="w-4 h-4"></i> Beranda</a>
+      <h1 class="text-xl font-bold text-slate-800">Wallet Dent Tech</h1>
+      <p class="text-sm text-slate-500 mb-5">Saldo untuk biaya kunjungan onsite</p>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import { requireAuth } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+    import { initMobileLayout } from '/components/layout.js';
+    import { spinner, errorState, emptyState, toast, refreshIcons } from '/components/ui.js';
+    import { fmtIDR, fmtDateTime, esc } from '/utils/format.js';
+
+    requireAuth(['customer']);
+    initMobileLayout('home', 'customer');
+    lucide.createIcons();
+
+    const TOPUP_AMOUNT = 100000;
+    const content = document.getElementById('content');
+    let state = { wallet: { balance: 0 }, transactions: [], order: null };
+    let pollTimer = null;
+
+    function safeQrSrc(value) {
+      const src = String(value || '');
+      return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
+    }
+
+    function orderPanel(order) {
+      if (!order) return '';
+      const status = String(order.status || 'PENDING').toUpperCase();
+      const qr = safeQrSrc(order.qr_data_url);
+      return `<section id="topup-order" class="card p-5 mb-5 border-2 ${status === 'COMPLETED' ? 'border-emerald-300 bg-emerald-50' : 'border-blue-200'}" aria-live="polite">
+        <div class="flex items-start justify-between gap-3">
+          <div><h2 class="font-bold">Top Up QRIS</h2><p class="text-xs text-slate-500 mt-0.5">Order ID: <span class="font-mono">${esc(order.order_id || '-')}</span></p></div>
+          <span class="text-xs font-bold rounded-full px-2.5 py-1 ${status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${esc(status)}</span>
+        </div>
+        ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS top up wallet" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : ''}
+        <dl class="space-y-2 text-sm mt-3">
+          <div class="flex justify-between gap-3"><dt class="text-slate-500">Saldo masuk</dt><dd class="font-semibold">${fmtIDR(order.amount)}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500">Biaya QRIS</dt><dd class="font-semibold">${fmtIDR(order.gateway_fee || 0)}</dd></div>
+          <div class="flex justify-between gap-3 border-t border-slate-200 pt-2"><dt class="font-bold">Total pembayaran</dt><dd class="font-bold text-blue-700">${fmtIDR(order.total_payment ?? order.amount)}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500">Berlaku sampai</dt><dd class="text-right">${order.expired_at ? fmtDateTime(order.expired_at) : '-'}</dd></div>
+        </dl>
+        <p class="text-xs text-slate-500 mt-4">QRIS diverifikasi otomatis. Saldo diperbarui setelah pembayaran terkonfirmasi; tidak perlu konfirmasi manual.</p>
+      </section>`;
+    }
+
+    function render() {
+      const balance = Number(state.wallet?.balance || 0);
+      content.innerHTML = `
+        <section class="card p-5 mb-5 bg-gradient-to-br from-slate-900 to-blue-900 text-white">
+          <p class="text-xs font-bold uppercase tracking-widest text-blue-200">Saldo tersedia</p>
+          <p id="wallet-balance" class="text-3xl font-extrabold mt-1">${fmtIDR(balance)}</p>
+          <div class="mt-4 pt-4 border-t border-white/15 flex items-center justify-between gap-3 text-sm">
+            <span class="text-slate-300">Biaya onsite per request</span><b>${fmtIDR(TOPUP_AMOUNT)}</b>
+          </div>
+        </section>
+        ${orderPanel(state.order)}
+        <section id="topup" class="card p-5 mb-5 scroll-mt-20">
+          <h2 class="font-bold">Top Up Wallet</h2>
+          <p class="text-sm text-slate-500 mt-1">Nominal top up tetap <b class="text-slate-700">${fmtIDR(TOPUP_AMOUNT)}</b>. Biaya QRIS ditampilkan sebelum pembayaran.</p>
+          <button id="create-topup" class="btn-primary w-full !py-3 mt-4" ${state.order?.status === 'PENDING' ? 'disabled' : ''}><i data-lucide="qr-code" class="w-4 h-4"></i> Buat QRIS ${fmtIDR(TOPUP_AMOUNT)}</button>
+        </section>
+        <section id="history" class="scroll-mt-20">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-slate-400 mb-3">Riwayat Transaksi</h2>
+          ${state.transactions.length ? `<div class="space-y-2.5">${state.transactions.map((tx) => {
+            const credit = String(tx.type).startsWith('CREDIT');
+            return `<article class="card p-4 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full ${credit ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'} flex items-center justify-center shrink-0"><i data-lucide="${credit ? 'arrow-down-left' : 'arrow-up-right'}" class="w-5 h-5"></i></div>
+              <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-slate-700">${esc(tx.description || tx.type)}</p><p class="text-xs text-slate-400 mt-0.5">${fmtDateTime(tx.created_at)} · Saldo ${fmtIDR(tx.balance_after)}</p></div>
+              <p class="text-sm font-bold ${credit ? 'text-emerald-600' : 'text-amber-700'}">${credit ? '+' : '-'}${fmtIDR(tx.amount)}</p>
+            </article>`;
+          }).join('')}</div>` : `<div class="card">${emptyState('history', 'Belum ada transaksi', 'Top up dan biaya kunjungan akan tampil di sini.')}</div>`}
+        </section>`;
+      refreshIcons();
+      document.getElementById('create-topup')?.addEventListener('click', createTopup);
+    }
+
+    async function loadHistory() {
+      const result = await api.get('/api/wallet/history');
+      state.wallet = result.wallet;
+      state.transactions = result.transactions || [];
+      render();
+    }
+
+    async function createTopup() {
+      const btn = document.getElementById('create-topup');
+      btn.disabled = true;
+      try {
+        const result = await api.post('/api/wallet/topups');
+        state.order = result.order;
+        render();
+        document.getElementById('topup-order')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (state.order?.status === 'PENDING') schedulePoll(state.order.id, 1000);
+      } catch (e) {
+        toast(e.message, 'error');
+        btn.disabled = false;
+      }
+    }
+
+    function schedulePoll(id, delay = 4000) {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(() => pollTopup(id), delay);
+    }
+
+    async function pollTopup(id) {
+      try {
+        const result = await api.get('/api/wallet/topups/' + encodeURIComponent(id));
+        state.order = result.order;
+        state.wallet = result.wallet || state.wallet;
+        render();
+        if (result.order?.status === 'COMPLETED') {
+          toast('Top up berhasil dan saldo telah diperbarui');
+          await loadHistory();
+        } else if (result.order?.status === 'PENDING') {
+          schedulePoll(id);
+        }
+      } catch (e) {
+        toast(e.message, 'error');
+        schedulePoll(id, 6000);
+      }
+    }
+
+    content.innerHTML = spinner('Memuat wallet...');
+    try { await loadHistory(); }
+    catch (e) { content.innerHTML = errorState(e.message); refreshIcons(); }
+    window.addEventListener('pagehide', () => { if (pollTimer) clearTimeout(pollTimer); });
+  </script>
+</body>
+</html>

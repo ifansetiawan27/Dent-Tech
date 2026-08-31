@@ -47,7 +47,7 @@ function bankInfoHtml(bank) {
   if (!bank || (!bank.bank_name && !bank.bank_account_name && !bank.bank_account_number)) return '';
   return `
   <div class="bank">
-    <h4>Informasi Pembayaran</h4>
+    <h4>Transfer Bank Jago</h4>
     <div class="muted" style="margin-bottom:4px">Silakan lakukan pembayaran melalui transfer ke rekening berikut:</div>
     <table class="bank-table">
       ${bank.bank_name ? `<tr><td>Nama Bank</td><td><b>${esc(bank.bank_name)}</b></td></tr>` : ''}
@@ -57,8 +57,32 @@ function bankInfoHtml(bank) {
   </div>`;
 }
 
+function safeQrDataUrl(value) {
+  const src = String(value || '');
+  return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
+}
+
+function qrisInfoHtml(order) {
+  if (!order) return '';
+  const qr = safeQrDataUrl(order.qr_data_url);
+  return `<div class="qris">
+    <h4>QRIS Pakasir</h4>
+    ${qr ? `<img src="${esc(qr)}" alt="Kode QRIS pembayaran">` : ''}
+    <table class="bank-table">
+      <tr><td>Order ID</td><td><b>${esc(order.order_id || '-')}</b></td></tr>
+      <tr><td>Nominal</td><td><b>${fmtIDR(order.amount)}</b></td></tr>
+      <tr><td>Biaya QRIS</td><td><b>${fmtIDR(order.gateway_fee || 0)}</b></td></tr>
+      <tr><td>Total Bayar</td><td><b>${fmtIDR(order.total_payment ?? order.amount)}</b></td></tr>
+      <tr><td>Berlaku Sampai</td><td><b>${order.expired_at ? fmtDateTime(order.expired_at) : '-'}</b></td></tr>
+    </table>
+    <div class="muted" style="margin-top:6px">Pembayaran diverifikasi otomatis oleh Pakasir.</div>
+  </div>`;
+}
+
 export function buildInvoiceHtml(data) {
-  const { invoice: inv, totals, items, customer, ticket, work_order, payments, company, evidence, payment_account } = data;
+  const { invoice: inv, totals, items, customer, ticket, work_order, payments, company, evidence, payment_account, payment_options } = data;
+  const bank = payment_options?.bank || payment_account;
+  const qrisOrder = payment_options?.pakasir_qris || null;
   const isProforma = inv.type === 'PROFORMA';
   const docLabel = isProforma ? 'Proforma Invoice' : 'Invoice';
 
@@ -95,6 +119,9 @@ ${DOC_BASE_CSS}
 .bank-table td { padding: 2px 0; font-size: 12px; color: #475569; }
 .bank-table td:first-child { width: 120px; color: #64748b; }
 .bank-table b { color: #1e293b; font-size: 12px; }
+.qris { margin-top: 20px; background: #f8fafc; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; break-inside: avoid; }
+.qris h4 { color: #1e40af; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; }
+.qris img { display: block; width: 180px; height: 180px; object-fit: contain; margin: 8px auto 12px; }
 </style></head><body>
   ${watermarkHtml(inv)}
   <div class="head">
@@ -138,7 +165,7 @@ ${DOC_BASE_CSS}
     <div class="row grand"><span>Total</span><span>${fmtIDR(totals.total)}</span></div>
   </div>
 
-  ${inv.status !== 'PAID' ? bankInfoHtml(payment_account) : ''}
+  ${inv.status !== 'PAID' ? `${qrisInfoHtml(qrisOrder)}${bankInfoHtml(bank)}` : ''}
 
   ${(payments && payments.length) ? `
   <div class="pay"><h4>Pembayaran</h4>

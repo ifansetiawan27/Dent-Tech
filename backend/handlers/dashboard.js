@@ -80,7 +80,13 @@ async function dashboardHandler(ctx) {
      FROM tickets t LEFT JOIN work_orders wo ON wo.ticket_id = t.id LEFT JOIN users u ON u.id = wo.technician_id
      WHERE t.customer_id = ? AND t.status IN ('ASSIGNED','IN_PROGRESS','COMPLETED') ORDER BY t.updated_at DESC LIMIT 1`
   ).get(cid);
-  sendJSON(ctx.res, 200, { stats: { active_tickets: active, equipment: equipmentCount, unpaid_invoices: unpaid }, recent_tickets: recentTickets, active_ticket: activeTicket || null });
+  const wallet = await db.prepare('SELECT id, customer_id, balance, updated_at FROM wallet_accounts WHERE customer_id = ?').get(cid);
+  sendJSON(ctx.res, 200, {
+    stats: { active_tickets: active, equipment: equipmentCount, unpaid_invoices: unpaid },
+    wallet: wallet ? { ...wallet, balance: Number(wallet.balance) } : { customer_id: cid, balance: 0 },
+    recent_tickets: recentTickets,
+    active_ticket: activeTicket || null
+  });
 }
 
 async function listNotificationsHandler(ctx) {

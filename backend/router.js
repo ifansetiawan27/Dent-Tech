@@ -10,6 +10,7 @@ const invoicesH = require('./handlers/invoices');
 const dashH = require('./handlers/dashboard');
 const filesH = require('./handlers/files');
 const finH = require('./handlers/finance');
+const walletH = require('./handlers/wallet');
 
 const routes = [];
 function route(method, pattern, roles, handler) {
@@ -101,7 +102,15 @@ route('PUT', '/api/invoice-settings', ['admin'], invoicesH.updateInvoiceSettings
 route('POST', '/api/invoices/proforma', ['admin'], invoicesH.createProformaHandler);
 route('GET', '/api/invoices/:id', ['admin', 'customer'], invoicesH.getInvoiceHandler);
 route('PUT', '/api/invoices/:id', ['admin'], invoicesH.updateInvoiceHandler);
-route('POST', '/api/invoices/:id/pay', ['admin', 'customer'], invoicesH.payInvoiceHandler);
+route('POST', '/api/invoices/:id/pay', ['admin'], invoicesH.payInvoiceHandler);
+route('POST', '/api/invoices/:id/payment-orders', ['customer'], walletH.createInvoicePaymentHandler);
+route('GET', '/api/invoices/:id/payment-orders/:orderId', ['customer'], walletH.invoicePaymentStatusHandler);
+
+route('GET', '/api/wallet', ['customer'], walletH.getWalletHandler);
+route('GET', '/api/wallet/history', ['customer'], walletH.walletHistoryHandler);
+route('POST', '/api/wallet/topups', ['customer'], walletH.createTopupHandler);
+route('GET', '/api/wallet/topups/:id', ['customer'], walletH.topupStatusHandler);
+route('POST', '/api/payments/pakasir/callback', null, walletH.callbackHandler);
 
 route('GET', '/api/dashboard', [], dashH.dashboardHandler);
 route('GET', '/api/notifications', [], dashH.listNotificationsHandler);

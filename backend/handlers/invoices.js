@@ -53,9 +53,16 @@ async function invoiceDetail(inv, user, executor = db) {
     evidence.diagnosis = (await db.prepare('SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1').get(wo.id)) || null;
   }
 
+  const paymentOrder = await executor.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' ORDER BY created_at DESC LIMIT 1").get(inv.id);
+  let pakasirQris = null;
+  if (paymentOrder) {
+    const { orderWithQr } = require('./wallet');
+    pakasirQris = await orderWithQr(paymentOrder);
+  }
   return {
     invoice: inv, totals, items, customer, payments,
     payment_account: await readBankSettings(),
+    payment_options: { bank: await readBankSettings(), pakasir_qris: pakasirQris },
     work_order: wo ? { id: wo.id, number: wo.number, scheduled_date: wo.scheduled_date } : null,
     ticket, evidence
   };
@@ -142,6 +149,8 @@ async function updateInvoiceHandler(ctx) {
       const inv = await tx.prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE').get(ctx.params.id);
       if (!inv) { const e = new Error('Invoice tidak ditemukan'); e.status = 404; throw e; }
       if (inv.status === 'PAID') { const e = new Error('Invoice sudah dibayar'); e.status = 400; throw e; }
+      const activeOrder = await tx.prepare("SELECT id FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' AND status = 'PENDING'").get(inv.id);
+      if (activeOrder) { const e = new Error('Invoice memiliki order pembayaran gateway aktif'); e.status = 409; e.code = 'ACTIVE_PAYMENT_ORDER'; throw e; }
       if (Number(version) !== Number(inv.version)) { const e = new Error('Invoice sudah berubah. Muat ulang sebelum menyimpan.'); e.status = 409; throw e; }
       const ts = now();
       await tx.prepare(`UPDATE invoices SET labor_cost = ?, discount = ?, tax_rate = ?, due_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
@@ -163,7 +172,7 @@ async function updateInvoiceHandler(ctx) {
       return tx.prepare('SELECT * FROM invoices WHERE id = ?').get(inv.id);
     });
   } catch (e) {
-    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message, ...(e.code ? { code: e.code } : {}) });
     throw e;
   }
   const detail = await invoiceDetail(updated, ctx.user);
@@ -184,6 +193,9 @@ async function payInvoiceHandler(ctx) {
     await db.transaction(async (tx) => {
       const locked = await tx.prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE').get(inv.id);
       if (!locked || locked.status === 'PAID') { const e = new Error('Invoice sudah dibayar'); e.status = 409; throw e; }
+      if (!['SENT', 'OVERDUE'].includes(locked.status)) { const e = new Error('Status invoice tidak dapat dibayar'); e.status = 409; e.code = 'INVOICE_NOT_PAYABLE'; throw e; }
+      const activeOrder = await tx.prepare("SELECT id FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' AND status = 'PENDING'").get(inv.id);
+      if (activeOrder) { const e = new Error('Invoice memiliki order pembayaran gateway aktif'); e.status = 409; e.code = 'ACTIVE_PAYMENT_ORDER'; throw e; }
       const items = await getInvoiceItems(inv.id, tx);
       totals = invoiceTotals(locked, items);
       await tx.prepare('INSERT INTO payments (id, invoice_id, amount, method, reference, paid_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -192,7 +204,7 @@ async function payInvoiceHandler(ctx) {
         .run(paidAt, paidAt, inv.id);
     });
   } catch (e) {
-    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message, ...(e.code ? { code: e.code } : {}) });
     throw e;
   }
   if (inv.ticket_id) {

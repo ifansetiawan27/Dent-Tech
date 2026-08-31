@@ -5,3 +5,4 @@ data/
 supabase/.temp/
 .kilo/
 .env*
+!.env.example

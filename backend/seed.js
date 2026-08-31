@@ -76,6 +76,11 @@ async function seed() {
   await insCust(c1, 'CUS-0001', 'Klinik Gigi Senyum Sehat', 'Klinik Gigi', '+62 21 7200 118', 'info@senyumsehat.id', 'Jl. Melati No. 12', 'Jakarta Selatan', iso(85));
   await insCust(c2, 'CUS-0002', 'RS Medika Farma', 'Rumah Sakit', '+62 22 8750 221', 'teknik@medikafarma.co.id', 'Jl. Asia Afrika No. 210', 'Bandung', iso(80));
   await insCust(c3, 'CUS-0003', 'Lab Dental Pro', 'Laboratorium Dental', '+62 31 5500 77', 'halo@dentalpro.id', 'Jl. Tunjungan No. 45', 'Surabaya', iso(60));
+  const walletTs = iso(60);
+  for (const customerId of [c1, c2, c3]) {
+    await db.prepare('INSERT INTO wallet_accounts (id, customer_id, balance, created_at, updated_at) VALUES (?, ?, 0, ?, ?) ON CONFLICT (customer_id) DO NOTHING')
+      .run(uid(), customerId, walletTs, walletTs);
+  }
 
   const uRatna = await createAuthUser('ratna@denttech.id', 'customer123', 'Ratna Dewi', 'customer');
   const uHendra = await createAuthUser('hendra@denttech.id', 'customer123', 'Hendra Kusuma', 'customer');

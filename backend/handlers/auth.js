@@ -62,12 +62,22 @@ async function signupHandler(ctx) {
 
   const customerId = uid();
   const code = 'CUS-' + String((await nextNumber('CUS')).split('-')[2]);
-  await db.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(customerId, code, String(clinic_name).trim(), 'Klinik', phoneNorm, emailNorm, String(address).trim(), String(city || '').trim(), 'ACTIVE', now());
-  await db.prepare('INSERT INTO customer_contacts (id, customer_id, name, role, phone, email, is_primary) VALUES (?, ?, ?, ?, ?, ?, 1)')
-    .run(uid(), customerId, String(name).trim(), 'Penanggung Jawab', phoneNorm, emailNorm);
-  await db.prepare('INSERT INTO users (id, email, password_hash, name, role, phone, customer_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
-    .run(authUser.id, emailNorm, 'supabase-auth', String(name).trim(), 'customer', phoneNorm, customerId, now());
+  const ts = now();
+  try {
+    await db.transaction(async (tx) => {
+      await tx.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(customerId, code, String(clinic_name).trim(), 'Klinik', phoneNorm, emailNorm, String(address).trim(), String(city || '').trim(), 'ACTIVE', ts);
+      await tx.prepare('INSERT INTO customer_contacts (id, customer_id, name, role, phone, email, is_primary) VALUES (?, ?, ?, ?, ?, ?, 1)')
+        .run(uid(), customerId, String(name).trim(), 'Penanggung Jawab', phoneNorm, emailNorm);
+      await tx.prepare('INSERT INTO users (id, email, password_hash, name, role, phone, customer_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
+        .run(authUser.id, emailNorm, 'supabase-auth', String(name).trim(), 'customer', phoneNorm, customerId, ts);
+      await tx.prepare('INSERT INTO wallet_accounts (id, customer_id, balance, created_at, updated_at) VALUES (?, ?, 0, ?, ?)')
+        .run(uid(), customerId, ts, ts);
+    });
+  } catch (error) {
+    await supabaseAdmin.auth.admin.deleteUser(authUser.id).catch(() => {});
+    throw error;
+  }
 
   const result = await auth.login(emailNorm, password);
   if (result.error) return sendJSON(ctx.res, 500, { error: 'Pendaftaran berhasil namun gagal login, silakan coba login kembali' });

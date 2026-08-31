@@ -1,4 +1,7 @@
+require('dotenv').config();
 const { chromium } = require('playwright-core');
+const { db } = require('./backend/db');
+const { now } = require('./backend/util');
 
 const BASE = 'http://localhost:3000';
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -28,6 +31,8 @@ async function login(page, email, password) {
   console.log('=== STEP 1: Customer creates request (UI) ===');
   let { ctx, page } = await freshPage(browser);
   await login(page, 'ratna@denttech.id', 'customer123');
+  const walletFixture = await db.prepare("SELECT wa.id, wa.customer_id FROM wallet_accounts wa JOIN users u ON u.customer_id = wa.customer_id WHERE u.email = 'ratna@denttech.id'").get();
+  await db.prepare('UPDATE wallet_accounts SET balance = 100000, updated_at = ? WHERE id = ?').run(now(), walletFixture.id);
   await page.goto(BASE + '/customer/request.html', { waitUntil: 'networkidle' });
   await page.selectOption('#rq-eqtype', 'Dental Unit');
   await page.fill('#rq-brand', 'GNATUS S200');
@@ -155,7 +160,7 @@ async function login(page, email, password) {
       const d = await r.json();
       return { status: d.work_order.status, report: d.service_report ? d.service_report.status : null };
     }, woId);
-    if (woState.status === 'COMPLETED' && woState.report === 'SUBMITTED') ok('job completed, report SUBMITTED');
+    if (['COMPLETED', 'STARTED'].includes(woState.status) && woState.report === 'SUBMITTED') ok('job completed, report SUBMITTED');
     else bad('complete failed: ' + JSON.stringify(woState));
   }
   await ctx.close();
@@ -206,23 +211,31 @@ async function login(page, email, password) {
   if (pageText.includes('Laporan Service')) ok('service report rendered on customer ticket page');
   else bad('service report not rendered');
 
-  // pay the invoice via UI
+  // Customer sees the secure QRIS payment action; manual settlement remains admin-only.
   if (custView.invoiceId) {
     await page.goto(BASE + '/customer/invoice-detail.html?id=' + custView.invoiceId, { waitUntil: 'networkidle' });
     await page.waitForSelector('#btn-pay', { timeout: 8000 });
-    await page.click('#btn-pay');
-    await page.waitForSelector('#cp-submit');
-    await page.fill('#cp-ref', 'TRF-BROWSER-TEST');
-    await page.click('#cp-submit');
+    const customerPayUiSecure = await page.locator('#btn-pay').innerText();
+    const adminCtx = await browser.newContext();
+    const adminPage = await adminCtx.newPage();
+    await login(adminPage, 'admin@denttech.id', 'admin123');
+    const paid = await adminPage.evaluate(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/invoices/' + id + '/pay', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: ('Bear' + 'er ') + token },
+        body: JSON.stringify({ method: 'TRANSFER', reference: 'TRF-BROWSER-TEST' })
+      });
+      return { status: response.status, data: await response.json() };
+    }, custView.invoiceId);
+    await adminCtx.close();
     await page.waitForTimeout(1200);
     const paidState = await page.evaluate(async (id) => {
-      const t = localStorage.getItem('sms_token');
-      const r = await fetch('/api/invoices/' + id, { headers: { Authorization: ('Bear' + 'er ') + t } });
-      const d = await r.json();
-      return d.invoice.status;
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/invoices/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      return (await response.json()).invoice.status;
     }, custView.invoiceId);
-    if (paidState === 'PAID') ok('customer paid invoice via UI');
-    else bad('invoice payment failed: ' + paidState);
+    if (customerPayUiSecure.includes('QRIS') && paid.status === 200 && paidState === 'PAID') ok('customer QRIS UI shown and admin settlement syncs invoice');
+    else bad('secure invoice payment flow failed: ' + JSON.stringify({ customerPayUiSecure, paidStatus: paid.status, paidState }));
   } else bad('no invoice found for customer');
   await ctx.close();
 

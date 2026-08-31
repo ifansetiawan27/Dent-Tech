@@ -49,8 +49,13 @@ async function createCustomerHandler(ctx) {
   if (!name) return sendJSON(ctx.res, 400, { error: 'Nama customer wajib diisi' });
   const id = uid();
   const code = 'CUS-' + String((await nextNumber('CUS')).split('-')[2]);
-  await db.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(id, code, name, industry, phone, email, address, city, 'ACTIVE', now());
+  const ts = now();
+  await db.transaction(async (tx) => {
+    await tx.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, code, name, industry, phone, email, address, city, 'ACTIVE', ts);
+    await tx.prepare('INSERT INTO wallet_accounts (id, customer_id, balance, created_at, updated_at) VALUES (?, ?, 0, ?, ?)')
+      .run(uid(), id, ts, ts);
+  });
   for (const ct of contacts) {
     if (!ct.name) continue;
     await db.prepare('INSERT INTO customer_contacts (id, customer_id, name, role, phone, email, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?)')
