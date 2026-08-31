@@ -64,7 +64,7 @@ export function buildInvoiceHtml(data) {
 
   const itemRows = (items || []).map((it) => `
     <tr>
-      <td>Spare Part: ${esc(it.part_name)} <span class="muted">(${esc(it.part_code || '')})</span></td>
+      <td>${esc(it.description)}${it.item_type === 'CUSTOM' ? ' <span class="muted">(Tambahan)</span>' : ''}</td>
       <td class="center">${it.qty} ${esc(it.unit || '')}</td>
       <td class="right">${fmtIDR(it.unit_price)}</td>
       <td class="right">${fmtIDR(it.qty * it.unit_price)}</td>
@@ -128,19 +128,11 @@ ${DOC_BASE_CSS}
 
   <table class="grid">
     <thead><tr><th>Deskripsi</th><th class="center">Qty</th><th class="right">Harga</th><th class="right">Jumlah</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>Biaya Jasa${ticket?.problem ? ' — ' + esc(ticket.problem) : ''}</td>
-        <td class="center">1</td>
-        <td class="right">${fmtIDR(inv.labor_cost)}</td>
-        <td class="right">${fmtIDR(inv.labor_cost)}</td>
-      </tr>
-      ${itemRows}
-    </tbody>
+     <tbody>${itemRows}</tbody>
   </table>
 
   <div class="totals">
-    <div class="row"><span>Subtotal</span><span>${fmtIDR(totals.labor_cost + totals.parts_total)}</span></div>
+    <div class="row"><span>Subtotal Item</span><span>${fmtIDR(totals.items_total)}</span></div>
     ${totals.discount > 0 ? `<div class="row"><span>Diskon</span><span>-${fmtIDR(totals.discount)}</span></div>` : ''}
     ${taxRow}
     <div class="row grand"><span>Total</span><span>${fmtIDR(totals.total)}</span></div>

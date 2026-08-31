@@ -13,6 +13,7 @@
     "test:visual": "node visual_audit.js",
     "test:finance": "node test_finance.js",
     "test:rupiah": "node test_rupiah.js",
+    "test:invoice-sync": "node test_invoice_sync.js",
     "audit": "node audit.js",
     "reset": "node reset_db.js"
   },

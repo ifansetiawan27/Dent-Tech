@@ -4,7 +4,7 @@ const { db, supabaseAdmin } = require('./backend/db');
 const { seed } = require('./backend/seed');
 const { BUCKET } = require('./backend/storage');
 
-const TABLES = ['users','tokens','customers','customer_contacts','equipment','tickets','ticket_status_history','ticket_timeline','work_orders','checklist_templates','checklist_template_items','checklist_responses','diagnoses','work_performed','parts','part_usages','expenses','attachments','service_reports','invoices','payments','notifications','audit_logs','settings'];
+const TABLES = ['users','tokens','customers','customer_contacts','equipment','tickets','ticket_status_history','ticket_timeline','work_orders','checklist_templates','checklist_template_items','checklist_responses','diagnoses','work_performed','parts','part_usages','expenses','attachments','service_reports','invoice_items','invoices','payments','notifications','audit_logs','settings'];
 
 (async () => {
   console.log('[1/4] Truncating tables...');

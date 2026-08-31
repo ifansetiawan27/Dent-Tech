@@ -14,7 +14,9 @@ async function dashboardHandler(ctx) {
     const equipmentCount = await stat('SELECT COUNT(*) AS c FROM equipment');
     const lowStock = await stat('SELECT COUNT(*) AS c FROM parts WHERE stock <= min_stock');
     const pendingReports = await stat("SELECT COUNT(*) AS c FROM service_reports WHERE status = 'SUBMITTED'");
-    const unpaid = (await db.prepare("SELECT COALESCE(SUM(labor_cost),0) AS s FROM invoices WHERE status IN ('SENT','OVERDUE')").get()).s;
+    const unpaid = (await db.prepare(`SELECT COALESCE(SUM(GREATEST(0, COALESCE(ii.items_total,0) - i.discount) * (1 + i.tax_rate/100.0)),0)::float8 AS s
+      FROM invoices i LEFT JOIN (SELECT invoice_id, SUM(qty*unit_price) AS items_total FROM invoice_items GROUP BY invoice_id) ii ON ii.invoice_id = i.id
+      WHERE i.status IN ('SENT','OVERDUE')`).get()).s;
     const paidMonth = (await db.prepare("SELECT COUNT(*) AS c FROM invoices WHERE status='PAID' AND substr(paid_at,1,7) = ?").get(monthKey)).c;
     const ticketsByStatus = await db.prepare('SELECT status, COUNT(*) AS count FROM tickets GROUP BY status').all();
     const today = new Date().toISOString().slice(0, 10);

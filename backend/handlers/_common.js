@@ -71,16 +71,50 @@ async function canAccessWorkOrder(user, wo) {
 }
 
 async function partTotalForWorkOrder(woId) {
-  const row = await db.prepare('SELECT COALESCE(SUM(qty * unit_price), 0) AS total FROM part_usages WHERE work_order_id = ?').get(woId);
+  const row = await db.prepare('SELECT COALESCE(SUM(qty * unit_price), 0)::float8 AS total FROM part_usages WHERE work_order_id = ?').get(woId);
   return row.total;
 }
 
-function invoiceTotals(inv, partTotal) {
-  const parts = Math.round(partTotal * 100) / 100;
-  const subtotal = Math.max(0, inv.labor_cost + parts - inv.discount);
-  const tax = Math.round(subtotal * inv.tax_rate) / 100;
+async function getInvoiceItems(invoiceId, executor = db) {
+  return executor.prepare(`SELECT id, invoice_id, item_type, description,
+    qty::float8 AS qty, unit, unit_price::float8 AS unit_price,
+    sort_order, source_id, created_at, updated_at
+    FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order, created_at, id`).all(invoiceId);
+}
+
+function invoiceItemsTotal(items) {
+  return Math.round((items || []).reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unit_price || 0), 0) * 100) / 100;
+}
+
+async function snapshotWorkOrderInvoiceItems(executor, invoiceId, workOrderId, laborCost, laborDescription) {
+  const ts = now();
+  await executor.prepare(`INSERT INTO invoice_items (id, invoice_id, item_type, description, qty, unit, unit_price, sort_order, source_id, created_at, updated_at)
+    VALUES (?, ?, 'LABOR', ?, 1, 'jasa', ?, 0, 'labor', ?, ?)`)
+    .run(uid(), invoiceId, laborDescription || 'Biaya Jasa', laborCost, ts, ts);
+  if (!workOrderId) return;
+  const parts = await executor.prepare(`SELECT pu.id, pu.qty::float8 AS qty, pu.unit_price::float8 AS unit_price, p.name, p.code, p.unit
+    FROM part_usages pu JOIN parts p ON p.id = pu.part_id
+    WHERE pu.work_order_id = ? ORDER BY pu.created_at, pu.id`).all(workOrderId);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    await executor.prepare(`INSERT INTO invoice_items (id, invoice_id, item_type, description, qty, unit, unit_price, sort_order, source_id, created_at, updated_at)
+      VALUES (?, ?, 'PART', ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(uid(), invoiceId, `Spare Part: ${p.name}${p.code ? ` (${p.code})` : ''}`, p.qty, p.unit || 'pcs', p.unit_price, 100 + i, p.id, ts, ts);
+  }
+}
+
+function invoiceTotals(inv, itemsOrPartTotal) {
+  const items = Array.isArray(itemsOrPartTotal) ? itemsOrPartTotal : null;
+  const labor = items ? invoiceItemsTotal(items.filter((x) => x.item_type === 'LABOR')) : Number(inv.labor_cost || 0);
+  const parts = items ? invoiceItemsTotal(items.filter((x) => x.item_type === 'PART')) : Math.round(Number(itemsOrPartTotal || 0) * 100) / 100;
+  const custom = items ? invoiceItemsTotal(items.filter((x) => x.item_type === 'CUSTOM')) : 0;
+  const itemsTotal = items ? invoiceItemsTotal(items) : labor + parts;
+  const discount = Number(inv.discount || 0);
+  const subtotal = Math.max(0, itemsTotal - discount);
+  const taxRate = Number(inv.tax_rate || 0);
+  const tax = Math.round(subtotal * taxRate) / 100;
   const total = Math.round((subtotal + tax) * 100) / 100;
-  return { labor_cost: inv.labor_cost, parts_total: parts, discount: inv.discount, subtotal: Math.round(subtotal * 100) / 100, tax_rate: inv.tax_rate, tax, total };
+  return { labor_cost: labor, parts_total: parts, custom_total: custom, items_total: itemsTotal, discount, subtotal: Math.round(subtotal * 100) / 100, tax_rate: taxRate, tax, total };
 }
 
 function customerVisible(obj, allowedKeys) {
@@ -130,5 +164,5 @@ module.exports = {
   TICKET_STATUSES, WO_STATUSES, TICKET_TRANSITIONS,
   notify, audit, timeline, setTicketStatus,
   getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder,
-  partTotalForWorkOrder, invoiceTotals, customerVisible, buildChecklistState
+  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, invoiceTotals, customerVisible, buildChecklistState
 };

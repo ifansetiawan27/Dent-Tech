@@ -2,8 +2,8 @@
 const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig, localDate, getSetting } = require('../util');
 const {
-  audit, timeline, setTicketStatus, getTicket, getWorkOrder,
-  notify, partTotalForWorkOrder, invoiceTotals
+  audit, timeline, getTicket, getWorkOrder,
+  notify, getInvoiceItems, snapshotWorkOrderInvoiceItems, invoiceTotals
 } = require('./_common');
 
 async function reportDetail(r) {
@@ -64,39 +64,46 @@ async function getReportHandler(ctx) {
 }
 
 async function approveReportHandler(ctx) {
-  const r = await db.prepare('SELECT * FROM service_reports WHERE id = ?').get(ctx.params.id);
-  if (!r) return sendJSON(ctx.res, 404, { error: 'Service report tidak ditemukan' });
-  if (r.status !== 'SUBMITTED') return sendJSON(ctx.res, 400, { error: 'Hanya laporan berstatus SUBMITTED yang bisa disetujui' });
-  const wo = await getWorkOrder(r.work_order_id);
-  const t = await getTicket(wo.ticket_id);
-  const laborCost = Number(ctx.body.labor_cost) || 0;
-  const dueDays = Number(ctx.body.due_days) || 14;
-
-  await db.prepare("UPDATE service_reports SET status = 'APPROVED', approved_at = ?, approved_by = ?, updated_at = ? WHERE id = ?")
-    .run(now(), ctx.user.id, now(), r.id);
-  await db.prepare("UPDATE work_orders SET status = 'APPROVED', updated_at = ? WHERE id = ?").run(now(), wo.id);
-  if (t) {
-    await setTicketStatus(t, 'CLOSED', ctx.user, 'Laporan service disetujui');
-    await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
-    timeline(t.id, 'APPROVAL', 'Laporan disetujui', `Service report ${r.number} disetujui. Invoice dibuat.`, 'CUSTOMER_VISIBLE', ctx.user.id);
-  }
-
-  const partsTotal = await partTotalForWorkOrder(wo.id);
+  const laborCost = ctx.body.labor_cost === undefined ? 0 : Number(ctx.body.labor_cost);
+  const dueDays = ctx.body.due_days === undefined ? 14 : Number(ctx.body.due_days);
+  if (!Number.isFinite(laborCost) || laborCost < 0) return sendJSON(ctx.res, 400, { error: 'Biaya jasa tidak valid' });
+  if (!Number.isInteger(dueDays) || dueDays < 1 || dueDays > 365) return sendJSON(ctx.res, 400, { error: 'Jatuh tempo harus 1–365 hari' });
   const invId = uid();
   const invNumber = await nextNumber('INV');
   const issued = now();
   const due = localDate(new Date(Date.now() + dueDays * 24 * 3600 * 1000));
   const taxRate = (await getSetting('invoice_tax_mode', 'PPN')) === 'NON_PPN' ? 0 : 11;
-  await db.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, issued_at, due_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'SENT', 'FINAL', ?, ?, ?)`)
-    .run(invId, invNumber, t ? t.id : null, wo.id, t.customer_id, laborCost, taxRate, issued, due, issued);
-  const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invId);
-  const totals = invoiceTotals(inv, partsTotal);
-
-  if (t) {
-    notify({ customer_id: t.customer_id, title: `Laporan ${t.number} disetujui`, body: `Service report ${r.number} disetujui. Invoice ${invNumber} diterbitkan (Total Rp ${totals.total.toLocaleString('id-ID')})`, type: 'REPORT', ref_type: 'ticket', ref_id: t.id });
-    notify({ customer_id: t.customer_id, title: `Invoice ${invNumber} diterbitkan`, body: `Jatuh tempo ${due}`, type: 'INVOICE', ref_type: 'invoice', ref_id: invId });
+  let r, wo, t;
+  try {
+    await db.transaction(async (tx) => {
+      r = await tx.prepare('SELECT * FROM service_reports WHERE id = ? FOR UPDATE').get(ctx.params.id);
+      if (!r) { const e = new Error('Service report tidak ditemukan'); e.status = 404; throw e; }
+      if (r.status !== 'SUBMITTED') { const e = new Error('Hanya laporan berstatus SUBMITTED yang bisa disetujui'); e.status = 400; throw e; }
+      wo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(r.work_order_id);
+      t = wo ? await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(wo.ticket_id) : null;
+      if (!wo || !t) { const e = new Error('Work order atau ticket tidak ditemukan'); e.status = 404; throw e; }
+      const existing = await tx.prepare("SELECT id FROM invoices WHERE work_order_id = ? AND type = 'FINAL'").get(wo.id);
+      if (existing) { const e = new Error('Invoice final untuk work order ini sudah ada'); e.status = 409; throw e; }
+      await tx.prepare("UPDATE service_reports SET status = 'APPROVED', approved_at = ?, approved_by = ?, updated_at = ? WHERE id = ?")
+        .run(issued, ctx.user.id, issued, r.id);
+      await tx.prepare("UPDATE work_orders SET status = 'APPROVED', updated_at = ? WHERE id = ?").run(issued, wo.id);
+      await tx.prepare("UPDATE tickets SET status = 'CLOSED', closed_at = ?, updated_at = ? WHERE id = ?").run(issued, issued, t.id);
+      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(uid(), t.id, t.status, 'CLOSED', ctx.user.id, 'Laporan service disetujui', issued);
+      await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, issued_at, due_at, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'SENT', 'FINAL', ?, ?, ?, ?, 1)`)
+        .run(invId, invNumber, t.id, wo.id, t.customer_id, laborCost, taxRate, issued, due, issued, issued);
+      await snapshotWorkOrderInvoiceItems(tx, invId, wo.id, laborCost, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa');
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
   }
+  const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invId);
+  const totals = invoiceTotals(inv, await getInvoiceItems(invId));
+  timeline(t.id, 'APPROVAL', 'Laporan disetujui', `Service report ${r.number} disetujui. Invoice dibuat.`, 'CUSTOMER_VISIBLE', ctx.user.id);
+  notify({ customer_id: t.customer_id, title: `Laporan ${t.number} disetujui`, body: `Service report ${r.number} disetujui. Invoice ${invNumber} diterbitkan (Total Rp ${totals.total.toLocaleString('id-ID')})`, type: 'REPORT', ref_type: 'ticket', ref_id: t.id });
+  notify({ customer_id: t.customer_id, title: `Invoice ${invNumber} diterbitkan`, body: `Jatuh tempo ${due}`, type: 'INVOICE', ref_type: 'invoice', ref_id: invId });
   if (wo.technician_id) notify({ user_id: wo.technician_id, title: `Laporan ${r.number} disetujui`, body: `Work order ${wo.number} closed`, type: 'REPORT', ref_type: 'service_report', ref_id: r.id });
   audit(ctx.user, 'UPDATE', 'service_report', r.id, `Approve laporan ${r.number} + invoice ${invNumber}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true, invoice_id: invId, invoice_number: invNumber });
@@ -159,14 +166,14 @@ async function analyticsHandler(ctx) {
 
   const rf = dateFilter('paid_at');
   const paidInvoices = await db.prepare(
-    `SELECT i.*, COALESCE((SELECT SUM(pu.qty*pu.unit_price) FROM part_usages pu WHERE pu.work_order_id = i.work_order_id),0) AS parts_total
+    `SELECT i.*, COALESCE((SELECT SUM(ii.qty*ii.unit_price) FROM invoice_items ii WHERE ii.invoice_id = i.id),0)::float8 AS items_total
      FROM invoices i WHERE i.status = 'PAID' AND i.paid_at IS NOT NULL ${rf.sql}`
   ).all(...rf.params);
   const revMap = new Map();
   let totalRevenue = 0;
   for (const inv of paidInvoices) {
     const key = inv.paid_at.slice(0, 7);
-    const totals = invoiceTotals(inv, inv.parts_total);
+    const totals = invoiceTotals({ ...inv, labor_cost: 0 }, inv.items_total);
     revMap.set(key, (revMap.get(key) || 0) + totals.total);
     totalRevenue += totals.total;
   }
@@ -195,9 +202,12 @@ async function analyticsHandler(ctx) {
   const completedTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status IN ('COMPLETED','CLOSED') ${tf.sql}`).get(...tf.params)).c;
   const cancelledTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'CANCELLED' ${tf.sql}`).get(...tf.params)).c;
   const openTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status IN ('OPEN','REVIEWING','ASSIGNED','IN_PROGRESS') ${tf.sql}`).get(...tf.params)).c;
-  const outstanding = (await db.prepare(
-    `SELECT COALESCE(SUM(labor_cost),0) AS s FROM invoices WHERE status IN ('SENT','OVERDUE')`
-  ).get()).s;
+  const outstanding = (await db.prepare(`
+    SELECT COALESCE(SUM(GREATEST(0, COALESCE(ii.items_total,0) - i.discount) * (1 + i.tax_rate/100.0)),0)::float8 AS s
+    FROM invoices i
+    LEFT JOIN (SELECT invoice_id, SUM(qty*unit_price) AS items_total FROM invoice_items GROUP BY invoice_id) ii ON ii.invoice_id = i.id
+    WHERE i.status IN ('SENT','OVERDUE')
+  `).get()).s;
 
   const summary = {
     from: from || null, to: to || null,

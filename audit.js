@@ -92,6 +92,7 @@ function extractResult(out) {
     { name: 'Browser pages (32)', cmd: process.execPath, args: ['test_browser.js'], resetBefore: false },
     { name: 'Finance module (9)', cmd: process.execPath, args: ['test_finance.js'], resetBefore: true },
     { name: 'Rupiah inputs (8)', cmd: process.execPath, args: ['test_rupiah.js'], resetBefore: false },
+    { name: 'Invoice sync (13)', cmd: process.execPath, args: ['test_invoice_sync.js'], resetBefore: true },
     { name: 'Lifecycle flow (11)', cmd: process.execPath, args: ['test_flow.js'], resetBefore: true },
     { name: 'Portal features (10)', cmd: process.execPath, args: ['test_newfeatures.js'], resetBefore: true },
     { name: 'New features (30)', cmd: process.execPath, args: ['test_features2.js'], resetBefore: true },

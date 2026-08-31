@@ -1,9 +1,9 @@
 'use strict';
 const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, localDate } = require('../util');
-const { audit, invoiceTotals } = require('./_common');
+const { audit } = require('./_common');
 
-const PARTS_TOTAL_SUBQUERY = '(SELECT work_order_id, SUM(qty*unit_price) AS parts_total FROM part_usages GROUP BY work_order_id)';
+const INVOICE_ITEMS_TOTAL_SUBQUERY = '(SELECT invoice_id, SUM(qty*unit_price) AS items_total FROM invoice_items GROUP BY invoice_id)';
 
 // ---------------- Customers ----------------
 async function listCustomersHandler(ctx) {
@@ -21,10 +21,10 @@ async function listCustomersHandler(ctx) {
   const iAgg = await db.query(`SELECT i.customer_id, COUNT(*) AS invoice_count,
       COUNT(*) FILTER (WHERE i.status = 'PAID') AS paid_invoices,
       COUNT(*) FILTER (WHERE i.status IN ('SENT','OVERDUE')) AS unpaid_invoices,
-      COALESCE(SUM((i.labor_cost + COALESCE(pu.parts_total,0) - i.discount) * (1 + i.tax_rate/100.0)) FILTER (WHERE i.status = 'PAID'), 0)::float8 AS paid_total,
-      COALESCE(SUM((i.labor_cost + COALESCE(pu.parts_total,0) - i.discount) * (1 + i.tax_rate/100.0)) FILTER (WHERE i.status IN ('SENT','OVERDUE')), 0)::float8 AS outstanding
+      COALESCE(SUM(GREATEST(0, COALESCE(ii.items_total,0) - i.discount) * (1 + i.tax_rate/100.0)) FILTER (WHERE i.status = 'PAID'), 0)::float8 AS paid_total,
+      COALESCE(SUM(GREATEST(0, COALESCE(ii.items_total,0) - i.discount) * (1 + i.tax_rate/100.0)) FILTER (WHERE i.status IN ('SENT','OVERDUE')), 0)::float8 AS outstanding
     FROM invoices i
-    LEFT JOIN ${PARTS_TOTAL_SUBQUERY} pu ON pu.work_order_id = i.work_order_id
+    LEFT JOIN ${INVOICE_ITEMS_TOTAL_SUBQUERY} ii ON ii.invoice_id = i.id
     GROUP BY i.customer_id`);
   const tMap = new Map(tAgg.map((r) => [r.customer_id, r]));
   const iMap = new Map(iAgg.map((r) => [r.customer_id, r]));
@@ -79,18 +79,20 @@ async function getCustomerHandler(ctx) {
         COUNT(*) FILTER (WHERE status = 'CLOSED') AS closed,
         COUNT(*) FILTER (WHERE status = 'CANCELLED') AS cancelled
       FROM tickets WHERE customer_id = ?`).get(id);
-    const invoices = await db.prepare(`SELECT i.id, i.number, i.type, i.status, i.labor_cost, i.discount, i.tax_rate, i.issued_at, i.due_at,
-        COALESCE(pu.parts_total, 0) AS parts_total
+    const invoices = await db.prepare(`SELECT i.id, i.number, i.type, i.status, i.discount, i.tax_rate, i.issued_at, i.due_at, i.updated_at, i.version,
+        COALESCE(ii.items_total, 0)::float8 AS items_total
       FROM invoices i
-      LEFT JOIN ${PARTS_TOTAL_SUBQUERY} pu ON pu.work_order_id = i.work_order_id
+      LEFT JOIN ${INVOICE_ITEMS_TOTAL_SUBQUERY} ii ON ii.invoice_id = i.id
       WHERE i.customer_id = ? ORDER BY i.issued_at DESC`).all(id);
     let paidTotal = 0;
     let outstanding = 0;
     for (const inv of invoices) {
-      inv.total = invoiceTotals(inv, inv.parts_total).total;
+      const subtotal = Math.max(0, inv.items_total - inv.discount);
+      const tax = Math.round(subtotal * inv.tax_rate) / 100;
+      inv.total = Math.round((subtotal + tax) * 100) / 100;
       if (inv.status === 'PAID') paidTotal += inv.total;
       else if (inv.status === 'SENT' || inv.status === 'OVERDUE') outstanding += inv.total;
-      delete inv.labor_cost; delete inv.discount; delete inv.tax_rate; delete inv.parts_total;
+      delete inv.discount; delete inv.tax_rate; delete inv.items_total;
     }
     c.summary = {
       tickets: { total: tAgg.total, active: tAgg.active, closed: tAgg.closed, cancelled: tAgg.cancelled },

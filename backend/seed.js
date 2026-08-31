@@ -3,6 +3,7 @@ const { db, supabaseAdmin } = require('./db');
 const { saveFile } = require('./storage');
 const { uid, localDate } = require('./util');
 const { CHECKLIST_TEMPLATES } = require('./checklist-data');
+const { snapshotWorkOrderInvoiceItems } = require('./handlers/_common');
 
 function iso(daysAgo, hour = 9, minute = 0) {
   const d = new Date();
@@ -180,11 +181,13 @@ async function seed() {
       'Jadwalkan maintenance berikutnya dalam 3 bulan.', 'APPROVED', iso(28, 16, 0), uAdmin, iso(30, 15, 0), iso(28, 16, 0));
 
   const inv1 = uid();
-  await db.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, issued_at, due_at, paid_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(inv1, 'INV-2026-000001', t1, wo1, c1, 750000, 0, 11, 'PAID', iso(28, 16, 30), dateOnly(14), iso(20, 11, 0), iso(28, 16, 30));
+  const invoiceCreated = iso(28, 16, 30);
+  await db.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, issued_at, due_at, paid_at, created_at, updated_at, version)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'FINAL', ?, ?, ?, ?, ?, 1)`)
+    .run(inv1, 'INV-2026-000001', t1, wo1, c1, 750000, 0, 11, 'PAID', invoiceCreated, dateOnly(14), iso(20, 11, 0), invoiceCreated, invoiceCreated);
+  await snapshotWorkOrderInvoiceItems(db, inv1, wo1, 750000, 'Biaya Jasa — Preventive maintenance dental unit');
   await db.prepare('INSERT INTO payments (id, invoice_id, amount, method, reference, paid_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(uid(), inv1, 1135750, 'TRANSFER', 'TRF-BCA-88231', iso(20, 11, 0));
+    .run(uid(), inv1, 1137750, 'TRANSFER', 'TRF-BCA-88231', iso(20, 11, 0));
 
   // ---------- TICKET 2 : IN_PROGRESS, technician demo ----------
   const t2 = uid();

@@ -31,12 +31,19 @@
     lucide.createIcons();
 
     const content = document.getElementById('content');
+    let signature = '';
+    let polling = false;
 
-    async function load() {
-      content.innerHTML = spinner('Memuat invoice...');
+    async function load(silent = false) {
+      if (!silent) content.innerHTML = spinner('Memuat invoice...');
+      if (polling) return;
+      polling = true;
       try {
         const d = await api.get('/api/invoices');
         const list = d.invoices;
+        const nextSignature = list.map((i) => `${i.id}:${i.version || 0}:${i.updated_at || ''}:${i.status}:${i.totals?.total || 0}`).join('|');
+        if (silent && nextSignature === signature) return;
+        signature = nextSignature;
         if (!list.length) {
           content.innerHTML = `<div class="card">${emptyState('receipt', 'Belum ada invoice', 'Invoice akan muncul setelah service Anda selesai dan disetujui.')}</div>`;
           refreshIcons();
@@ -53,7 +60,7 @@
             ${list.map((i) => `
               <a href="/customer/invoice-detail.html?id=${i.id}" class="card p-4 block hover:border-blue-300 transition-colors">
                 <div class="flex items-center justify-between gap-2">
-                  <p class="font-semibold text-slate-700 text-sm">${i.number}</p>
+                  <div><p class="font-semibold text-slate-700 text-sm">${i.number}</p>${i.type === 'PROFORMA' ? '<span class="text-[10px] font-semibold text-violet-600">Proforma Invoice</span>' : ''}</div>
                   ${statusBadge(i.status, INVOICE_STATUS)}
                 </div>
                 <div class="flex items-end justify-between mt-2">
@@ -67,12 +74,20 @@
           </div>`;
         refreshIcons();
       } catch (e) {
-        content.innerHTML = errorState(e.message);
-        refreshIcons();
+        if (!silent) {
+          content.innerHTML = errorState(e.message);
+          refreshIcons();
+        }
+      } finally {
+        polling = false;
       }
     }
 
     load();
+    const pollTimer = setInterval(() => { if (document.visibilityState === 'visible') load(true); }, 10000);
+    window.addEventListener('focus', () => load(true));
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(true); });
+    window.addEventListener('pagehide', () => clearInterval(pollTimer));
   </script>
 </body>
 </html>
