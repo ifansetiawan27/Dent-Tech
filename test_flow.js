@@ -24,6 +24,17 @@ async function login(page, email, password) {
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.click('#login-btn')]);
 }
 
+async function pollPage(page, evaluate, arg, timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  let value;
+  while (Date.now() < deadline) {
+    value = await page.evaluate(evaluate, arg);
+    if (value) return value;
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`State tidak tercapai dalam ${timeout}ms`);
+}
+
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
 
@@ -53,9 +64,9 @@ async function login(page, email, password) {
   ({ ctx, page } = await freshPage(browser));
   await login(page, 'admin@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/ticket-detail.html?id=' + custTicketId, { waitUntil: 'networkidle' });
-  await page.waitForSelector('#btn-assign', { timeout: 8000 });
+  await page.waitForSelector('#btn-assign', { timeout: 15000 });
   await page.click('#btn-assign');
-  await page.waitForSelector('#as-tech', { timeout: 5000 });
+  await page.waitForSelector('#as-tech', { timeout: 15000 });
   await page.selectOption('#as-tech', { label: 'Budi Santoso' });
   const today = new Date();
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -63,7 +74,12 @@ async function login(page, email, password) {
   await page.selectOption('#as-window', '09:00 - 12:00');
   await page.click('#as-submit');
   await page.waitForSelector('#btn-cancel, .card:has-text("Work Orders")', { timeout: 8000 }).catch(() => {});
-  await page.waitForTimeout(1000);
+  await page.waitForFunction(async (id) => {
+    const token = localStorage.getItem('sms_token');
+    const response = await fetch('/api/tickets/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+    const detail = await response.json();
+    return detail.ticket?.status === 'ASSIGNED' && detail.work_orders?.length > 0;
+  }, custTicketId, { timeout: 10000 });
   const assigned = await page.evaluate(async (id) => {
     const t = localStorage.getItem('sms_token');
     const r = await fetch('/api/tickets/' + id, { headers: { Authorization: ('Bear' + 'er ') + t } });
@@ -89,18 +105,29 @@ async function login(page, email, password) {
   else {
     await page.goto(BASE + '/technician/job-detail.html?id=' + woId, { waitUntil: 'networkidle' });
     await page.waitForSelector('#btn-start', { timeout: 8000 });
+    const startResponsePromise = page.waitForResponse((response) =>
+      response.url().includes('/api/work-orders/' + woId + '/start') && response.request().method() === 'POST',
+    { timeout: 15000 });
     await page.click('#btn-start');
-    await page.waitForSelector('.tab-pill', { timeout: 8000 });
+    const startResponse = await startResponsePromise;
+    if (!startResponse.ok()) throw new Error(`Start work order gagal (${startResponse.status()}): ${await startResponse.text()}`);
+    await page.waitForSelector('.tab-pill', { timeout: 15000 });
     ok('technician started job');
 
     // fill all checklist items PASS
     const chkButtons = await page.$$('.chk-btn[data-result="PASS"]');
     for (const b of chkButtons) { await b.click(); await page.waitForTimeout(60); }
+    await page.waitForFunction(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      const detail = await response.json();
+      return detail.checklist?.complete === true;
+    }, woId, { timeout: 20000 });
     const chkState = await page.evaluate(async (id) => {
       const t = localStorage.getItem('sms_token');
       const r = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + t } });
       const d = await r.json();
-      return d.checklist ? d.checklist.complete : true;
+      return d.checklist?.complete === true;
     }, woId);
     if (chkState) ok('checklist filled complete via UI (' + chkButtons.length + ' items)');
     else bad('checklist not complete after UI clicks');
@@ -112,10 +139,21 @@ async function login(page, email, password) {
     await page.fill('#dg-root', 'Keausan normal pemakaian');
     await page.fill('#dg-recom', 'Ganti bearing, lumasi rutin');
     await page.click('#dg-save');
-    await page.waitForTimeout(700);
+    await page.waitForFunction(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      const detail = await response.json();
+      return detail.diagnosis?.findings === 'Bearing handpiece aus';
+    }, woId, { timeout: 15000 });
+    await page.waitForSelector('#wp-input', { state: 'visible' });
     await page.fill('#wp-input', 'Mengganti bearing handpiece');
     await page.click('#wp-add');
-    await page.waitForTimeout(700);
+    await page.waitForFunction(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      const detail = await response.json();
+      return detail.work_performed?.some((item) => item.description === 'Mengganti bearing handpiece');
+    }, woId, { timeout: 15000 });
     ok('diagnosis + work performed saved');
 
     // parts tab — add one part
@@ -125,7 +163,12 @@ async function login(page, email, password) {
     await page.waitForSelector('#mp-part');
     await page.selectOption('#mp-part', { index: 1 });
     await page.click('#mp-submit');
-    await page.waitForTimeout(700);
+    await page.waitForFunction(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      const detail = await response.json();
+      return detail.part_usages?.length > 0;
+    }, woId, { timeout: 15000 });
     const partsCount = await page.evaluate(async (id) => {
       const t = localStorage.getItem('sms_token');
       const r = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + t } });
@@ -144,23 +187,39 @@ async function login(page, email, password) {
       page.click('[data-upload="after"]')
     ]);
     await fileChooser.setFiles({ name: 'after.png', mimeType: 'image/png', buffer: pngBuf });
-    await page.waitForTimeout(2000);
+    await page.waitForFunction(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      const detail = await response.json();
+      return detail.photos?.some((photo) => photo.kind === 'after');
+    }, woId, { timeout: 20000 });
 
     // complete tab
     await page.click('.tab-pill[data-tab="complete"]');
     await page.waitForSelector('#cm-summary');
+    await page.waitForFunction(() => document.querySelectorAll('#tab-content .bg-emerald-100').length === 4, null, { timeout: 15000 });
     await page.fill('#cm-summary', 'Browser test: handpiece selesai diperbaiki, berfungsi normal.');
     await page.click('#cm-submit');
     await page.waitForSelector('[data-act="ok"]', { timeout: 5000 });
-    await page.click('[data-act="ok"]');
-    await page.waitForTimeout(1200);
+    const completeResponsePromise = page.waitForResponse((response) =>
+      response.url().includes('/api/work-orders/' + woId + '/complete') && response.request().method() === 'POST',
+    { timeout: 15000 });
+    await page.locator('[data-act="ok"]').click();
+    const completeResponse = await completeResponsePromise;
+    if (!completeResponse.ok()) throw new Error(`Complete work order gagal (${completeResponse.status()}): ${await completeResponse.text()}`);
+    await page.waitForFunction(async (id) => {
+      const token = localStorage.getItem('sms_token');
+      const response = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + token } });
+      const detail = await response.json();
+      return detail.work_order?.status === 'COMPLETED' && detail.service_report?.status === 'SUBMITTED';
+    }, woId, { timeout: 15000 });
     const woState = await page.evaluate(async (id) => {
       const t = localStorage.getItem('sms_token');
       const r = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + t } });
       const d = await r.json();
       return { status: d.work_order.status, report: d.service_report ? d.service_report.status : null };
     }, woId);
-    if (['COMPLETED', 'STARTED'].includes(woState.status) && woState.report === 'SUBMITTED') ok('job completed, report SUBMITTED');
+    if (woState.status === 'COMPLETED' && woState.report === 'SUBMITTED') ok('job completed, report SUBMITTED');
     else bad('complete failed: ' + JSON.stringify(woState));
   }
   await ctx.close();
@@ -173,15 +232,21 @@ async function login(page, email, password) {
   await page.waitForSelector('#btn-approve', { timeout: 8000 });
   await page.fill('#ap-labor', '600000');
   await page.click('#btn-approve');
-  await page.waitForTimeout(1500);
-  const approval = await page.evaluate(async (id) => {
-    const t = localStorage.getItem('sms_token');
-    const r = await fetch('/api/work-orders/' + id, { headers: { Authorization: ('Bear' + 'er ') + t } });
-    const d = await r.json();
-    const r2 = await fetch('/api/invoices', { headers: { Authorization: ('Bear' + 'er ') + t } });
-    const d2 = await r2.json();
-    const inv = d2.invoices.find((i) => i.work_order_id === id);
-    return { woStatus: d.work_order.status, report: d.service_report.status, invoice: inv ? { number: inv.number, status: inv.status, total: inv.totals.total } : null };
+  const approval = await pollPage(page, async (id) => {
+    const token = localStorage.getItem('sms_token');
+    const headers = { Authorization: ('Bear' + 'er ') + token };
+    const [workOrderResponse, invoicesResponse] = await Promise.all([
+      fetch('/api/work-orders/' + id, { headers }),
+      fetch('/api/invoices', { headers })
+    ]);
+    const [workOrderDetail, invoicesDetail] = await Promise.all([workOrderResponse.json(), invoicesResponse.json()]);
+    const invoice = invoicesDetail.invoices?.find((item) => item.work_order_id === id);
+    if (workOrderDetail.work_order?.status !== 'APPROVED' || workOrderDetail.service_report?.status !== 'APPROVED' || !invoice) return null;
+    return {
+      woStatus: workOrderDetail.work_order.status,
+      report: workOrderDetail.service_report.status,
+      invoice: { number: invoice.number, status: invoice.status, total: invoice.totals.total }
+    };
   }, woId);
   if (approval.woStatus === 'APPROVED' && approval.report === 'APPROVED' && approval.invoice) ok(`report approved, invoice ${approval.invoice.number} created (${approval.invoice.total})`);
   else bad('approval failed: ' + JSON.stringify(approval));

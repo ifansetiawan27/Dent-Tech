@@ -54,7 +54,6 @@
         ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS top up wallet" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : ''}
         <dl class="space-y-2 text-sm mt-3">
           <div class="flex justify-between gap-3"><dt class="text-slate-500">Saldo masuk</dt><dd class="font-semibold">${fmtIDR(order.amount)}</dd></div>
-          <div class="flex justify-between gap-3"><dt class="text-slate-500">Biaya QRIS</dt><dd class="font-semibold">${fmtIDR(order.gateway_fee || 0)}</dd></div>
           <div class="flex justify-between gap-3 border-t border-slate-200 pt-2"><dt class="font-bold">Total pembayaran</dt><dd class="font-bold text-blue-700">${fmtIDR(order.total_payment ?? order.amount)}</dd></div>
           <div class="flex justify-between gap-3"><dt class="text-slate-500">Berlaku sampai</dt><dd class="text-right">${order.expired_at ? fmtDateTime(order.expired_at) : '-'}</dd></div>
         </dl>
@@ -75,7 +74,7 @@
         ${orderPanel(state.order)}
         <section id="topup" class="card p-5 mb-5 scroll-mt-20">
           <h2 class="font-bold">Top Up Wallet</h2>
-          <p class="text-sm text-slate-500 mt-1">Nominal top up tetap <b class="text-slate-700">${fmtIDR(TOPUP_AMOUNT)}</b>. Biaya QRIS ditampilkan sebelum pembayaran.</p>
+          <p class="text-sm text-slate-500 mt-1">Nominal top up tetap <b class="text-slate-700">${fmtIDR(TOPUP_AMOUNT)}</b>. Total pembayaran ditampilkan setelah QRIS dibuat.</p>
           <button id="create-topup" class="btn-primary w-full !py-3 mt-4" ${state.order?.status === 'PENDING' ? 'disabled' : ''}><i data-lucide="qr-code" class="w-4 h-4"></i> Buat QRIS ${fmtIDR(TOPUP_AMOUNT)}</button>
         </section>
         <section id="history" class="scroll-mt-20">

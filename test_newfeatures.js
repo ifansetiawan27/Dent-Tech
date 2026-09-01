@@ -40,7 +40,10 @@ async function login(page, email, password) {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('#pf-photo-btn')]);
   await chooser.setFiles({ name: 'me.png', mimeType: 'image/png', buffer: png });
-  await page.waitForTimeout(2000);
+  await page.waitForFunction(() => {
+    const u = JSON.parse(localStorage.getItem('sms_user') || '{}');
+    return !!u.photo_url;
+  }, null, { timeout: 10000 });
   const photoSet = await page.evaluate(() => {
     const u = JSON.parse(localStorage.getItem('sms_user') || '{}');
     return !!u.photo_url;
@@ -52,7 +55,10 @@ async function login(page, email, password) {
   else bad('profile avatar not an image');
 
   console.log('=== 3. Avatar appears in topbar ===');
-  const topbarImg = await page.$eval('#user-menu-btn', (el) => el.innerHTML.includes('<img'));
+  await page.waitForTimeout(900);
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForSelector('#user-menu-btn', { state: 'visible' });
+  const topbarImg = await page.locator('#user-menu-btn img').count() > 0;
   if (topbarImg) ok('topbar avatar shows photo');
   else bad('topbar avatar not updated');
 

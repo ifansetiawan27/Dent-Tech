@@ -33,22 +33,32 @@ async function waitPortFree(ms = 8000) {
   while (Date.now() - start < ms) { if (!(await portInUse())) return; await new Promise((r) => setTimeout(r, 200)); }
 }
 
-async function waitHttpUp(ms = 10000) {
+async function waitHttpUp(ms = 30000) {
   const start = Date.now();
-  while (Date.now() - start < ms) { if (await httpUp()) return; await new Promise((r) => setTimeout(r, 200)); }
+  while (Date.now() - start < ms) { if (await httpUp()) return; await new Promise((r) => setTimeout(r, 500)); }
 }
 
 function wipeDb() {
   // Database is Supabase (PostgreSQL), not SQLite. Reset = truncate all tables,
-  // delete Supabase auth users, clean uploads, then reseed. reset_db.js does all of it.
-  execFileSync(process.execPath, ['reset_db.js'], { cwd: ROOT, stdio: 'inherit' });
+  // delete Supabase auth users, clean uploads, then reseed. Retry transient network failures.
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      execFileSync(process.execPath, ['reset_db.js'], { cwd: ROOT, stdio: 'inherit' });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) execFileSync(process.execPath, ['-e', `setTimeout(() => {}, ${attempt * 3000})`], { stdio: 'ignore' });
+    }
+  }
+  throw lastError;
 }
 
 function startServer() {
   return new Promise((resolve, reject) => {
     server = spawn(process.execPath, ['backend/server.js'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
-    const timer = setTimeout(() => reject(new Error('server start timeout: ' + out)), 15000);
+    const timer = setTimeout(() => reject(new Error('server start timeout: ' + out)), 35000);
     server.stdout.on('data', (d) => { out += d.toString(); });
     server.stderr.on('data', (d) => { out += d.toString(); });
     server.on('exit', (code) => { if (!out.includes('Server berjalan')) { clearTimeout(timer); reject(new Error('server exited early: ' + out)); } });
@@ -111,6 +121,7 @@ function extractResult(out) {
     const res = extractResult(r.out);
     if (res) {
       console.log(`  >> ${s.name}: ${res.pass} passed, ${res.fail} failed`);
+      if (res.fail > 0 || !r.ok) console.log(r.out.trim());
       summary.push({ name: s.name, ...res });
     } else {
       console.log('  >> could not parse result; ok=' + r.ok);

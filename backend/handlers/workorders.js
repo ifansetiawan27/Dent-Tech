@@ -229,7 +229,10 @@ async function completeWorkOrderHandler(ctx) {
   if (!summary || !String(summary).trim()) return sendJSON(ctx.res, 400, { error: 'Ringkasan service report wajib diisi' });
 
   const t = await getTicket(wo.ticket_id);
-  await db.prepare("UPDATE work_orders SET status = 'COMPLETED', completed_at = ?, updated_at = ? WHERE id = ?").run(now(), now(), wo.id);
+  const completedAt = now();
+  const transition = await db.prepare("UPDATE work_orders SET status = 'COMPLETED', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'STARTED'")
+    .run(completedAt, completedAt, wo.id);
+  if (!transition.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman sebelum mencoba lagi.' });
   const reportId = uid();
   const reportNumber = await nextNumber('SR');
   await db.prepare(`INSERT INTO service_reports (id, number, version, work_order_id, summary, technician_note, status, created_at, updated_at)

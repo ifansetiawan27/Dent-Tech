@@ -85,7 +85,7 @@ async function installMocks(page, mockUser = user) {
   await page.click('#create-topup');
   await page.waitForSelector('#topup-order img');
   const walletText = await page.locator('#topup-order').innerText();
-  await check(walletText.includes('WT-topup-1') && walletText.includes('Rp 101.000') && walletText.includes('Rp 1.000'), 'wallet displays order ID, exact total, and fee');
+  await check(walletText.includes('WT-topup-1') && walletText.includes('Rp 101.000') && !walletText.includes('Biaya QRIS'), 'wallet displays order ID and exact total without QRIS fee breakdown');
   await check(walletText.includes('diverifikasi otomatis'), 'wallet warns QRIS verification is automatic');
 
   await page.goto(BASE + '/customer/invoice-detail.html?id=inv-1', { waitUntil: 'networkidle' });
