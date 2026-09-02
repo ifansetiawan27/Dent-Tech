@@ -5,7 +5,7 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
-    "build:css": "tailwindcss -c tailwind.config.js -i frontend/styles/tailwind.css -o frontend/styles/tailwind.min.css --minify",
+    "build:css": "tailwindcss -c tailwind.config.js -i frontend/styles/tailwind.css -o frontend/styles/landing.min.css --minify",
     "optimize:landing": "node scripts/optimize-landing.js && npm run build:css",
     "test:api": "powershell -ExecutionPolicy Bypass -File test_api.ps1",
     "test:browser": "node test_browser.js",

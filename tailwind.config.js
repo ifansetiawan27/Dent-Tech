@@ -1,7 +1,7 @@
 'use strict';
 
 module.exports = {
-  content: ['./frontend/**/*.{html,js}'],
+  content: ['./frontend/index.html'],
   theme: {
     extend: {
       fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
