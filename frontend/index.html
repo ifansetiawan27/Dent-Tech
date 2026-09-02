@@ -5,27 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dent Tech — Trustworthy Dental Equipment Services</title>
   <meta name="description" content="Dent Tech — layanan service, perawatan, instalasi, dan inspeksi peralatan dental yang terpercaya di seluruh Indonesia. Satu sistem untuk seluruh operasional service Anda.">
-  <link rel="icon" type="image/png" href="/assets/logo.png?v=2">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
-          colors: {
-            brand: { DEFAULT: '#2563eb', dark: '#1d4ed8', deep: '#1e40af', light: '#3b82f6', soft: '#eff6ff' },
-            med: { teal: '#14b8a6', tealsoft: '#ccfbf1', cyan: '#06b6d4' }
-          },
-          boxShadow: {
-            soft: '0 10px 40px -12px rgba(37,99,235,.18)',
-            lift: '0 20px 50px -18px rgba(15,23,42,.22)'
-          }
-        }
-      }
-    };
-  </script>
+  <link rel="icon" type="image/png" href="/assets/logo-96.png?v=1">
+  <link rel="stylesheet" href="/styles/tailwind.min.css?v=1">
   <link rel="stylesheet" href="/styles/app.css?v=2">
   <style>
     .nav-link { position: relative; }
@@ -41,6 +22,17 @@
     html { scroll-padding-top: 96px; }
     .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
     .reveal.show { opacity: 1; transform: none; }
+    #coverage, #portal, #testimonials, #blog, footer { content-visibility: auto; contain-intrinsic-size: auto 800px; }
+    @media (max-width: 767px) {
+      .floaty, .floaty-delay { position: static; margin-top: 1rem; animation: none; }
+      .floaty-delay { display: none; }
+      .map-dot-ping { animation: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .floaty, .floaty-delay, .map-dot-ping { animation: none; }
+      .reveal { opacity: 1; transform: none; transition: none; }
+    }
   </style>
 </head>
 <body class="bg-white text-slate-700 font-sans antialiased">
@@ -49,12 +41,15 @@
   <div class="bg-slate-900 text-slate-200 text-xs">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-2 py-2.5">
       <div class="flex items-center gap-5">
-        <span class="flex items-center gap-1.5"><i data-lucide="map-pin" class="w-3.5 h-3.5 text-med-teal"></i><span data-company-address>Jl. Raya Serpong No. 88, Tangerang Selatan</span></span>
-        <span class="hidden sm:flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5 text-med-teal"></i>Sen–Jum 09:00–18:00 · Sab 09:00–15:00</span>
+        <span class="flex items-center gap-1.5"><svg class="lucide lucide-map-pin w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+  <circle cx="12" cy="10" r="3" /></svg><span data-company-address>Jl. Raya Serpong No. 88, Tangerang Selatan</span></span>
+        <span class="hidden sm:flex items-center gap-1.5"><svg class="lucide lucide-clock w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2" />
+  <circle cx="12" cy="12" r="10" /></svg>Sen–Jum 09:00–18:00 · Sab 09:00–15:00</span>
       </div>
       <div class="flex items-center gap-4">
-        <a href="tel:" data-company-phone-link class="flex items-center gap-1.5 hover:text-white transition"><i data-lucide="phone" class="w-3.5 h-3.5 text-med-teal"></i><span data-company-phone>08953-2744-5799</span></a>
-        <a href="mailto:" data-company-email-link class="hidden md:flex items-center gap-1.5 hover:text-white transition"><i data-lucide="mail" class="w-3.5 h-3.5 text-med-teal"></i><span data-company-email>support@denttech.id</span></a>
+        <a href="tel:" data-company-phone-link class="flex items-center gap-1.5 hover:text-white transition"><svg class="lucide lucide-phone w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg><span data-company-phone>08953-2744-5799</span></a>
+        <a href="mailto:" data-company-email-link class="hidden md:flex items-center gap-1.5 hover:text-white transition"><svg class="lucide lucide-mail w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+  <rect x="2" y="4" width="20" height="16" rx="2" /></svg><span data-company-email>support@denttech.id</span></a>
       </div>
     </div>
   </div>
@@ -64,7 +59,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-18 py-3.5">
         <a href="#home" class="flex items-center gap-3">
-          <img src="/assets/logo.png?v=2" alt="Dent Tech" class="w-10 h-10 object-contain">
+          <img src="/assets/logo-96.png?v=1" alt="Dent Tech" width="40" height="40" decoding="async" class="w-10 h-10 object-contain">
           <div class="leading-tight">
             <p class="font-extrabold text-slate-900 text-lg" data-company-name>Dent Tech</p>
             <p class="text-[11px] text-slate-400 -mt-0.5">Service Management System</p>
@@ -83,14 +78,20 @@
 
         <div class="flex items-center gap-3">
           <a href="tel:" data-company-phone-link class="hidden md:flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-brand transition">
-            <span class="w-9 h-9 rounded-full bg-brand-soft flex items-center justify-center"><i data-lucide="phone" class="w-4 h-4 text-brand"></i></span>
+            <span class="w-9 h-9 rounded-full bg-brand-soft flex items-center justify-center"><svg class="lucide lucide-phone w-4 h-4 text-brand" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg></span>
             <span data-company-phone>08953-2744-5799</span>
           </a>
           <a data-auth-cta href="/login.html" class="btn-primary !px-5 hidden sm:inline-flex">
-            <i data-lucide="calendar-check" class="w-4 h-4"></i><span data-auth-cta-label>Book an Appointment</span>
+            <svg class="lucide lucide-calendar-check w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" />
+  <path d="m9 16 2 2 4-4" /></svg><span data-auth-cta-label>Book an Appointment</span>
           </a>
           <button id="menu-btn" class="lg:hidden w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600">
-            <i data-lucide="menu" class="w-5 h-5"></i>
+            <svg class="lucide lucide-menu w-5 h-5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16" />
+  <path d="M4 12h16" />
+  <path d="M4 19h16" /></svg>
           </button>
         </div>
       </div>
@@ -106,7 +107,11 @@
         <a href="#portal" class="mobile-link px-3 py-2.5 rounded-lg hover:bg-slate-50">Portal</a>
         <a href="#blog" class="mobile-link px-3 py-2.5 rounded-lg hover:bg-slate-50">Blog</a>
         <a href="#contact" class="mobile-link px-3 py-2.5 rounded-lg hover:bg-slate-50">Contact</a>
-        <a data-auth-cta href="/login.html" class="btn-primary mt-2 justify-center"><i data-lucide="calendar-check" class="w-4 h-4"></i><span data-auth-cta-label>Book an Appointment</span></a>
+        <a data-auth-cta href="/login.html" class="btn-primary mt-2 justify-center"><svg class="lucide lucide-calendar-check w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" />
+  <path d="m9 16 2 2 4-4" /></svg><span data-auth-cta-label>Book an Appointment</span></a>
       </div>
     </div>
   </header>
@@ -120,7 +125,8 @@
       <div class="grid lg:grid-cols-2 gap-14 items-center">
         <div class="reveal show">
           <span class="inline-flex items-center gap-2 bg-white border border-brand/15 text-brand text-xs font-semibold px-3.5 py-1.5 rounded-full shadow-sm">
-            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Terpercaya · Bersertifikat · Seluruh Indonesia
+            <svg class="lucide lucide-shield-check w-3.5 h-3.5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+  <path d="m9 12 2 2 4-4" /></svg> Terpercaya · Bersertifikat · Seluruh Indonesia
           </span>
           <h1 class="mt-6 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-[1.05] tracking-tight">
             Trustworthy <span class="text-brand">dental services</span> for your equipment.
@@ -130,10 +136,13 @@
           </p>
           <div class="mt-9 flex flex-wrap items-center gap-4">
             <a href="#about" class="btn-primary !px-7 !py-3.5 !text-base shadow-soft">
-              <span>Learn More</span><i data-lucide="arrow-down" class="w-4 h-4"></i>
+              <span>Learn More</span><svg class="lucide lucide-arrow-down w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14" />
+  <path d="m19 12-7 7-7-7" /></svg>
             </a>
             <a href="tel:" data-company-phone-link class="btn-secondary !px-7 !py-3.5 !text-base">
-              <i data-lucide="phone-call" class="w-4 h-4 text-red-500"></i><span>Emergency Call</span>
+              <svg class="lucide lucide-phone-call w-4 h-4 text-red-500" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2a9 9 0 0 1 9 9" />
+  <path d="M13 6a5 5 0 0 1 5 5" />
+  <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg><span>Emergency Call</span>
             </a>
           </div>
 
@@ -152,7 +161,7 @@
 
             <div class="relative bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-sm">
               <div class="flex items-center gap-3">
-                <img src="/assets/logo.png?v=2" alt="Dent Tech" class="w-12 h-12 object-contain rounded-xl bg-white p-1.5">
+                 <img src="/assets/logo-96.png?v=1" alt="Dent Tech" width="48" height="48" decoding="async" class="w-12 h-12 object-contain rounded-xl bg-white p-1.5">
                 <div>
                   <p class="text-white font-bold" data-company-name>Dent Tech</p>
                   <p class="text-blue-100 text-xs">Service Management System</p>
@@ -160,21 +169,39 @@
               </div>
               <div class="mt-6 grid grid-cols-3 gap-3">
                 <div class="bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
-                  <i data-lucide="monitor-cog" class="w-5 h-5 text-blue-200 mx-auto"></i>
+                  <svg class="lucide lucide-monitor-cog w-5 h-5 text-blue-200 mx-auto" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4" />
+  <path d="m14.305 7.53.923-.382" />
+  <path d="m15.228 4.852-.923-.383" />
+  <path d="m16.852 3.228-.383-.924" />
+  <path d="m16.852 8.772-.383.923" />
+  <path d="m19.148 3.228.383-.924" />
+  <path d="m19.53 9.696-.382-.924" />
+  <path d="m20.772 4.852.924-.383" />
+  <path d="m20.772 7.148.924.383" />
+  <path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" />
+  <path d="M8 21h8" />
+  <circle cx="18" cy="6" r="3" /></svg>
                   <p class="text-[11px] text-blue-100 mt-2 font-medium">Admin Portal</p>
                 </div>
                 <div class="bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
-                  <i data-lucide="hard-hat" class="w-5 h-5 text-emerald-200 mx-auto"></i>
+                  <svg class="lucide lucide-hard-hat w-5 h-5 text-emerald-200 mx-auto" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5" />
+  <path d="M14 6a6 6 0 0 1 6 6v3" />
+  <path d="M4 15v-3a6 6 0 0 1 6-6" />
+  <rect x="2" y="15" width="20" height="4" rx="1" /></svg>
                   <p class="text-[11px] text-blue-100 mt-2 font-medium">Technician</p>
                 </div>
                 <div class="bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
-                  <i data-lucide="user-check" class="w-5 h-5 text-amber-200 mx-auto"></i>
+                  <svg class="lucide lucide-user-check w-5 h-5 text-amber-200 mx-auto" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 11 2 2 4-4" />
+  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+  <circle cx="9" cy="7" r="4" /></svg>
                   <p class="text-[11px] text-blue-100 mt-2 font-medium">Customer</p>
                 </div>
               </div>
               <div class="mt-5 bg-white/10 border border-white/15 rounded-xl p-4">
                 <div class="flex items-center justify-between text-xs text-blue-100">
-                  <span class="flex items-center gap-1.5"><i data-lucide="route" class="w-3.5 h-3.5"></i>Alur Service</span>
+                  <span class="flex items-center gap-1.5"><svg class="lucide lucide-route w-3.5 h-3.5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3" />
+  <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+  <circle cx="18" cy="5" r="3" /></svg>Alur Service</span>
                   <span class="text-emerald-300 font-semibold">Real-time</span>
                 </div>
                 <p class="mt-2.5 text-[13px] text-white leading-relaxed">Request → Ticket → Work Order → Checklist → Foto → Laporan → Approval → Invoice → Riwayat</p>
@@ -184,7 +211,9 @@
 
           <!-- floating emergency card -->
           <div class="floaty absolute -bottom-7 -left-4 sm:-left-8 bg-white rounded-2xl shadow-lift border border-slate-100 p-4 flex items-center gap-3">
-            <span class="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center"><i data-lucide="phone-call" class="w-5 h-5 text-red-500"></i></span>
+            <span class="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center"><svg class="lucide lucide-phone-call w-5 h-5 text-red-500" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2a9 9 0 0 1 9 9" />
+  <path d="M13 6a5 5 0 0 1 5 5" />
+  <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg></span>
             <div>
               <p class="text-sm font-bold text-slate-900">Call us for emergency</p>
               <a href="tel:" data-company-phone-link class="text-xs text-brand font-semibold" data-company-phone>08953-2744-5799</a>
@@ -193,7 +222,8 @@
 
           <!-- floating badge -->
           <div class="floaty-delay absolute -top-6 -right-3 sm:-right-6 bg-white rounded-2xl shadow-lift border border-slate-100 px-4 py-3 flex items-center gap-2.5">
-            <i data-lucide="badge-check" class="w-5 h-5 text-med-teal"></i>
+            <svg class="lucide lucide-badge-check w-5 h-5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+  <path d="m9 12 2 2 4-4" /></svg>
             <p class="text-xs font-semibold text-slate-800">Say goodbye to<br>dental equipment issues</p>
           </div>
         </div>
@@ -212,17 +242,22 @@
 
       <div class="mt-14 grid md:grid-cols-3 gap-6">
         <div class="reveal card p-8 hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center"><i data-lucide="target" class="w-6 h-6 text-brand"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center"><svg class="lucide lucide-target w-6 h-6 text-brand" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <circle cx="12" cy="12" r="6" />
+  <circle cx="12" cy="12" r="2" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Misi Kami</h3>
           <p class="mt-2.5 text-sm text-slate-500 leading-relaxed">Memusatkan operasional service, mengurangi pekerjaan administrasi manual, meningkatkan produktivitas teknisi, serta membangun kepercayaan pelanggan melalui visibilitas penuh.</p>
         </div>
         <div class="reveal card p-8 hover:shadow-soft hover:-translate-y-1 transition duration-300 border-brand/20 bg-gradient-to-b from-brand-soft/40 to-white">
-          <span class="w-12 h-12 rounded-2xl bg-brand flex items-center justify-center"><i data-lucide="workflow" class="w-6 h-6 text-white"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand flex items-center justify-center"><svg class="lucide lucide-workflow w-6 h-6 text-white" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2" />
+  <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+  <rect width="8" height="8" x="13" y="13" rx="2" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">One Unit at a Time!</h3>
           <p class="mt-2.5 text-sm text-slate-500 leading-relaxed">Setiap aktivitas service dapat dilacak — dari permintaan pelanggan hingga riwayat service akhir. Checklist terstandar, bukti foto before/after, dan approval pelanggan dalam satu alur.</p>
         </div>
         <div class="reveal card p-8 hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-med-tealsoft flex items-center justify-center"><i data-lucide="eye" class="w-6 h-6 text-med-teal"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-med-tealsoft flex items-center justify-center"><svg class="lucide lucide-eye w-6 h-6 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+  <circle cx="12" cy="12" r="3" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Visi Kami</h3>
           <p class="mt-2.5 text-sm text-slate-500 leading-relaxed">Menjadi platform service management yang profesional dan transparan, dengan riwayat service peralatan yang lengkap, pelacakan spare-part akurat, dan fondasi untuk otomasi masa depan.</p>
         </div>
@@ -239,51 +274,64 @@
           <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Layanan peralatan dental menyeluruh</h2>
           <p class="mt-4 text-slate-500 leading-relaxed">Dari perbaikan hingga instalasi, semua layanan kami terdokumentasi rapi melalui Service Management System.</p>
         </div>
-        <a data-auth-cta href="/login.html" class="btn-primary self-start md:self-auto"><span data-auth-cta-label>Book an Appointment</span><i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+        <a data-auth-cta href="/login.html" class="btn-primary self-start md:self-auto"><span data-auth-cta-label>Book an Appointment</span><svg class="lucide lucide-arrow-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" />
+  <path d="m12 5 7 7-7 7" /></svg></a>
       </div>
 
       <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- 1 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><i data-lucide="wrench" class="w-6 h-6 text-brand group-hover:text-white transition"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-wrench w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Repair & Troubleshooting</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Perbaikan dental unit dan peralatan dental lainnya dengan diagnosis terstruktur dan dokumentasi lengkap.</p>
-          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
         </div>
         <!-- 2 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><i data-lucide="settings" class="w-6 h-6 text-brand group-hover:text-white transition"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-settings w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+  <circle cx="12" cy="12" r="3" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Preventive Maintenance</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Perawatan berkala terjadwal untuk memperpanjang usia pakai peralatan dan mencegah kerusakan mendadak.</p>
-          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
         </div>
         <!-- 3 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><i data-lucide="plug-zap" class="w-6 h-6 text-brand group-hover:text-white transition"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-plug-zap w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z" />
+  <path d="m2 22 3-3" />
+  <path d="M7.5 13.5 10 11" />
+  <path d="M10.5 16.5 13 14" />
+  <path d="m18 3-4 4h6l-4 4" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Installation & Commissioning</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Instalasi peralatan dental baru dengan pengujian fungsi dan dokumentasi commissioning yang lengkap.</p>
-          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
         </div>
         <!-- 4 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><i data-lucide="search-check" class="w-6 h-6 text-brand group-hover:text-white transition"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-search-check w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 11 2 2 4-4" />
+  <circle cx="11" cy="11" r="8" />
+  <path d="m21 21-4.3-4.3" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Inspection & Assessment</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Inspeksi kondisi peralatan dengan checklist terstandar dan laporan hasil yang dapat diakses pelanggan.</p>
-          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
         </div>
         <!-- 5 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><i data-lucide="package" class="w-6 h-6 text-brand group-hover:text-white transition"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-package w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
+  <path d="M12 22V12" />
+  <polyline points="3.29 7 12 12 20.71 7" />
+  <path d="m7.5 4.27 9 5.15" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Spare-Part Management</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Pelacakan penggunaan spare-part yang akurat, terintegrasi langsung dengan laporan service dan invoice.</p>
-          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
         </div>
         <!-- 6 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><i data-lucide="file-check-2" class="w-6 h-6 text-brand group-hover:text-white transition"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-file-check-2 w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" />
+  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+  <path d="m3 15 2 2 4-4" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Digital Service Report</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Laporan service digital dengan foto before/after, approval pelanggan, dan riwayat service yang lengkap.</p>
-          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+          <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
         </div>
       </div>
     </div>
@@ -424,33 +472,49 @@
 
       <div class="mt-14 grid md:grid-cols-3 gap-6">
         <div class="reveal bg-white/5 border border-white/10 rounded-2xl p-7 backdrop-blur-sm hover:bg-white/[.08] transition">
-          <span class="w-12 h-12 rounded-2xl bg-blue-500/15 flex items-center justify-center"><i data-lucide="monitor-cog" class="w-6 h-6 text-blue-400"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-blue-500/15 flex items-center justify-center"><svg class="lucide lucide-monitor-cog w-6 h-6 text-blue-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4" />
+  <path d="m14.305 7.53.923-.382" />
+  <path d="m15.228 4.852-.923-.383" />
+  <path d="m16.852 3.228-.383-.924" />
+  <path d="m16.852 8.772-.383.923" />
+  <path d="m19.148 3.228.383-.924" />
+  <path d="m19.53 9.696-.382-.924" />
+  <path d="m20.772 4.852.924-.383" />
+  <path d="m20.772 7.148.924.383" />
+  <path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" />
+  <path d="M8 21h8" />
+  <circle cx="18" cy="6" r="3" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-white">Admin Portal</h3>
           <p class="mt-2 text-sm text-slate-400 leading-relaxed">Kontrol penuh operasional: pelanggan, peralatan, tiket, teknisi, penjadwalan, billing, spare-part, laporan, dan konfigurasi sistem.</p>
           <ul class="mt-4 space-y-2 text-sm text-slate-300">
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-blue-400"></i>Manajemen tiket & work order</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-blue-400"></i>Penugasan & penjadwalan teknisi</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-blue-400"></i>Invoice & dashboard laporan</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-blue-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Manajemen tiket & work order</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-blue-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Penugasan & penjadwalan teknisi</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-blue-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Invoice & dashboard laporan</li>
           </ul>
         </div>
         <div class="reveal bg-white/5 border border-white/10 rounded-2xl p-7 backdrop-blur-sm hover:bg-white/[.08] transition">
-          <span class="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center"><i data-lucide="hard-hat" class="w-6 h-6 text-emerald-400"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center"><svg class="lucide lucide-hard-hat w-6 h-6 text-emerald-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5" />
+  <path d="M14 6a6 6 0 0 1 6 6v3" />
+  <path d="M4 15v-3a6 6 0 0 1 6-6" />
+  <rect x="2" y="15" width="20" height="4" rx="1" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-white">Technician Portal</h3>
           <p class="mt-2 text-sm text-slate-400 leading-relaxed">Terima penugasan, jalankan service, lengkapi checklist detail, dokumentasikan dengan foto, catat spare-part, dan peroleh approval pelanggan.</p>
           <ul class="mt-4 space-y-2 text-sm text-slate-300">
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>Checklist service terstandar</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>Foto before/after & diagnosis</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>Approval pelanggan di tempat</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-emerald-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Checklist service terstandar</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-emerald-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Foto before/after & diagnosis</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-emerald-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Approval pelanggan di tempat</li>
           </ul>
         </div>
         <div class="reveal bg-white/5 border border-white/10 rounded-2xl p-7 backdrop-blur-sm hover:bg-white/[.08] transition">
-          <span class="w-12 h-12 rounded-2xl bg-amber-500/15 flex items-center justify-center"><i data-lucide="user-check" class="w-6 h-6 text-amber-400"></i></span>
+          <span class="w-12 h-12 rounded-2xl bg-amber-500/15 flex items-center justify-center"><svg class="lucide lucide-user-check w-6 h-6 text-amber-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 11 2 2 4-4" />
+  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+  <circle cx="9" cy="7" r="4" /></svg></span>
           <h3 class="mt-5 text-lg font-bold text-white">Customer Portal</h3>
           <p class="mt-2 text-sm text-slate-400 leading-relaxed">Ajukan service request, pantau progres, lihat dokumentasi, foto dan laporan, kelola peralatan, serta akses invoice Anda kapan saja.</p>
           <ul class="mt-4 space-y-2 text-sm text-slate-300">
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i>Buat & pantau service request</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i>Riwayat service peralatan</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i>Akses invoice & laporan</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-amber-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Buat & pantau service request</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-amber-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Riwayat service peralatan</li>
+            <li class="flex items-center gap-2"><svg class="lucide lucide-check w-4 h-4 text-amber-400" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Akses invoice & laporan</li>
           </ul>
         </div>
       </div>
@@ -460,21 +524,23 @@
         <p class="text-center text-sm font-semibold text-slate-300 uppercase tracking-widest mb-6">Alur Service End-to-End</p>
         <div class="flow-scroll overflow-x-auto pb-4">
           <div class="flex items-center gap-2 min-w-max mx-auto">
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Customer Request</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Ticket</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Assessment</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Work Order</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Schedule</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Technician Visit</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Checklist & Photos</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Service Report</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Customer Approval</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
-            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Invoice & Payment</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 shrink-0"></i>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Customer Request</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Ticket</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Assessment</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Work Order</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Schedule</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Technician Visit</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Checklist & Photos</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Service Report</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Customer Approval</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <span class="px-4 py-2 rounded-full bg-white/10 border border-white/15 text-slate-100 text-xs font-medium whitespace-nowrap">Invoice & Payment</span><svg class="lucide lucide-chevron-right w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
             <span class="px-4 py-2 rounded-full bg-med-teal/20 border border-med-teal/30 text-med-tealsoft text-xs font-semibold whitespace-nowrap">Service History</span>
           </div>
         </div>
         <div class="mt-8 text-center">
-          <a data-auth-cta href="/login.html" class="btn-primary !px-7 !py-3.5"><i data-lucide="log-in" class="w-4 h-4"></i><span data-auth-cta-label>Masuk ke Portal</span></a>
+          <a data-auth-cta href="/login.html" class="btn-primary !px-7 !py-3.5"><svg class="lucide lucide-log-in w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 17 5-5-5-5" />
+  <path d="M15 12H3" />
+  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg><span data-auth-cta-label>Masuk ke Portal</span></a>
         </div>
       </div>
     </div>
@@ -492,7 +558,7 @@
       <div class="mt-14 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="reveal card p-7 flex flex-col hover:shadow-soft hover:-translate-y-1 transition duration-300">
           <div class="flex gap-0.5 text-amber-400">
-            <i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i>
+            <svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg>
           </div>
           <p class="mt-4 text-sm text-slate-600 leading-relaxed flex-1">"Dental unit Osssteem kami kembali beroperasi sempurna. Prosesnya transparan — kami bisa pantau setiap tahap dari request sampai laporan service."</p>
           <div class="mt-6 flex items-center gap-3">
@@ -506,7 +572,7 @@
 
         <div class="reveal card p-7 flex flex-col hover:shadow-soft hover:-translate-y-1 transition duration-300">
           <div class="flex gap-0.5 text-amber-400">
-            <i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i>
+            <svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg>
           </div>
           <p class="mt-4 text-sm text-slate-600 leading-relaxed flex-1">"Teknisinya profesional dan checklist-nya detail sekali. Foto before/after dan approval langsung di tempat membuat kami benar-benar tenang."</p>
           <div class="mt-6 flex items-center gap-3">
@@ -520,7 +586,7 @@
 
         <div class="reveal card p-7 flex flex-col hover:shadow-soft hover:-translate-y-1 transition duration-300">
           <div class="flex gap-0.5 text-amber-400">
-            <i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i>
+            <svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg>
           </div>
           <p class="mt-4 text-sm text-slate-600 leading-relaxed flex-1">"Perawatan autoclave type B kami kini terjadwal rapi lewat portal. Riwayat service lengkap dan invoice jelas. Sangat direkomendasikan."</p>
           <div class="mt-6 flex items-center gap-3">
@@ -534,7 +600,7 @@
 
         <div class="reveal card p-7 flex flex-col hover:shadow-soft hover:-translate-y-1 transition duration-300">
           <div class="flex gap-0.5 text-amber-400">
-            <i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i>
+            <svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><svg class="lucide lucide-star w-4 h-4 fill-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg>
           </div>
           <p class="mt-4 text-sm text-slate-600 leading-relaxed flex-1">"Instalasi dental unit Belmont di klinik baru kami berjalan mulus. Commissioning terdokumentasi dan tim support sangat responsif."</p>
           <div class="mt-6 flex items-center gap-3">
@@ -558,7 +624,8 @@
           <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Wawasan perawatan peralatan dental</h2>
           <p class="mt-4 text-slate-500 leading-relaxed">Pelajari cara merawat peralatan dental Anda agar tetap prima dan tahan lama.</p>
         </div>
-        <a href="#blog" class="btn-secondary self-start md:self-auto"><span>Lihat Semua Artikel</span><i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+        <a href="#blog" class="btn-secondary self-start md:self-auto"><span>Lihat Semua Artikel</span><svg class="lucide lucide-arrow-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" />
+  <path d="m12 5 7 7-7 7" /></svg></a>
       </div>
 
       <div class="mt-12 grid md:grid-cols-3 gap-6">
@@ -569,11 +636,14 @@
           <div class="p-6">
             <div class="flex items-center gap-3 text-xs text-slate-400">
               <span class="text-brand font-semibold bg-brand-soft px-2.5 py-1 rounded-full">Dental Unit</span>
-              <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>12 Agu 2026</span>
+              <span class="flex items-center gap-1"><svg class="lucide lucide-calendar w-3.5 h-3.5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" /></svg>12 Agu 2026</span>
             </div>
             <h3 class="mt-3 text-lg font-bold text-slate-900 group-hover:text-brand transition">Cara Perawatan Dental Unit yang Benar</h3>
             <p class="mt-2 text-sm text-slate-500 leading-relaxed">Panduan lengkap merawat dental unit agar performa tetap optimal dan usia pakai lebih panjang.</p>
-            <a href="/artikel.html?id=perawatan-dental-unit" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Baca Selengkapnya <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+            <a href="/artikel.html?id=perawatan-dental-unit" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Baca Selengkapnya <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
           </div>
         </article>
 
@@ -584,11 +654,14 @@
           <div class="p-6">
             <div class="flex items-center gap-3 text-xs text-slate-400">
               <span class="text-med-teal font-semibold bg-med-tealsoft px-2.5 py-1 rounded-full">Autoclave</span>
-              <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>05 Agu 2026</span>
+              <span class="flex items-center gap-1"><svg class="lucide lucide-calendar w-3.5 h-3.5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" /></svg>05 Agu 2026</span>
             </div>
             <h3 class="mt-3 text-lg font-bold text-slate-900 group-hover:text-brand transition">Cara Perawatan Autoclave Type B</h3>
             <p class="mt-2 text-sm text-slate-500 leading-relaxed">Langkah perawatan autoclave type B untuk memastikan sterilisasi alat selalu efektif dan aman.</p>
-            <a href="/artikel.html?id=perawatan-autoclave" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Baca Selengkapnya <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+            <a href="/artikel.html?id=perawatan-autoclave" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Baca Selengkapnya <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
           </div>
         </article>
 
@@ -599,11 +672,14 @@
           <div class="p-6">
             <div class="flex items-center gap-3 text-xs text-slate-400">
               <span class="text-slate-700 font-semibold bg-slate-100 px-2.5 py-1 rounded-full">Manajemen</span>
-              <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>28 Jul 2026</span>
+              <span class="flex items-center gap-1"><svg class="lucide lucide-calendar w-3.5 h-3.5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" /></svg>28 Jul 2026</span>
             </div>
             <h3 class="mt-3 text-lg font-bold text-slate-900 group-hover:text-brand transition">Mengapa Klinik Butuh Service Management System</h3>
             <p class="mt-2 text-sm text-slate-500 leading-relaxed">Bagaimana sistem service terintegrasi menghemat waktu, biaya, dan meningkatkan kepercayaan pasien.</p>
-            <a href="/artikel.html?id=service-management-system" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Baca Selengkapnya <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
+            <a href="/artikel.html?id=service-management-system" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Baca Selengkapnya <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg></a>
           </div>
         </article>
       </div>
@@ -617,8 +693,12 @@
       <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Siap mengelola service peralatan dental Anda?</h2>
       <p class="mt-4 text-blue-100 max-w-2xl mx-auto leading-relaxed">Buat service request pertama Anda dan rasakan operasional service yang terpusat, transparan, dan terlacak dari awal hingga akhir.</p>
       <div class="mt-8 flex flex-wrap justify-center gap-4">
-        <a data-auth-cta href="/login.html" class="inline-flex items-center gap-2 bg-white text-brand font-semibold px-7 py-3.5 rounded-xl hover:bg-blue-50 transition shadow-lift"><i data-lucide="calendar-check" class="w-4 h-4"></i><span data-auth-cta-label>Book an Appointment</span></a>
-        <a href="#contact" class="inline-flex items-center gap-2 border border-white/40 text-white font-semibold px-7 py-3.5 rounded-xl hover:bg-white/10 transition"><i data-lucide="phone" class="w-4 h-4"></i>Hubungi Kami</a>
+        <a data-auth-cta href="/login.html" class="inline-flex items-center gap-2 bg-white text-brand font-semibold px-7 py-3.5 rounded-xl hover:bg-blue-50 transition shadow-lift"><svg class="lucide lucide-calendar-check w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" />
+  <path d="m9 16 2 2 4-4" /></svg><span data-auth-cta-label>Book an Appointment</span></a>
+        <a href="#contact" class="inline-flex items-center gap-2 border border-white/40 text-white font-semibold px-7 py-3.5 rounded-xl hover:bg-white/10 transition"><svg class="lucide lucide-phone w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg>Hubungi Kami</a>
       </div>
     </div>
   </section>
@@ -630,7 +710,7 @@
         <!-- Brand -->
         <div>
           <div class="flex items-center gap-3">
-            <img src="/assets/logo.png?v=2" alt="Dent Tech" class="w-10 h-10 object-contain rounded-lg bg-white p-1">
+             <img src="/assets/logo-96.png?v=1" alt="Dent Tech" width="40" height="40" loading="lazy" decoding="async" class="w-10 h-10 object-contain rounded-lg bg-white p-1">
             <div class="leading-tight">
               <p class="font-extrabold text-white text-lg" data-company-name>Dent Tech</p>
               <p class="text-[11px] text-slate-400 -mt-0.5">Service Management System</p>
@@ -638,7 +718,8 @@
           </div>
           <p class="mt-5 text-sm text-slate-400 leading-relaxed">Layanan service, perawatan, instalasi, dan inspeksi peralatan dental yang terpercaya. Setiap aktivitas service dapat dilacak — dari request hingga riwayat service.</p>
           <div class="mt-5 flex items-center gap-2 text-xs text-slate-500">
-            <i data-lucide="badge-check" class="w-4 h-4 text-med-teal"></i>
+            <svg class="lucide lucide-badge-check w-4 h-4 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+  <path d="m9 12 2 2 4-4" /></svg>
             <span>Berlisensi & Bersertifikat · Izin Operasional Resmi</span>
           </div>
         </div>
@@ -647,12 +728,12 @@
         <div>
           <h4 class="text-white font-bold text-sm uppercase tracking-widest">Navigasi</h4>
           <ul class="mt-5 space-y-3 text-sm">
-            <li><a href="#home" class="hover:text-white transition flex items-center gap-2"><i data-lucide="chevron-right" class="w-3.5 h-3.5 text-med-teal"></i>Home</a></li>
-            <li><a href="#about" class="hover:text-white transition flex items-center gap-2"><i data-lucide="chevron-right" class="w-3.5 h-3.5 text-med-teal"></i>About</a></li>
-            <li><a href="#services" class="hover:text-white transition flex items-center gap-2"><i data-lucide="chevron-right" class="w-3.5 h-3.5 text-med-teal"></i>Services</a></li>
-            <li><a href="#coverage" class="hover:text-white transition flex items-center gap-2"><i data-lucide="chevron-right" class="w-3.5 h-3.5 text-med-teal"></i>Coverage</a></li>
-            <li><a href="#blog" class="hover:text-white transition flex items-center gap-2"><i data-lucide="chevron-right" class="w-3.5 h-3.5 text-med-teal"></i>Blog</a></li>
-            <li><a href="/login.html" class="hover:text-white transition flex items-center gap-2"><i data-lucide="chevron-right" class="w-3.5 h-3.5 text-med-teal"></i>Login Portal</a></li>
+            <li><a href="#home" class="hover:text-white transition flex items-center gap-2"><svg class="lucide lucide-chevron-right w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>Home</a></li>
+            <li><a href="#about" class="hover:text-white transition flex items-center gap-2"><svg class="lucide lucide-chevron-right w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>About</a></li>
+            <li><a href="#services" class="hover:text-white transition flex items-center gap-2"><svg class="lucide lucide-chevron-right w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>Services</a></li>
+            <li><a href="#coverage" class="hover:text-white transition flex items-center gap-2"><svg class="lucide lucide-chevron-right w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>Coverage</a></li>
+            <li><a href="#blog" class="hover:text-white transition flex items-center gap-2"><svg class="lucide lucide-chevron-right w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>Blog</a></li>
+            <li><a href="/login.html" class="hover:text-white transition flex items-center gap-2"><svg class="lucide lucide-chevron-right w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>Login Portal</a></li>
           </ul>
         </div>
 
@@ -676,11 +757,17 @@
         <div>
           <h4 class="text-white font-bold text-sm uppercase tracking-widest">Kontak</h4>
           <ul class="mt-5 space-y-4 text-sm">
-            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><i data-lucide="map-pin" class="w-4 h-4 text-med-teal"></i></span><span class="text-slate-300" data-company-address>Jl. Raya Serpong No. 88, Tangerang Selatan</span></li>
-            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><i data-lucide="phone" class="w-4 h-4 text-med-teal"></i></span><a href="tel:" data-company-phone-link class="text-slate-300 hover:text-white transition" data-company-phone>08953-2744-5799</a></li>
-            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><i data-lucide="mail" class="w-4 h-4 text-med-teal"></i></span><a href="mailto:" data-company-email-link class="text-slate-300 hover:text-white transition" data-company-email>support@denttech.id</a></li>
+            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><svg class="lucide lucide-map-pin w-4 h-4 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+  <circle cx="12" cy="10" r="3" /></svg></span><span class="text-slate-300" data-company-address>Jl. Raya Serpong No. 88, Tangerang Selatan</span></li>
+            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><svg class="lucide lucide-phone w-4 h-4 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg></span><a href="tel:" data-company-phone-link class="text-slate-300 hover:text-white transition" data-company-phone>08953-2744-5799</a></li>
+            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><svg class="lucide lucide-mail w-4 h-4 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+  <rect x="2" y="4" width="20" height="16" rx="2" /></svg></span><a href="mailto:" data-company-email-link class="text-slate-300 hover:text-white transition" data-company-email>support@denttech.id</a></li>
           </ul>
-          <a data-auth-cta href="/login.html" class="btn-primary mt-6 w-full"><i data-lucide="calendar-check" class="w-4 h-4"></i><span data-auth-cta-label>Book an Appointment</span></a>
+          <a data-auth-cta href="/login.html" class="btn-primary mt-6 w-full"><svg class="lucide lucide-calendar-check w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" />
+  <path d="m9 16 2 2 4-4" /></svg><span data-auth-cta-label>Book an Appointment</span></a>
         </div>
       </div>
     </div>
@@ -688,16 +775,14 @@
     <div class="border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
         <p>© <span id="year"></span> <span data-company-name>Dent Tech</span>. All rights reserved.</p>
-        <p class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-med-teal"></i>Service Management System — Three Portal</p>
+        <p class="flex items-center gap-1.5"><svg class="lucide lucide-shield-check w-3.5 h-3.5 text-med-teal" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+  <path d="m9 12 2 2 4-4" /></svg>Service Management System — Three Portal</p>
       </div>
     </div>
   </footer>
 
-  <script src="https://unpkg.com/lucide@latest"></script>
   <script type="module">
     import { getToken, getUser, portalHome } from '/utils/auth.js';
-
-    lucide.createIcons();
 
     // year
     document.getElementById('year').textContent = new Date().getFullYear();
@@ -733,11 +818,25 @@
       document.querySelectorAll('[data-auth-cta-label]').forEach((el) => { el.textContent = label; });
     }
 
-    // reveal on scroll
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add('show'); io.unobserve(en.target); } });
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+    // reveal on scroll without delaying startup work
+    const revealElements = document.querySelectorAll('.reveal:not(.show)');
+    const observeReveals = () => {
+      if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        revealElements.forEach((el) => el.classList.add('show'));
+        return;
+      }
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('show');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: '160px 0px', threshold: 0.01 });
+      revealElements.forEach((el) => io.observe(el));
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(observeReveals, { timeout: 1000 });
+    else setTimeout(observeReveals, 0);
   </script>
 </body>
 </html>
