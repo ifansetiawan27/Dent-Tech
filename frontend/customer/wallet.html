@@ -54,7 +54,7 @@
         ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS top up wallet" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : ''}
         <dl class="space-y-2 text-sm mt-3">
           <div class="flex justify-between gap-3"><dt class="text-slate-500">Saldo masuk</dt><dd class="font-semibold">${fmtIDR(order.amount)}</dd></div>
-          <div class="flex justify-between gap-3 border-t border-slate-200 pt-2"><dt class="font-bold">Total pembayaran</dt><dd class="font-bold text-blue-700">${fmtIDR(order.total_payment ?? order.amount)}</dd></div>
+          <div class="flex justify-between gap-3 border-t border-slate-200 pt-2"><dt class="font-bold">Total pembayaran</dt><dd class="font-bold text-blue-700">${fmtIDR(order.amount)}</dd></div>
           <div class="flex justify-between gap-3"><dt class="text-slate-500">Berlaku sampai</dt><dd class="text-right">${order.expired_at ? fmtDateTime(order.expired_at) : '-'}</dd></div>
         </dl>
         <p class="text-xs text-slate-500 mt-4">QRIS diverifikasi otomatis. Saldo diperbarui setelah pembayaran terkonfirmasi; tidak perlu konfirmasi manual.</p>

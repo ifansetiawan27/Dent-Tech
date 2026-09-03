@@ -51,7 +51,7 @@
     }
 
     function render() {
-      const activeStatuses = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED'];
+      const activeStatuses = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_IN_PROGRESS', 'COMPLETED'];
       const list = all.filter((t) => tab === 'active' ? activeStatuses.includes(t.status) : ['CLOSED', 'CANCELLED'].includes(t.status));
       if (!list.length) {
         content.innerHTML = `<div class="card">${emptyState('ticket', tab === 'active' ? 'Tidak ada service aktif' : 'Belum ada riwayat', tab === 'active' ? 'Request service Anda akan tampil di sini.' : 'Service yang sudah selesai akan tersimpan di sini.', '<a href="/customer/request.html" class="btn-primary">Buat Request</a>')}</div>`;

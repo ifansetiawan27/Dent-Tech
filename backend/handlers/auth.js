@@ -162,7 +162,11 @@ async function updateUserHandler(ctx) {
   const { name, phone, active, password } = ctx.body;
   if (name) await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, target.id);
   if (phone !== undefined) await db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, target.id);
-  if (active !== undefined) await db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, target.id);
+  if (active !== undefined) {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(target.id, { ban_duration: active ? 'none' : '876000h' });
+    if (error && !/not found/i.test(error.message || '')) return sendJSON(ctx.res, 500, { error: 'Gagal mengubah status login: ' + error.message });
+    await db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, target.id);
+  }
   if (password) {
     if (String(password).length < 6) return sendJSON(ctx.res, 400, { error: 'Password minimal 6 karakter' });
     const { error } = await supabaseAdmin.auth.admin.updateUserById(target.id, { password });
@@ -170,6 +174,41 @@ async function updateUserHandler(ctx) {
   }
   audit(ctx.user, 'UPDATE', 'user', target.id, `Memperbarui user ${target.name}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true });
+}
+
+async function deleteTechnicianHandler(ctx) {
+  const target = await db.prepare('SELECT * FROM users WHERE id = ?').get(ctx.params.id);
+  if (!target) return sendJSON(ctx.res, 404, { error: 'Teknisi tidak ditemukan' });
+  if (target.role !== 'technician') return sendJSON(ctx.res, 400, { error: 'Fitur hapus ini hanya untuk akun teknisi' });
+
+  const activeWorkOrders = await db.prepare(
+    "SELECT number, status FROM work_orders WHERE technician_id = ? AND status IN ('ASSIGNED','STARTED','WAITING_QUOTATION','WAITING_CUSTOMER_APPROVAL','REPAIR_AUTHORIZED','REPAIR_STARTED') ORDER BY created_at ASC"
+  ).all(target.id);
+  if (activeWorkOrders.length) {
+    return sendJSON(ctx.res, 409, {
+      error: `Teknisi masih memiliki ${activeWorkOrders.length} pekerjaan aktif. Selesaikan atau pindahkan penugasan terlebih dahulu.`,
+      work_orders: activeWorkOrders
+    });
+  }
+
+  if (target.active) {
+    await db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(target.id);
+    audit(ctx.user, 'DELETE', 'user', target.id, `Menghapus teknisi ${target.name} dari operasional; riwayat service dipertahankan`, ctx.ip);
+  }
+
+  let authDisabled = true;
+  const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(target.id, { ban_duration: '876000h' });
+  if (authError && !/not found/i.test(authError.message || '')) {
+    authDisabled = false;
+    console.error('[deleteTechnician] Gagal menonaktifkan Supabase Auth:', authError.message);
+  }
+
+  sendJSON(ctx.res, 200, {
+    ok: true,
+    archived: true,
+    auth_disabled: authDisabled,
+    message: 'Teknisi dihapus dari operasional. Riwayat service tetap tersimpan.'
+  });
 }
 
 async function publicSettingsHandler(ctx) {
@@ -213,6 +252,6 @@ async function getPhotoHandler(ctx) {
 
 module.exports = {
   loginHandler, signupHandler, logoutHandler, meHandler, changePasswordHandler,
-  listUsersHandler, createUserHandler, updateUserHandler, publicSettingsHandler,
+  listUsersHandler, createUserHandler, updateUserHandler, deleteTechnicianHandler, publicSettingsHandler,
   uploadPhotoHandler, getPhotoHandler
 };

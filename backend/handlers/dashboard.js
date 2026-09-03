@@ -25,7 +25,7 @@ async function dashboardHandler(ctx) {
          c.name AS customer_name, u.name AS technician_name
        FROM work_orders wo JOIN tickets t ON t.id = wo.ticket_id JOIN customers c ON c.id = t.customer_id
        LEFT JOIN users u ON u.id = wo.technician_id
-       WHERE wo.scheduled_date = ? AND wo.status IN ('ASSIGNED','STARTED')
+       WHERE wo.scheduled_date = ? AND wo.status IN ('ASSIGNED','STARTED','WAITING_QUOTATION','WAITING_CUSTOMER_APPROVAL','REPAIR_AUTHORIZED','REPAIR_STARTED')
        ORDER BY wo.time_window`
     ).all(today);
     const recentTickets = await db.prepare(
@@ -50,7 +50,7 @@ async function dashboardHandler(ctx) {
          e.name AS equipment_name
        FROM work_orders wo JOIN tickets t ON t.id = wo.ticket_id JOIN customers c ON c.id = t.customer_id
        LEFT JOIN equipment e ON e.id = t.equipment_id
-       WHERE wo.technician_id = ? AND wo.status IN ('ASSIGNED','STARTED')
+       WHERE wo.technician_id = ? AND wo.status IN ('ASSIGNED','STARTED','WAITING_QUOTATION','WAITING_CUSTOMER_APPROVAL','REPAIR_AUTHORIZED','REPAIR_STARTED')
        ORDER BY wo.scheduled_date ASC, wo.time_window`
     ).all(ctx.user.id);
     const monthKey = localMonthKey();
@@ -78,7 +78,7 @@ async function dashboardHandler(ctx) {
   const activeTicket = await db.prepare(
     `SELECT t.id, t.number, t.problem, t.status, t.priority, t.service_type, wo.scheduled_date, wo.time_window, u.name AS technician_name, wo.status AS wo_status
      FROM tickets t LEFT JOIN work_orders wo ON wo.ticket_id = t.id LEFT JOIN users u ON u.id = wo.technician_id
-     WHERE t.customer_id = ? AND t.status IN ('ASSIGNED','IN_PROGRESS','COMPLETED') ORDER BY t.updated_at DESC LIMIT 1`
+     WHERE t.customer_id = ? AND t.status IN ('ASSIGNED','IN_PROGRESS','WAITING_QUOTATION','WAITING_CUSTOMER_APPROVAL','REPAIR_AUTHORIZED','REPAIR_IN_PROGRESS','COMPLETED') ORDER BY t.updated_at DESC LIMIT 1`
   ).get(cid);
   const wallet = await db.prepare('SELECT id, customer_id, balance, updated_at FROM wallet_accounts WHERE customer_id = ?').get(cid);
   sendJSON(ctx.res, 200, {

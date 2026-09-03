@@ -16,7 +16,7 @@ let pakasir = defaultPakasir;
 function setPakasirClient(client) { pakasir = client || defaultPakasir; }
 function appError(message, code, status) { const error = new Error(message); error.code = code; error.status = status; return error; }
 function safePaymentError(error) {
-  const allowed = new Set(['PAYMENT_SERVICE_UNAVAILABLE', 'PAYMENT_TIMEOUT', 'PAYMENT_RESPONSE_MISMATCH', 'PAYMENT_PROJECT_MISMATCH', 'INVALID_PAYMENT_DATA', 'PAYMENT_MISMATCH', 'PAYMENT_NOT_COMPLETED', 'INVOICE_AMOUNT_CHANGED', 'INVOICE_ALREADY_PAID', 'INVOICE_NOT_PAYABLE', 'ACTIVE_PAYMENT_ORDER']);
+  const allowed = new Set(['PAYMENT_SERVICE_UNAVAILABLE', 'PAYMENT_TIMEOUT', 'PAYMENT_RESPONSE_MISMATCH', 'PAYMENT_PROJECT_MISMATCH', 'INVALID_PAYMENT_DATA', 'PAYMENT_MISMATCH', 'PAYMENT_NOT_COMPLETED', 'CUSTOMER_QRIS_FEE_NOT_ALLOWED', 'INVOICE_AMOUNT_CHANGED', 'INVOICE_ALREADY_PAID', 'INVOICE_NOT_PAYABLE', 'ACTIVE_PAYMENT_ORDER']);
   if (error && allowed.has(error.code)) return { status: Math.min(599, Math.max(400, Number(error.status) || 400)), error: error.message, code: error.code };
   return { status: 502, error: 'Layanan pembayaran gagal', code: 'PAYMENT_GATEWAY_ERROR' };
 }
@@ -48,7 +48,7 @@ function publicOrder(order) {
   return {
     id: order.id, order_id: order.order_id, kind: order.kind, invoice_id: order.invoice_id,
     amount: Number(order.amount), status: order.status, payment_method: order.payment_method,
-    total_payment: order.total_payment === null ? null : Number(order.total_payment), gateway_fee: order.gateway_fee === null ? null : Number(order.gateway_fee),
+    total_payment: order.total_payment === null ? null : Number(order.total_payment),
     expired_at: order.expired_at, completed_at: order.gateway_completed_at, settled_at: order.settled_at, created_at: order.created_at
   };
 }
@@ -70,8 +70,12 @@ async function insertPendingOrder(executor, { kind, customerId, invoiceId = null
 async function provisionQris(order, executor = db) {
   try {
     const payment = await pakasir.createQris({ orderId: order.order_id, amount: Number(order.amount) });
+    const totalPayment = payment.total_payment == null ? Number(order.amount) : Number(payment.total_payment);
+    if (!Number.isSafeInteger(totalPayment) || totalPayment !== Number(order.amount)) {
+      throw appError('Konfigurasi QRIS masih membebankan biaya kepada customer. Ubah fee payer Pakasir menjadi merchant.', 'CUSTOMER_QRIS_FEE_NOT_ALLOWED', 409);
+    }
     await executor.prepare(`UPDATE payment_orders SET payment_number = ?, gateway_fee = ?, total_payment = ?, expired_at = ?, updated_at = ? WHERE id = ? AND status = 'PENDING'`)
-      .run(payment.payment_number, payment.fee == null ? null : Number(payment.fee), payment.total_payment == null ? order.amount : Number(payment.total_payment), payment.expired_at || null, now(), order.id);
+      .run(payment.payment_number, payment.fee == null ? null : Number(payment.fee), totalPayment, payment.expired_at || null, now(), order.id);
   } catch (error) {
     await transitionOrder(order.id, 'FAILED', executor);
     throw error;
@@ -110,10 +114,25 @@ async function settleVerifiedOrder(orderId, transaction) {
       const invoice = await tx.prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE').get(order.invoice_id);
       if (!invoice || invoice.customer_id !== order.customer_id) throw appError('Invoice pembayaran tidak sesuai', 'PAYMENT_MISMATCH', 409);
       if (INVOICE_PAYABLE_STATUSES.has(invoice.status)) {
+        if (invoice.type === 'PROFORMA' && invoice.approval_status !== 'APPROVED') throw appError('Proforma belum disetujui customer', 'INVOICE_NOT_PAYABLE', 409);
+        const wo = invoice.work_order_id ? await tx.prepare('SELECT status FROM work_orders WHERE id = ?').get(invoice.work_order_id) : null;
+        const report = invoice.work_order_id ? await tx.prepare("SELECT status FROM service_reports WHERE work_order_id = ? ORDER BY created_at DESC LIMIT 1").get(invoice.work_order_id) : null;
+        if (invoice.type === 'PROFORMA' && (!wo || wo.status !== 'APPROVED' || !report || report.status !== 'APPROVED')) throw appError('Pembayaran tersedia setelah teknisi menyelesaikan pekerjaan', 'INVOICE_NOT_PAYABLE', 409);
         const expected = Math.round(invoiceTotals(invoice, await getInvoiceItems(invoice.id, tx)).total);
         if (expected !== Number(order.amount)) throw appError('Total invoice telah berubah', 'INVOICE_AMOUNT_CHANGED', 409);
         await tx.prepare('INSERT INTO payments (id, invoice_id, amount, method, reference, paid_at) VALUES (?, ?, ?, ?, ?, ?)').run(uid(), invoice.id, order.amount, 'PAKASIR_QRIS', order.order_id, ts);
-        await tx.prepare("UPDATE invoices SET status = 'PAID', paid_at = ?, updated_at = ?, version = version + 1 WHERE id = ?").run(ts, ts, invoice.id);
+        if (invoice.type === 'PROFORMA') {
+          const { convertPaidProforma } = require('./invoices');
+          const invoiceNumber = await convertPaidProforma(tx, invoice, ts);
+          if (invoice.ticket_id) {
+            const ticket = await tx.prepare('SELECT status FROM tickets WHERE id = ? FOR UPDATE').get(invoice.ticket_id);
+            if (ticket && ticket.status !== 'CLOSED') {
+              await tx.prepare("UPDATE tickets SET status = 'CLOSED', closed_at = ?, updated_at = ? WHERE id = ?").run(ts, ts, invoice.ticket_id);
+              await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                .run(uid(), invoice.ticket_id, ticket.status, 'CLOSED', null, `Pembayaran terverifikasi; ${invoice.number} menjadi ${invoiceNumber}`, ts);
+            }
+          }
+        } else await tx.prepare("UPDATE invoices SET status = 'PAID', paid_at = ?, updated_at = ?, version = version + 1 WHERE id = ?").run(ts, ts, invoice.id);
       } else if (invoice.status === 'PAID') {
         const existing = await tx.prepare("SELECT id FROM payments WHERE invoice_id = ? AND method = 'PAKASIR_QRIS' AND reference = ?").get(invoice.id, order.order_id);
         if (!existing) throw appError('Invoice telah dibayar melalui metode lain', 'INVOICE_ALREADY_PAID', 409);
@@ -165,6 +184,10 @@ async function createInvoicePaymentHandler(ctx) {
       if (!invoice) throw appError('Invoice tidak ditemukan', 'INVOICE_NOT_PAYABLE', 404);
       if (invoice.customer_id !== ctx.user.customer_id) throw appError('Tidak memiliki akses', 'INVOICE_NOT_PAYABLE', 403);
       if (!INVOICE_PAYABLE_STATUSES.has(invoice.status)) throw appError('Status invoice tidak dapat dibayar', 'INVOICE_NOT_PAYABLE', 409);
+      if (invoice.type === 'PROFORMA' && invoice.approval_status !== 'APPROVED') throw appError('Setujui proforma terlebih dahulu', 'INVOICE_NOT_PAYABLE', 409);
+      const wo = invoice.work_order_id ? await tx.prepare('SELECT status FROM work_orders WHERE id = ?').get(invoice.work_order_id) : null;
+      const report = invoice.work_order_id ? await tx.prepare("SELECT status FROM service_reports WHERE work_order_id = ? ORDER BY created_at DESC LIMIT 1").get(invoice.work_order_id) : null;
+      if (invoice.type === 'PROFORMA' && (!wo || wo.status !== 'APPROVED' || !report || report.status !== 'APPROVED')) throw appError('Pembayaran tersedia setelah teknisi menyelesaikan pekerjaan', 'INVOICE_NOT_PAYABLE', 409);
       const pending = await tx.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' AND status = 'PENDING'").get(invoice.id);
       if (pending) return { existing: true, order: pending };
       const amount = Math.round(invoiceTotals(invoice, await getInvoiceItems(invoice.id, tx)).total);

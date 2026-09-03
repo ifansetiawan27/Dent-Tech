@@ -26,8 +26,8 @@ async function apiCall(page, method, path, body) {
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
 
-  // Setup: create a completed job with checklist for a customer so we can inspect rendered views.
-  console.log('=== Setup: build a completed job ===');
+  // Setup: complete the diagnosis-first lifecycle so we can inspect rendered views.
+  console.log('=== Setup: build a completed diagnosis-first job ===');
   let ctx = await browser.newContext();
   let page = await ctx.newPage();
   await login(page, 'ratna@denttech.id', 'customer123');
@@ -52,17 +52,36 @@ async function apiCall(page, method, path, body) {
   const items = woD.data.checklist.sections.flatMap((s) => s.items);
   await apiCall(page, 'POST', `/api/work-orders/${woId}/checklist`, { items: items.map((i) => ({ item_id: i.id, result: 'PASS', note: '' })) });
   await apiCall(page, 'POST', `/api/work-orders/${woId}/diagnosis`, { findings: 'F', root_cause: 'R', recommendation: 'X' });
-  await apiCall(page, 'POST', `/api/work-orders/${woId}/work-performed`, { description: 'W' });
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-  await apiCall(page, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'before', work_order_id: woId, caption: 'b' });
-  await apiCall(page, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'after', work_order_id: woId, caption: 'a' });
+  await apiCall(page, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'before', work_order_id: woId, caption: 'Before repair' });
+  await apiCall(page, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'equipment_brand', work_order_id: woId, caption: 'Equipment brand' });
+  await apiCall(page, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'equipment_serial', work_order_id: woId, caption: 'Equipment serial' });
+  await apiCall(page, 'POST', `/api/work-orders/${woId}/submit-diagnosis`);
+  await ctx.close();
+
+  ctx = await browser.newContext(); page = await ctx.newPage();
+  await login(page, 'admin@denttech.id', 'admin123');
+  await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'NON_PPN' });
+  const pf = await apiCall(page, 'POST', '/api/invoices/proforma', { work_order_id: woId, labor_cost: 500000 });
+  const pfId = pf.data.id;
+  await ctx.close();
+
+  ctx = await browser.newContext(); page = await ctx.newPage();
+  await login(page, 'ratna@denttech.id', 'customer123');
+  await apiCall(page, 'POST', `/api/invoices/${pfId}/approve`);
+  await ctx.close();
+
+  ctx = await browser.newContext(); page = await ctx.newPage();
+  await login(page, 'budi@denttech.id', 'tech123');
+  await apiCall(page, 'POST', `/api/work-orders/${woId}/start-repair`);
+  await apiCall(page, 'POST', `/api/work-orders/${woId}/work-performed`, { description: 'W' });
+  await apiCall(page, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'after', work_order_id: woId, caption: 'After repair' });
   const comp = await apiCall(page, 'POST', `/api/work-orders/${woId}/complete`, { summary: 'Visual audit complete' });
   await ctx.close();
 
   ctx = await browser.newContext(); page = await ctx.newPage();
   await login(page, 'admin@denttech.id', 'admin123');
-  const appr = await apiCall(page, 'POST', `/api/service-reports/${comp.data.report_id}/approve`, { labor_cost: 500000, due_days: 14 });
-  const invId = appr.data.invoice_id;
+  const invId = comp.data.invoice_id;
 
   // === 1. Checklist Library renders 21 templates ===
   console.log('=== 1. Checklist Library page ===');
@@ -85,15 +104,11 @@ async function apiCall(page, method, path, body) {
   if (await page.$('#set-labor')) ok('settings modal has default labor field'); else bad('missing labor field');
   await page.keyboard.press('Escape');
 
-  // === 3. Proforma + watermark + Non-PPN rendering ===
-  console.log('=== 3. Invoice doc (watermark + Non-PPN + attachments) ===');
-  // create proforma (Non-PPN) then inspect the generated doc HTML via the module
-  await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'NON_PPN' });
-  const pf = await apiCall(page, 'POST', '/api/invoices/proforma', { work_order_id: woId, labor_cost: 500000 });
-  const pfId = pf.data.id;
+  // === 3. Existing proforma + watermark + Non-PPN rendering ===
+  console.log('=== 3. Existing invoice doc (watermark + Non-PPN + attachments) ===');
   const pfDet = await apiCall(page, 'GET', '/api/invoices/' + pfId);
   if (pfDet.data.invoice.tax_rate === 0) ok('proforma Non-PPN (tax_rate 0)'); else bad('tax_rate=' + pfDet.data.invoice.tax_rate);
-  if ((pfDet.data.evidence.photos.length) >= 2) ok('proforma carries before+after photos (' + pfDet.data.evidence.photos.length + ')'); else bad('photos=' + pfDet.data.evidence.photos.length);
+  if ((pfDet.data.evidence.photos.length) >= 4) ok('proforma carries required before/brand/serial and after photos (' + pfDet.data.evidence.photos.length + ')'); else bad('photos=' + pfDet.data.evidence.photos.length);
   if (pfDet.data.evidence.checklist) ok('proforma carries checklist'); else bad('no checklist on proforma');
   await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'PPN' });
 

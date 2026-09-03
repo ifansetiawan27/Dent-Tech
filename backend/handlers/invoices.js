@@ -63,7 +63,7 @@ async function invoiceDetail(inv, user, executor = db) {
     invoice: inv, totals, items, customer, payments,
     payment_account: await readBankSettings(),
     payment_options: { bank: await readBankSettings(), pakasir_qris: pakasirQris },
-    work_order: wo ? { id: wo.id, number: wo.number, scheduled_date: wo.scheduled_date } : null,
+    work_order: wo ? { id: wo.id, number: wo.number, status: wo.status, scheduled_date: wo.scheduled_date } : null,
     ticket, evidence
   };
 }
@@ -149,6 +149,7 @@ async function updateInvoiceHandler(ctx) {
       const inv = await tx.prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE').get(ctx.params.id);
       if (!inv) { const e = new Error('Invoice tidak ditemukan'); e.status = 404; throw e; }
       if (inv.status === 'PAID') { const e = new Error('Invoice sudah dibayar'); e.status = 400; throw e; }
+      if (inv.type === 'PROFORMA' && inv.approval_status === 'APPROVED') { const e = new Error('Proforma yang sudah disetujui customer tidak dapat diubah'); e.status = 409; throw e; }
       const activeOrder = await tx.prepare("SELECT id FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' AND status = 'PENDING'").get(inv.id);
       if (activeOrder) { const e = new Error('Invoice memiliki order pembayaran gateway aktif'); e.status = 409; e.code = 'ACTIVE_PAYMENT_ORDER'; throw e; }
       if (Number(version) !== Number(inv.version)) { const e = new Error('Invoice sudah berubah. Muat ulang sebelum menyimpan.'); e.status = 409; throw e; }
@@ -181,6 +182,14 @@ async function updateInvoiceHandler(ctx) {
   sendJSON(ctx.res, 200, { ok: true, ...detail });
 }
 
+async function convertPaidProforma(tx, invoice, paidAt) {
+  if (invoice.type !== 'PROFORMA') return invoice.number;
+  const invoiceNumber = await nextNumber('INV');
+  await tx.prepare(`UPDATE invoices SET number = ?, proforma_number = ?, type = 'FINAL', status = 'PAID', paid_at = ?, converted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
+    .run(invoiceNumber, invoice.number, paidAt, paidAt, paidAt, invoice.id);
+  return invoiceNumber;
+}
+
 async function payInvoiceHandler(ctx) {
   const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(ctx.params.id);
   if (!inv) return sendJSON(ctx.res, 404, { error: 'Invoice tidak ditemukan' });
@@ -189,18 +198,33 @@ async function payInvoiceHandler(ctx) {
   const { method = 'TRANSFER', reference = '' } = ctx.body;
   const paidAt = now();
   let totals;
+  let paidDocumentNumber = inv.number;
   try {
     await db.transaction(async (tx) => {
       const locked = await tx.prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE').get(inv.id);
       if (!locked || locked.status === 'PAID') { const e = new Error('Invoice sudah dibayar'); e.status = 409; throw e; }
       if (!['SENT', 'OVERDUE'].includes(locked.status)) { const e = new Error('Status invoice tidak dapat dibayar'); e.status = 409; e.code = 'INVOICE_NOT_PAYABLE'; throw e; }
+      if (locked.type === 'PROFORMA' && locked.approval_status !== 'APPROVED') { const e = new Error('Proforma belum disetujui customer'); e.status = 409; e.code = 'INVOICE_NOT_PAYABLE'; throw e; }
+      const wo = locked.work_order_id ? await tx.prepare('SELECT status FROM work_orders WHERE id = ?').get(locked.work_order_id) : null;
+      const report = locked.work_order_id ? await tx.prepare("SELECT status FROM service_reports WHERE work_order_id = ? ORDER BY created_at DESC LIMIT 1").get(locked.work_order_id) : null;
+      if (locked.type === 'PROFORMA' && (!wo || wo.status !== 'APPROVED' || !report || report.status !== 'APPROVED')) { const e = new Error('Pembayaran tersedia setelah teknisi menyelesaikan pekerjaan'); e.status = 409; e.code = 'INVOICE_NOT_PAYABLE'; throw e; }
       const activeOrder = await tx.prepare("SELECT id FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' AND status = 'PENDING'").get(inv.id);
       if (activeOrder) { const e = new Error('Invoice memiliki order pembayaran gateway aktif'); e.status = 409; e.code = 'ACTIVE_PAYMENT_ORDER'; throw e; }
       const items = await getInvoiceItems(inv.id, tx);
       totals = invoiceTotals(locked, items);
       await tx.prepare('INSERT INTO payments (id, invoice_id, amount, method, reference, paid_at) VALUES (?, ?, ?, ?, ?, ?)')
         .run(uid(), inv.id, totals.total, method, reference, paidAt);
-      await tx.prepare("UPDATE invoices SET status = 'PAID', paid_at = ?, updated_at = ?, version = version + 1 WHERE id = ?")
+      if (locked.type === 'PROFORMA') {
+        paidDocumentNumber = await convertPaidProforma(tx, locked, paidAt);
+        if (locked.ticket_id) {
+          const ticket = await tx.prepare('SELECT status FROM tickets WHERE id = ? FOR UPDATE').get(locked.ticket_id);
+          if (ticket && ticket.status !== 'CLOSED') {
+            await tx.prepare("UPDATE tickets SET status = 'CLOSED', closed_at = ?, updated_at = ? WHERE id = ?").run(paidAt, paidAt, locked.ticket_id);
+            await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+              .run(uid(), locked.ticket_id, ticket.status, 'CLOSED', ctx.user.id, `Pembayaran terverifikasi; ${locked.number} menjadi ${paidDocumentNumber}`, paidAt);
+          }
+        }
+      } else await tx.prepare("UPDATE invoices SET status = 'PAID', paid_at = ?, updated_at = ?, version = version + 1 WHERE id = ?")
         .run(paidAt, paidAt, inv.id);
     });
   } catch (e) {
@@ -213,7 +237,7 @@ async function payInvoiceHandler(ctx) {
     notify({ role: 'admin', title: `Invoice ${inv.number} dibayar`, body: `Rp ${totals.total.toLocaleString('id-ID')} via ${method}`, type: 'INVOICE', ref_type: 'invoice', ref_id: inv.id });
   }
   audit(ctx.user, 'UPDATE', 'invoice', inv.id, `Pembayaran invoice ${inv.number} Rp ${totals.total}`, ctx.ip);
-  sendJSON(ctx.res, 200, { ok: true, paid_amount: totals.total });
+  sendJSON(ctx.res, 200, { ok: true, paid_amount: totals.total, invoice_number: paidDocumentNumber });
 }
 
 // ---------- Invoice settings (PPN / Non-PPN, default labor, rekening pembayaran) ----------
@@ -257,6 +281,36 @@ async function updateInvoiceSettingsHandler(ctx) {
 }
 
 // ---------- Proforma Invoice ----------
+async function approveProformaHandler(ctx) {
+  let inv, wo, ticket;
+  const approvedAt = now();
+  try {
+    await db.transaction(async (tx) => {
+      inv = await tx.prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE').get(ctx.params.id);
+      if (!inv) { const e = new Error('Proforma tidak ditemukan'); e.status = 404; throw e; }
+      if (inv.customer_id !== ctx.user.customer_id) { const e = new Error('Tidak memiliki akses'); e.status = 403; throw e; }
+      if (inv.type !== 'PROFORMA' || inv.approval_status !== 'SENT') { const e = new Error('Proforma tidak dapat disetujui pada status ini'); e.status = 409; throw e; }
+      wo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(inv.work_order_id);
+      ticket = wo ? await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(wo.ticket_id) : null;
+      if (!wo || !ticket || wo.status !== 'WAITING_CUSTOMER_APPROVAL') { const e = new Error('Status pekerjaan tidak sesuai untuk approval'); e.status = 409; throw e; }
+      await tx.prepare("UPDATE invoices SET approval_status = 'APPROVED', approved_at = ?, approved_by = ?, updated_at = ?, version = version + 1 WHERE id = ?")
+        .run(approvedAt, ctx.user.id, approvedAt, inv.id);
+      await tx.prepare("UPDATE work_orders SET status = 'REPAIR_AUTHORIZED', updated_at = ? WHERE id = ?").run(approvedAt, wo.id);
+      await tx.prepare("UPDATE tickets SET status = 'REPAIR_AUTHORIZED', updated_at = ? WHERE id = ?").run(approvedAt, ticket.id);
+      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(uid(), ticket.id, ticket.status, 'REPAIR_AUTHORIZED', ctx.user.id, `Customer menyetujui proforma ${inv.number}`, approvedAt);
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
+  }
+  timeline(ticket.id, 'APPROVAL', `Proforma ${inv.number} disetujui`, 'Customer menyetujui biaya perbaikan. Teknisi dapat memulai pekerjaan.', 'CUSTOMER_VISIBLE', ctx.user.id);
+  notify({ user_id: wo.technician_id, title: `Perbaikan ${wo.number} disetujui`, body: `Customer menyetujui proforma ${inv.number}. Silakan mulai perbaikan.`, type: 'WORK_ORDER', ref_type: 'work_order', ref_id: wo.id });
+  notify({ role: 'admin', title: `Proforma ${inv.number} disetujui`, body: `${ticket.number} siap dikerjakan teknisi`, type: 'INVOICE', ref_type: 'invoice', ref_id: inv.id });
+  audit(ctx.user, 'UPDATE', 'invoice', inv.id, `Menyetujui proforma ${inv.number}`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, approval_status: 'APPROVED' });
+}
+
 async function createProformaHandler(ctx) {
   const { work_order_id, labor_cost, due_days = 14, items = [] } = ctx.body;
   if (!work_order_id) return sendJSON(ctx.res, 400, { error: 'work_order_id wajib diisi' });
@@ -277,15 +331,19 @@ async function createProformaHandler(ctx) {
     await db.transaction(async (tx) => {
       const wo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(work_order_id);
       if (!wo) { const e = new Error('Work order tidak ditemukan'); e.status = 404; throw e; }
-      if (!['COMPLETED', 'APPROVED'].includes(wo.status)) { const e = new Error('Proforma hanya bisa dibuat setelah pekerjaan selesai'); e.status = 400; throw e; }
+       if (wo.status !== 'WAITING_QUOTATION') { const e = new Error('Proforma hanya bisa dibuat setelah diagnosis dikirim teknisi'); e.status = 400; throw e; }
       t = await tx.prepare('SELECT * FROM tickets WHERE id = ?').get(wo.ticket_id);
       if (!t) { const e = new Error('Ticket tidak ditemukan'); e.status = 404; throw e; }
       const existing = await tx.prepare("SELECT id, number FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' AND status != 'PAID'").get(wo.id);
       if (existing) { const e = new Error(`Proforma ${existing.number} sudah ada untuk work order ini`); e.status = 409; throw e; }
-      await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, issued_at, due_at, created_at, updated_at, version)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'SENT', 'PROFORMA', ?, ?, ?, ?, 1)`)
-        .run(invId, invNumber, t.id, wo.id, t.customer_id, labor, taxRate, issued, due, issued, issued);
-      await snapshotInvoiceItems(tx, invId, wo.id, labor, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa', customItems);
+       await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, approval_status, issued_at, due_at, created_at, updated_at, version)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'SENT', 'PROFORMA', 'SENT', ?, ?, ?, ?, 1)`)
+         .run(invId, invNumber, t.id, wo.id, t.customer_id, labor, taxRate, issued, due, issued, issued);
+       await snapshotInvoiceItems(tx, invId, wo.id, labor, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa', customItems);
+       await tx.prepare("UPDATE work_orders SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, wo.id);
+       await tx.prepare("UPDATE tickets SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, t.id);
+       await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+         .run(uid(), t.id, t.status, 'WAITING_CUSTOMER_APPROVAL', ctx.user.id, `Proforma ${invNumber} dikirim`, issued);
     });
   } catch (e) {
     if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
@@ -300,6 +358,6 @@ async function createProformaHandler(ctx) {
 }
 
 module.exports = {
-  listInvoicesHandler, getInvoiceHandler, updateInvoiceHandler, payInvoiceHandler,
+  listInvoicesHandler, getInvoiceHandler, updateInvoiceHandler, payInvoiceHandler, approveProformaHandler, convertPaidProforma,
   getInvoiceSettingsHandler, updateInvoiceSettingsHandler, createProformaHandler
 };

@@ -51,7 +51,7 @@
     }
 
     function render() {
-      const activeStatuses = ['ASSIGNED', 'STARTED'];
+      const activeStatuses = ['ASSIGNED', 'STARTED', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_STARTED'];
       const list = all.filter((w) => tab === 'active' ? activeStatuses.includes(w.status) : !activeStatuses.includes(w.status));
       if (!list.length) {
         content.innerHTML = `<div class="card">${emptyState('clipboard-list', tab === 'active' ? 'Tidak ada job aktif' : 'Belum ada job selesai', tab === 'active' ? 'Job yang ditugaskan akan tampil di sini.' : 'Job yang sudah selesai akan diarsipkan di sini.')}</div>`;

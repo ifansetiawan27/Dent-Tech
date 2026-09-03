@@ -3,7 +3,7 @@ const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig } = require('../util');
 const {
   audit, timeline, setTicketStatus, getTicket, getWorkOrder, canAccessWorkOrder,
-  notify, partTotalForWorkOrder, buildChecklistState
+  notify, partTotalForWorkOrder, workOrderPhotoRequirements, buildChecklistState
 } = require('./_common');
 
 function attachmentWithUrl(a) {
@@ -85,6 +85,7 @@ async function getWorkOrderHandler(ctx) {
     part_usages: partUsages,
     parts_total: await partTotalForWorkOrder(wo.id),
     photos,
+    photo_requirements: await workOrderPhotoRequirements(wo.id),
     service_report: report
   });
 }
@@ -93,17 +94,64 @@ async function startWorkOrderHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
-  if (wo.status !== 'ASSIGNED') return sendJSON(ctx.res, 400, { error: 'Work order hanya bisa dimulai dari status ASSIGNED' });
+  if (wo.status !== 'ASSIGNED') return sendJSON(ctx.res, 400, { error: 'Inspeksi hanya bisa dimulai dari status ASSIGNED' });
   await db.prepare("UPDATE work_orders SET status = 'STARTED', started_at = ?, updated_at = ? WHERE id = ?").run(now(), now(), wo.id);
   const t = await getTicket(wo.ticket_id);
   if (t && t.status === 'ASSIGNED') {
-    await setTicketStatus(t, 'IN_PROGRESS', ctx.user, 'Teknisi memulai pekerjaan');
+    await setTicketStatus(t, 'IN_PROGRESS', ctx.user, 'Teknisi memulai inspeksi dan diagnosis');
     await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
   }
-  timeline(wo.ticket_id, 'STATUS', 'Service dimulai', 'Teknisi memulai pekerjaan di lokasi', 'CUSTOMER_VISIBLE', ctx.user.id);
-  notify({ customer_id: t.customer_id, title: `Service dimulai`, body: `Teknisi sedang bekerja untuk ticket ${t.number}`, type: 'WORK_ORDER', ref_type: 'ticket', ref_id: t.id });
-  audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Memulai work order ${wo.number}`, ctx.ip);
+  timeline(wo.ticket_id, 'STATUS', 'Inspeksi dimulai', 'Teknisi memulai checklist dan diagnosis di lokasi', 'CUSTOMER_VISIBLE', ctx.user.id);
+  notify({ customer_id: t.customer_id, title: 'Inspeksi dimulai', body: `Teknisi sedang memeriksa unit untuk ticket ${t.number}`, type: 'WORK_ORDER', ref_type: 'ticket', ref_id: t.id });
+  audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Memulai inspeksi ${wo.number}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true });
+}
+
+async function submitDiagnosisHandler(ctx) {
+  const wo = await getWorkOrder(ctx.params.id);
+  if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
+  if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
+  if (wo.status !== 'STARTED') return sendJSON(ctx.res, 400, { error: 'Diagnosis hanya dapat dikirim setelah inspeksi dimulai' });
+  const checklist = await buildChecklistState(wo);
+  if (!checklist) return sendJSON(ctx.res, 400, { error: 'Checklist inspeksi wajib tersedia sebelum diagnosis dikirim' });
+  if (!checklist.complete) return sendJSON(ctx.res, 400, { error: `Checklist wajib belum lengkap (${checklist.required_done}/${checklist.required_total})` });
+  const diagnosis = await db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id);
+  if (!diagnosis || !String(diagnosis.findings || '').trim()) return sendJSON(ctx.res, 400, { error: 'Diagnosis wajib diisi sebelum dikirim ke admin' });
+  const inspectionEvidence = await db.prepare(`SELECT kind FROM attachments WHERE work_order_id = ?
+    AND kind IN ('before','equipment_brand','equipment_serial') AND mime IN ('image/jpeg','image/png','image/webp')`).all(wo.id);
+  const capturedKinds = new Set(inspectionEvidence.map((photo) => photo.kind));
+  const missingInspection = ['before', 'equipment_brand', 'equipment_serial'].filter((kind) => !capturedKinds.has(kind));
+  if (missingInspection.length) return sendJSON(ctx.res, 400, {
+    error: 'Foto inspeksi wajib belum lengkap', code: 'INSPECTION_PHOTOS_MISSING', missing_photo_kinds: missingInspection
+  });
+  const ts = now();
+  const transition = await db.prepare("UPDATE work_orders SET status = 'WAITING_QUOTATION', updated_at = ? WHERE id = ? AND status = 'STARTED'").run(ts, wo.id);
+  if (!transition.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
+  const t = await getTicket(wo.ticket_id);
+  if (t) {
+    await setTicketStatus(t, 'WAITING_QUOTATION', ctx.user, 'Diagnosis selesai, menunggu proforma invoice');
+    timeline(t.id, 'DIAGNOSIS', 'Diagnosis selesai', 'Hasil inspeksi dikirim ke admin untuk penyusunan proforma invoice.', 'CUSTOMER_VISIBLE', ctx.user.id);
+    notify({ role: 'admin', title: `Diagnosis ${wo.number} siap direview`, body: `${t.number} — buat proforma biaya perbaikan`, type: 'WORK_ORDER', ref_type: 'work_order', ref_id: wo.id });
+  }
+  audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Mengirim diagnosis ${wo.number} untuk pembuatan proforma`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, status: 'WAITING_QUOTATION' });
+}
+
+async function startRepairHandler(ctx) {
+  const wo = await getWorkOrder(ctx.params.id);
+  if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
+  if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
+  if (wo.status !== 'REPAIR_AUTHORIZED') return sendJSON(ctx.res, 400, { error: 'Perbaikan belum disetujui customer' });
+  const ts = now();
+  await db.prepare("UPDATE work_orders SET status = 'REPAIR_STARTED', updated_at = ? WHERE id = ? AND status = 'REPAIR_AUTHORIZED'").run(ts, wo.id);
+  const t = await getTicket(wo.ticket_id);
+  if (t) {
+    await setTicketStatus(t, 'REPAIR_IN_PROGRESS', ctx.user, 'Teknisi memulai perbaikan yang disetujui');
+    timeline(t.id, 'STATUS', 'Perbaikan dimulai', 'Teknisi mulai mengerjakan perbaikan sesuai proforma yang disetujui.', 'CUSTOMER_VISIBLE', ctx.user.id);
+    notify({ customer_id: t.customer_id, title: `Perbaikan ${t.number} dimulai`, body: 'Teknisi mulai mengerjakan perbaikan yang Anda setujui', type: 'WORK_ORDER', ref_type: 'ticket', ref_id: t.id });
+  }
+  audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Memulai perbaikan ${wo.number}`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, status: 'REPAIR_STARTED' });
 }
 
 async function saveChecklistHandler(ctx) {
@@ -151,7 +199,7 @@ async function addWorkPerformedHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
-  if (!['ASSIGNED', 'STARTED'].includes(wo.status)) return sendJSON(ctx.res, 400, { error: 'Pekerjaan hanya bisa dicatat sebelum work order selesai' });
+  if (wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Pekerjaan perbaikan hanya dapat dicatat setelah proforma disetujui dan perbaikan dimulai' });
   const { description } = ctx.body;
   if (!description || !String(description).trim()) return sendJSON(ctx.res, 400, { error: 'Deskripsi pekerjaan wajib diisi' });
   await db.prepare('INSERT INTO work_performed (id, work_order_id, description, created_at) VALUES (?, ?, ?, ?)')
@@ -164,7 +212,7 @@ async function addPartUsageHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
-  if (!['ASSIGNED', 'STARTED'].includes(wo.status)) return sendJSON(ctx.res, 400, { error: 'Spare part hanya bisa dicatat sebelum work order selesai' });
+  if (wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Spare part hanya dapat dicatat saat perbaikan berlangsung' });
   const { part_id, qty = 1, note = '' } = ctx.body;
   const part = await db.prepare('SELECT * FROM parts WHERE id = ?').get(part_id);
   if (!part) return sendJSON(ctx.res, 400, { error: 'Spare part tidak ditemukan' });
@@ -183,7 +231,7 @@ async function removePartUsageHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
-  if (!['ASSIGNED', 'STARTED'].includes(wo.status)) return sendJSON(ctx.res, 400, { error: 'Spare part hanya bisa diubah sebelum work order selesai' });
+  if (wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Spare part hanya dapat diubah saat perbaikan berlangsung' });
   const usage = await db.prepare('SELECT * FROM part_usages WHERE id = ? AND work_order_id = ?').get(ctx.params.usageId, wo.id);
   if (!usage) return sendJSON(ctx.res, 404, { error: 'Penggunaan part tidak ditemukan' });
   await db.prepare('UPDATE parts SET stock = stock + ? WHERE id = ?').run(usage.qty, usage.part_id);
@@ -196,7 +244,7 @@ async function removePartUsageHandler(ctx) {
 async function rescheduleHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
-  if (!['ASSIGNED', 'STARTED'].includes(wo.status)) return sendJSON(ctx.res, 400, { error: 'Work order sudah selesai' });
+  if (!['ASSIGNED', 'STARTED', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_STARTED'].includes(wo.status)) return sendJSON(ctx.res, 400, { error: 'Work order sudah selesai' });
   const { scheduled_date, time_window } = ctx.body;
   if (!scheduled_date) return sendJSON(ctx.res, 400, { error: 'Tanggal jadwal wajib diisi' });
   await db.prepare('UPDATE work_orders SET scheduled_date = ?, time_window = ?, updated_at = ? WHERE id = ?')
@@ -213,44 +261,56 @@ async function completeWorkOrderHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
-  if (wo.status !== 'STARTED') return sendJSON(ctx.res, 400, { error: 'Work order harus dimulai terlebih dahulu' });
+  if (wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Perbaikan harus dimulai setelah proforma disetujui customer' });
 
   const checklist = await buildChecklistState(wo);
-  if (checklist && !checklist.complete) {
+  if (!checklist) return sendJSON(ctx.res, 400, { error: 'Checklist wajib tersedia sebelum menyelesaikan pekerjaan' });
+  if (!checklist.complete) {
     return sendJSON(ctx.res, 400, { error: `Checklist wajib belum lengkap (${checklist.required_done}/${checklist.required_total} item wajib diisi)` });
   }
   const diagnosis = await db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id);
   if (!diagnosis || !diagnosis.findings.trim()) return sendJSON(ctx.res, 400, { error: 'Diagnosis wajib diisi sebelum menyelesaikan pekerjaan' });
   const performed = (await db.prepare('SELECT COUNT(*) AS c FROM work_performed WHERE work_order_id = ?').get(wo.id)).c;
   if (!performed) return sendJSON(ctx.res, 400, { error: 'Catat minimal satu pekerjaan yang dilakukan' });
-  const afterPhotos = (await db.prepare("SELECT COUNT(*) AS c FROM attachments WHERE work_order_id = ? AND kind = 'after'").get(wo.id)).c;
-  if (!afterPhotos) return sendJSON(ctx.res, 400, { error: 'Upload minimal satu foto AFTER sebagai bukti service' });
+  const photoRequirements = await workOrderPhotoRequirements(wo.id);
+  if (!photoRequirements.complete) return sendJSON(ctx.res, 400, {
+    error: 'Foto wajib belum lengkap', code: 'REQUIRED_PHOTOS_MISSING', missing_photo_kinds: photoRequirements.missing
+  });
   const { summary } = ctx.body;
   if (!summary || !String(summary).trim()) return sendJSON(ctx.res, 400, { error: 'Ringkasan service report wajib diisi' });
 
-  const t = await getTicket(wo.ticket_id);
   const completedAt = now();
-  const transition = await db.prepare("UPDATE work_orders SET status = 'COMPLETED', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'STARTED'")
-    .run(completedAt, completedAt, wo.id);
-  if (!transition.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman sebelum mencoba lagi.' });
   const reportId = uid();
   const reportNumber = await nextNumber('SR');
-  await db.prepare(`INSERT INTO service_reports (id, number, version, work_order_id, summary, technician_note, status, created_at, updated_at)
-    VALUES (?, ?, 1, ?, ?, ?, 'SUBMITTED', ?, ?)`)
-    .run(reportId, reportNumber, wo.id, String(summary).trim(), ctx.body.technician_note || '', now(), now());
-  if (t) {
-    await setTicketStatus(t, 'COMPLETED', ctx.user, 'Pekerjaan selesai, menunggu approval laporan');
-    await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
-    timeline(t.id, 'STATUS', 'Service selesai', 'Semua checklist selesai. Laporan dikirim untuk approval admin.', 'CUSTOMER_VISIBLE', ctx.user.id);
-    notify({ role: 'admin', title: `Laporan ${reportNumber} menunggu approval`, body: `${wo.number} — ${t.problem}`, type: 'REPORT', ref_type: 'service_report', ref_id: reportId });
-    notify({ customer_id: t.customer_id, title: `Service ${t.number} selesai`, body: 'Laporan service sedang menunggu persetujuan admin', type: 'REPORT', ref_type: 'ticket', ref_id: t.id });
+  let t, proforma;
+  try {
+    await db.transaction(async (tx) => {
+      const lockedWo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(wo.id);
+      if (!lockedWo || lockedWo.status !== 'REPAIR_STARTED') { const e = new Error('Status work order berubah. Muat ulang halaman.'); e.status = 409; throw e; }
+      t = await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(lockedWo.ticket_id);
+      proforma = await tx.prepare("SELECT * FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(lockedWo.id);
+      if (!t || !proforma || proforma.approval_status !== 'APPROVED') { const e = new Error('Proforma yang disetujui customer tidak ditemukan'); e.status = 409; throw e; }
+      await tx.prepare("UPDATE work_orders SET status = 'APPROVED', completed_at = ?, updated_at = ? WHERE id = ?").run(completedAt, completedAt, lockedWo.id);
+      await tx.prepare(`INSERT INTO service_reports (id, number, version, work_order_id, summary, technician_note, status, approved_at, approved_by, created_at, updated_at)
+        VALUES (?, ?, 1, ?, ?, ?, 'APPROVED', ?, ?, ?, ?)`)
+        .run(reportId, reportNumber, lockedWo.id, String(summary).trim(), ctx.body.technician_note || '', completedAt, ctx.user.id, completedAt, completedAt);
+      await tx.prepare("UPDATE tickets SET status = 'COMPLETED', updated_at = ? WHERE id = ?").run(completedAt, t.id);
+      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(uid(), t.id, t.status, 'COMPLETED', ctx.user.id, 'Pekerjaan selesai; pembayaran tersedia', completedAt);
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
   }
-  audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Menyelesaikan ${wo.number} & submit laporan ${reportNumber}`, ctx.ip);
-  sendJSON(ctx.res, 200, { ok: true, report_id: reportId, report_number: reportNumber });
+  timeline(t.id, 'STATUS', 'Service selesai', `Pekerjaan dan laporan ${reportNumber} selesai. Pembayaran ${proforma.number} tersedia.`, 'CUSTOMER_VISIBLE', ctx.user.id);
+  notify({ role: 'admin', title: `Pekerjaan ${wo.number} selesai`, body: `${t.number} selesai oleh teknisi; pembayaran customer telah dibuka`, type: 'REPORT', ref_type: 'work_order', ref_id: wo.id });
+  notify({ customer_id: t.customer_id, title: `Service ${t.number} selesai`, body: `Silakan bayar ${proforma.number} melalui QRIS atau transfer bank.`, type: 'INVOICE', ref_type: 'invoice', ref_id: proforma.id });
+  audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Menyelesaikan ${wo.number}; laporan ${reportNumber} auto-approved dan pembayaran dibuka`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, report_id: reportId, report_number: reportNumber, invoice_id: proforma.id, invoice_number: proforma.number });
 }
 
 module.exports = {
-  listWorkOrdersHandler, getWorkOrderHandler, startWorkOrderHandler,
+  listWorkOrdersHandler, getWorkOrderHandler, startWorkOrderHandler, submitDiagnosisHandler, startRepairHandler,
   saveChecklistHandler, saveDiagnosisHandler, addWorkPerformedHandler,
   addPartUsageHandler, removePartUsageHandler, rescheduleHandler, completeWorkOrderHandler,
   buildChecklistState

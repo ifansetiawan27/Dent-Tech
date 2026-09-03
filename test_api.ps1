@@ -56,47 +56,80 @@ $tplId = $templates.templates[0].id
 $assign = Req 'POST' "$base/api/tickets/$($openTicket.id)/assign" $AT @{technician_id=$techId; scheduled_date=(Get-Date).ToString('yyyy-MM-dd'); time_window='13:00 - 15:00'; checklist_template_id=$tplId}
 if ($assign.work_order_id) { Ok "assigned -> WO $($assign.number)"; $WO=$assign.work_order_id } else { Bad "assign failed: $($assign | ConvertTo-Json)" }
 
-Write-Output "=== 6. TECHNICIAN FLOW ==="
+Write-Output "=== 6. TECHNICIAN INSPECTION & DIAGNOSIS ==="
 $tdash = Req 'GET' "$base/api/dashboard" $TT $null
 if ($tdash.stats.active -ge 1) { Ok "tech dashboard active=$($tdash.stats.active)" } else { Bad "tech dashboard" }
 $woDetail = Req 'GET' "$base/api/work-orders/$WO" $TT $null
 if ($woDetail.work_order.id -eq $WO) { Ok "wo detail, checklist items=$($woDetail.checklist.total_items)" } else { Bad "wo detail" }
 $start = Req 'POST' "$base/api/work-orders/$WO/start" $TT $null
-if ($start.ok) { Ok "wo started" } else { Bad "wo start: $($start|ConvertTo-Json)" }
-# fill all checklist items PASS
+if ($start.ok) { Ok "inspection started" } else { Bad "inspection start: $($start|ConvertTo-Json)" }
+# fill all checklist items PASS and record diagnosis during inspection
 $items = @()
 foreach ($sec in $woDetail.checklist.sections) { foreach ($it in $sec.items) { $items += @{item_id=$it.id; result='PASS'; note='ok'} } }
 $chk = Req 'POST' "$base/api/work-orders/$WO/checklist" $TT @{items=$items}
-if ($chk.checklist.complete) { Ok "checklist complete" } else { Bad "checklist not complete: $($chk|ConvertTo-Json)" }
+if ($chk.checklist.complete) { Ok "inspection checklist complete" } else { Bad "checklist not complete: $($chk|ConvertTo-Json)" }
 $diag = Req 'POST' "$base/api/work-orders/$WO/diagnosis" $TT @{findings='Unit bermasalah pada power supply'; root_cause='Kabel power putus'; recommendation='Ganti kabel power'}
-if ($diag.ok) { Ok "diagnosis saved" } else { Bad "diagnosis" }
+if ($diag.ok) { Ok "diagnosis saved" } else { Bad "diagnosis: $($diag|ConvertTo-Json)" }
+# lifecycle evidence must be JPG, PNG, or WebP; this is a tiny PNG data URL
+$pngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+foreach ($evidence in @(
+  @{kind='before'; caption='Kondisi unit sebelum perbaikan'},
+  @{kind='equipment_brand'; caption='Label merek equipment'},
+  @{kind='equipment_serial'; caption='Nomor seri equipment'}
+)) {
+  $up = Req 'POST' "$base/api/files" $TT @{dataUrl="data:image/png;base64,$pngB64"; kind=$evidence.kind; caption=$evidence.caption; work_order_id=$WO}
+  if ($up.id) { Ok "$($evidence.kind) evidence uploaded" } else { Bad "$($evidence.kind) upload: $($up|ConvertTo-Json)" }
+}
+$submitDiagnosis = Req 'POST' "$base/api/work-orders/$WO/submit-diagnosis" $TT $null
+if ($submitDiagnosis.ok -and $submitDiagnosis.status -eq 'WAITING_QUOTATION') { Ok "diagnosis submitted for quotation" } else { Bad "submit diagnosis: $($submitDiagnosis|ConvertTo-Json)" }
+
+Write-Output "=== 7. PROFORMA APPROVAL ==="
+$proforma = Req 'POST' "$base/api/invoices/proforma" $AT @{work_order_id=$WO; labor_cost=500000; due_days=14}
+if ($proforma.id -and $proforma.invoice.type -eq 'PROFORMA' -and $proforma.invoice.status -eq 'SENT') {
+  Ok "admin created proforma $($proforma.number)"
+  $INV = $proforma.id
+  $PROFORMA_NUMBER = $proforma.number
+} else { Bad "create proforma: $($proforma|ConvertTo-Json)" }
+$customerApprove = Req 'POST' "$base/api/invoices/$INV/approve" $CT $null
+if ($customerApprove.ok -and $customerApprove.approval_status -eq 'APPROVED') { Ok "customer approved proforma" } else { Bad "customer approve proforma: $($customerApprove|ConvertTo-Json)" }
+
+Write-Output "=== 8. TECHNICIAN REPAIR FLOW ==="
+$repair = Req 'POST' "$base/api/work-orders/$WO/start-repair" $TT $null
+if ($repair.ok -and $repair.status -eq 'REPAIR_STARTED') { Ok "repair started" } else { Bad "start repair: $($repair|ConvertTo-Json)" }
 $wp = Req 'POST' "$base/api/work-orders/$WO/work-performed" $TT @{description='Mengganti kabel power dan kalibrasi'}
-if ($wp.ok) { Ok "work performed" } else { Bad "work performed" }
+if ($wp.ok) { Ok "work performed recorded" } else { Bad "work performed: $($wp|ConvertTo-Json)" }
 # add a spare part
 $parts = Req 'GET' "$base/api/parts" $AT $null
 $partId = $parts.parts[0].id
 $pu = Req 'POST' "$base/api/work-orders/$WO/parts" $TT @{part_id=$partId; qty=1; note='ganti part'}
 if ($pu.ok) { Ok "part usage added" } else { Bad "part usage: $($pu|ConvertTo-Json)" }
-# upload after photo (tiny svg data url)
-$svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="green"/></svg>'
-$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($svg))
-$up = Req 'POST' "$base/api/files" $TT @{dataUrl="data:image/svg+xml;base64,$b64"; kind='after'; caption='Foto setelah perbaikan'; work_order_id=$WO}
-if ($up.id) { Ok "after photo uploaded" } else { Bad "photo upload: $($up|ConvertTo-Json)" }
-# try complete without summary -> should fail
+foreach ($evidence in @(
+  @{kind='after'; caption='Kondisi unit setelah perbaikan'},
+  @{kind='part_replacement'; caption='Bukti penggantian spare part'}
+)) {
+  $up = Req 'POST' "$base/api/files" $TT @{dataUrl="data:image/png;base64,$pngB64"; kind=$evidence.kind; caption=$evidence.caption; work_order_id=$WO}
+  if ($up.id) { Ok "$($evidence.kind) evidence uploaded" } else { Bad "$($evidence.kind) upload: $($up|ConvertTo-Json)" }
+}
+# all prerequisites are present, so an empty completion must fail specifically on its required summary
 $compBad = Req 'POST' "$base/api/work-orders/$WO/complete" $TT @{}
-if ($compBad.__error -and $compBad.code -eq 400) { Ok "complete blocked without summary" } else { Bad "complete should require summary" }
+if ($compBad.__error -and $compBad.code -eq 400) { Ok "complete blocked without summary" } else { Bad "complete should require summary: $($compBad|ConvertTo-Json)" }
 $comp = Req 'POST' "$base/api/work-orders/$WO/complete" $TT @{summary='Perbaikan selesai, unit berfungsi normal'; technician_note='Perlu monitoring 1 minggu'}
-if ($comp.report_number) { Ok "wo completed -> report $($comp.report_number)"; $REPORT=$comp.report_id } else { Bad "complete: $($comp|ConvertTo-Json)" }
+if ($comp.ok -and $comp.report_id -and $comp.report_number -and $comp.invoice_id -eq $INV -and $comp.invoice_number -eq $PROFORMA_NUMBER) {
+  Ok "technician completion auto-approved report $($comp.report_number) and retained proforma $($comp.invoice_number)"
+  $REPORT = $comp.report_id
+} else { Bad "completion should auto-approve report and retain proforma: $($comp|ConvertTo-Json)" }
 
-Write-Output "=== 7. ADMIN APPROVE REPORT ==="
-$approve = Req 'POST' "$base/api/service-reports/$REPORT/approve" $AT @{labor_cost=500000; due_days=14}
-if ($approve.invoice_number) { Ok "report approved -> invoice $($approve.invoice_number)"; $INV=$approve.invoice_id } else { Bad "approve: $($approve|ConvertTo-Json)" }
-
-Write-Output "=== 8. INVOICE ==="
+Write-Output "=== 9. VERIFY AUTO-APPROVED COMPLETION & PAYABLE PROFORMA ==="
+$completedWo = Req 'GET' "$base/api/work-orders/$WO" $AT $null
+if ($completedWo.work_order.id -eq $WO -and $completedWo.work_order.status -eq 'APPROVED') { Ok "completed work order is APPROVED" } else { Bad "completed work order should be APPROVED: $($completedWo|ConvertTo-Json)" }
+$reportDetail = Req 'GET' "$base/api/service-reports/$REPORT" $AT $null
+if ($reportDetail.report.id -eq $REPORT -and $reportDetail.report.status -eq 'APPROVED') { Ok "completion report is auto-approved" } else { Bad "completion report should be APPROVED: $($reportDetail|ConvertTo-Json)" }
 $invDetail = Req 'GET' "$base/api/invoices/$INV" $AT $null
-if ($invDetail.totals.total -gt 0) { Ok "invoice total=$($invDetail.totals.total)" } else { Bad "invoice totals" }
+if ($invDetail.invoice.id -eq $INV -and $invDetail.invoice.number -eq $PROFORMA_NUMBER -and $invDetail.invoice.type -eq 'PROFORMA' -and $invDetail.invoice.status -eq 'SENT' -and $invDetail.invoice.approval_status -eq 'APPROVED' -and $invDetail.totals.total -gt 0) {
+  Ok "customer-approved proforma is open for payment, total=$($invDetail.totals.total)"
+} else { Bad "customer-approved proforma should be payable after technician completion: $($invDetail|ConvertTo-Json)" }
 
-Write-Output "=== 9. CUSTOMER VISIBILITY ==="
+Write-Output "=== 10. CUSTOMER VISIBILITY & PAYMENT RBAC ==="
 $ctickets = Req 'GET' "$base/api/tickets" $CT $null
 $myTicket = $ctickets.tickets | Where-Object { $_.id -eq $openTicket.id } | Select-Object -First 1
 $cdetail = Req 'GET' "$base/api/tickets/$($openTicket.id)" $CT $null
@@ -108,8 +141,12 @@ $customerPay = Req 'POST' "$base/api/invoices/$INV/pay" $CT @{method='TRANSFER';
 if ($customerPay.__error -and $customerPay.code -eq 403) { Ok "customer direct payment rejected 403" } else { Bad "customer direct payment should be admin-only" }
 $pay = Req 'POST' "$base/api/invoices/$INV/pay" $AT @{method='TRANSFER'; reference='TRF-TEST-001'}
 if ($pay.ok) { Ok "admin records invoice payment amount=$($pay.paid_amount)" } else { Bad "admin pay invoice: $($pay|ConvertTo-Json)" }
+$paidDetail = Req 'GET' "$base/api/invoices/$INV" $AT $null
+if ($paidDetail.invoice.type -eq 'FINAL' -and $paidDetail.invoice.status -eq 'PAID' -and $paidDetail.invoice.proforma_number -eq $PROFORMA_NUMBER -and $paidDetail.invoice.number -eq $pay.invoice_number) {
+  Ok "admin payment converted approved proforma to FINAL PAID $($paidDetail.invoice.number)"
+} else { Bad "paid proforma should convert to FINAL PAID: $($paidDetail|ConvertTo-Json)" }
 
-Write-Output "=== 10. ANALYTICS ==="
+Write-Output "=== 11. ANALYTICS ==="
 $an = Req 'GET' "$base/api/reports/analytics" $AT $null
 if ($an.by_service_type) { Ok "analytics returned" } else { Bad "analytics" }
 

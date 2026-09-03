@@ -64,16 +64,8 @@ async function getReportHandler(ctx) {
 }
 
 async function approveReportHandler(ctx) {
-  const laborCost = ctx.body.labor_cost === undefined ? 0 : Number(ctx.body.labor_cost);
-  const dueDays = ctx.body.due_days === undefined ? 14 : Number(ctx.body.due_days);
-  if (!Number.isFinite(laborCost) || laborCost < 0) return sendJSON(ctx.res, 400, { error: 'Biaya jasa tidak valid' });
-  if (!Number.isInteger(dueDays) || dueDays < 1 || dueDays > 365) return sendJSON(ctx.res, 400, { error: 'Jatuh tempo harus 1–365 hari' });
-  const invId = uid();
-  const invNumber = await nextNumber('INV');
-  const issued = now();
-  const due = localDate(new Date(Date.now() + dueDays * 24 * 3600 * 1000));
-  const taxRate = (await getSetting('invoice_tax_mode', 'PPN')) === 'NON_PPN' ? 0 : 11;
-  let r, wo, t;
+  const approvedAt = now();
+  let r, wo, t, proforma;
   try {
     await db.transaction(async (tx) => {
       r = await tx.prepare('SELECT * FROM service_reports WHERE id = ? FOR UPDATE').get(ctx.params.id);
@@ -82,31 +74,25 @@ async function approveReportHandler(ctx) {
       wo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(r.work_order_id);
       t = wo ? await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(wo.ticket_id) : null;
       if (!wo || !t) { const e = new Error('Work order atau ticket tidak ditemukan'); e.status = 404; throw e; }
-      const existing = await tx.prepare("SELECT id FROM invoices WHERE work_order_id = ? AND type = 'FINAL'").get(wo.id);
-      if (existing) { const e = new Error('Invoice final untuk work order ini sudah ada'); e.status = 409; throw e; }
+      proforma = await tx.prepare("SELECT * FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(wo.id);
+      if (!proforma || proforma.approval_status !== 'APPROVED') { const e = new Error('Proforma harus disetujui customer sebelum laporan dapat disetujui'); e.status = 409; throw e; }
       await tx.prepare("UPDATE service_reports SET status = 'APPROVED', approved_at = ?, approved_by = ?, updated_at = ? WHERE id = ?")
-        .run(issued, ctx.user.id, issued, r.id);
-      await tx.prepare("UPDATE work_orders SET status = 'APPROVED', updated_at = ? WHERE id = ?").run(issued, wo.id);
-      await tx.prepare("UPDATE tickets SET status = 'CLOSED', closed_at = ?, updated_at = ? WHERE id = ?").run(issued, issued, t.id);
+        .run(approvedAt, ctx.user.id, approvedAt, r.id);
+      await tx.prepare("UPDATE work_orders SET status = 'APPROVED', updated_at = ? WHERE id = ?").run(approvedAt, wo.id);
+      await tx.prepare("UPDATE tickets SET status = 'COMPLETED', updated_at = ? WHERE id = ?").run(approvedAt, t.id);
       await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(uid(), t.id, t.status, 'CLOSED', ctx.user.id, 'Laporan service disetujui', issued);
-      await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, issued_at, due_at, created_at, updated_at, version)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'SENT', 'FINAL', ?, ?, ?, ?, 1)`)
-        .run(invId, invNumber, t.id, wo.id, t.customer_id, laborCost, taxRate, issued, due, issued, issued);
-      await snapshotWorkOrderInvoiceItems(tx, invId, wo.id, laborCost, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa');
+        .run(uid(), t.id, t.status, 'COMPLETED', ctx.user.id, 'Laporan disetujui; pembayaran proforma tersedia', approvedAt);
     });
   } catch (e) {
     if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
     throw e;
   }
-  const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invId);
-  const totals = invoiceTotals(inv, await getInvoiceItems(invId));
-  timeline(t.id, 'APPROVAL', 'Laporan disetujui', `Service report ${r.number} disetujui. Invoice dibuat.`, 'CUSTOMER_VISIBLE', ctx.user.id);
-  notify({ customer_id: t.customer_id, title: `Laporan ${t.number} disetujui`, body: `Service report ${r.number} disetujui. Invoice ${invNumber} diterbitkan (Total Rp ${totals.total.toLocaleString('id-ID')})`, type: 'REPORT', ref_type: 'ticket', ref_id: t.id });
-  notify({ customer_id: t.customer_id, title: `Invoice ${invNumber} diterbitkan`, body: `Jatuh tempo ${due}`, type: 'INVOICE', ref_type: 'invoice', ref_id: invId });
-  if (wo.technician_id) notify({ user_id: wo.technician_id, title: `Laporan ${r.number} disetujui`, body: `Work order ${wo.number} closed`, type: 'REPORT', ref_type: 'service_report', ref_id: r.id });
-  audit(ctx.user, 'UPDATE', 'service_report', r.id, `Approve laporan ${r.number} + invoice ${invNumber}`, ctx.ip);
-  sendJSON(ctx.res, 200, { ok: true, invoice_id: invId, invoice_number: invNumber });
+  const totals = invoiceTotals(proforma, await getInvoiceItems(proforma.id));
+  timeline(t.id, 'APPROVAL', 'Pekerjaan selesai dan disetujui', `Service report ${r.number} disetujui. Pembayaran proforma ${proforma.number} tersedia.`, 'CUSTOMER_VISIBLE', ctx.user.id);
+  notify({ customer_id: t.customer_id, title: `Pekerjaan ${t.number} selesai`, body: `Silakan bayar proforma ${proforma.number} sebesar Rp ${totals.total.toLocaleString('id-ID')} melalui QRIS atau transfer bank.`, type: 'INVOICE', ref_type: 'invoice', ref_id: proforma.id });
+  if (wo.technician_id) notify({ user_id: wo.technician_id, title: `Laporan ${r.number} disetujui`, body: `Work order ${wo.number} selesai dan menunggu pembayaran customer`, type: 'REPORT', ref_type: 'work_order', ref_id: wo.id });
+  audit(ctx.user, 'UPDATE', 'service_report', r.id, `Approve laporan ${r.number}; pembayaran proforma ${proforma.number} dibuka`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, invoice_id: proforma.id, invoice_number: proforma.number });
 }
 
 async function rejectReportHandler(ctx) {

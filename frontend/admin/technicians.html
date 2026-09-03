@@ -38,7 +38,7 @@
     import { requireAuth } from '/utils/auth.js';
     import { api } from '/services/api.js';
     import { initAdminLayout } from '/components/layout.js';
-    import { spinner, errorState, emptyState, table, openModal, toast, refreshIcons } from '/components/ui.js';
+    import { spinner, errorState, emptyState, table, openModal, confirmDialog, toast, refreshIcons } from '/components/ui.js';
     import { fmtDate, esc } from '/utils/format.js';
 
     requireAuth(['admin']);
@@ -91,13 +91,36 @@
           <td class="px-4 py-3 text-slate-600 text-sm">${esc(u.phone || '-')}</td>
           <td class="px-4 py-3 text-slate-600 text-sm">${esc(u.customer_name || '-')}</td>
           <td class="px-4 py-3 text-slate-600 text-sm whitespace-nowrap">${fmtDate(u.created_at)}</td>
-          <td class="px-4 py-3 text-right">
+          <td class="px-4 py-3 text-right whitespace-nowrap">
             <button class="btn-ghost !p-2" data-edit="${u.id}" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+            ${u.role === 'technician' && u.active ? `<button class="btn-ghost !p-2 !text-red-600 hover:!bg-red-50" data-delete="${u.id}" title="Hapus teknisi"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
           </td>
         </tr>`);
       content.innerHTML = table(['User', 'Role', 'Telepon', 'Customer', 'Dibuat', ''], rows);
       refreshIcons();
       content.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editModal(list.find((x) => x.id === b.dataset.edit))));
+      content.querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', () => deleteTechnician(list.find((x) => x.id === b.dataset.delete))));
+    }
+
+    async function deleteTechnician(u) {
+      const confirmed = await confirmDialog({
+        title: 'Hapus Teknisi',
+        message: `${u.name} akan dinonaktifkan dan tidak dapat login atau menerima penugasan baru. Riwayat service, laporan, foto, dan invoice tetap tersimpan. Lanjutkan?`,
+        confirmLabel: 'Ya, Hapus Teknisi',
+        danger: true
+      });
+      if (!confirmed) return;
+      try {
+        const result = await api.del('/api/users/' + u.id);
+        toast(result.message || 'Teknisi berhasil dihapus dari operasional');
+        load();
+      } catch (e) {
+        const jobs = e.data?.work_orders;
+        const detail = Array.isArray(jobs) && jobs.length
+          ? ` (${jobs.map((wo) => `${wo.number} — ${wo.status}`).join(', ')})`
+          : '';
+        toast(e.message + detail, 'error');
+      }
     }
 
     function editModal(u) {

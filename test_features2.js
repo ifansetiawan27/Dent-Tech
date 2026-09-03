@@ -70,48 +70,79 @@ async function apiCall(page, method, path, body) {
   else bad('auto-match got: ' + tplName);
   const itemCount = woDet.data.checklist?.total_items || 0;
   if (itemCount > 0) ok(`checklist has ${itemCount} items (synced to admin view)`); else bad('no checklist items on WO');
-  await custCtx.close();
 
-  // ===== 3. Technician fills checklist -> sync to customer =====
-  console.log('=== 3. Technician fills checklist, syncs to customer ===');
+  // ===== 3. Diagnosis-first quotation lifecycle =====
+  console.log('=== 3. Diagnosis-first quotation lifecycle ===');
   const techCtx = await browser.newContext();
   const techPage = await techCtx.newPage();
   await login(techPage, 'budi@denttech.id', 'tech123');
-  await apiCall(techPage, 'POST', `/api/work-orders/${woId}/start`);
+  const started = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/start`);
+  if (started.status === 200) ok('technician started inspection'); else bad('start inspection failed: ' + JSON.stringify(started.data));
   const woForChk = await apiCall(techPage, 'GET', '/api/work-orders/' + woId);
   const allItems = woForChk.data.checklist.sections.flatMap((s) => s.items);
   const fill = allItems.map((it) => ({ item_id: it.id, result: 'PASS', note: '' }));
-  await apiCall(techPage, 'POST', `/api/work-orders/${woId}/checklist`, { items: fill });
-  await apiCall(techPage, 'POST', `/api/work-orders/${woId}/diagnosis`, { findings: 'Test finding', root_cause: 'rc', recommendation: 'rec' });
-  await apiCall(techPage, 'POST', `/api/work-orders/${woId}/work-performed`, { description: 'Test work' });
+  const checklistSaved = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/checklist`, { items: fill });
+  if (checklistSaved.status === 200 && checklistSaved.data.checklist.complete) ok('inspection checklist completed'); else bad('checklist save failed: ' + JSON.stringify(checklistSaved.data));
+  const diagnosisSaved = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/diagnosis`, { findings: 'Test finding', root_cause: 'rc', recommendation: 'rec' });
+  if (diagnosisSaved.status === 200) ok('diagnosis recorded'); else bad('diagnosis save failed: ' + JSON.stringify(diagnosisSaved.data));
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-  await apiCall(techPage, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'after', work_order_id: woId, caption: 'after' });
+  for (const kind of ['before', 'equipment_brand', 'equipment_serial']) {
+    const upload = await apiCall(techPage, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind, work_order_id: woId, caption: kind });
+    if (upload.status === 201) ok(`${kind} inspection photo uploaded`); else bad(`${kind} upload failed: ` + JSON.stringify(upload.data));
+  }
+  const submitted = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/submit-diagnosis`);
+  if (submitted.status === 200 && submitted.data.status === 'WAITING_QUOTATION') ok('diagnosis submitted for quotation'); else bad('submit diagnosis failed: ' + JSON.stringify(submitted.data));
+
+  // Preserve proforma UI formatting coverage while the action is available.
+  await page.goto(BASE + '/admin/workorder-detail.html?id=' + woId, { waitUntil: 'networkidle' });
+  if (await page.$('#btn-dl-checklist')) ok('Download Checklist (PDF) button present'); else bad('missing checklist download button');
+  if (await page.$('#btn-proforma')) {
+    ok('Buat Proforma Invoice button present after diagnosis');
+    await page.click('#btn-proforma');
+    await page.waitForTimeout(200);
+    if ((await page.inputValue('#pf-labor')).includes('.')) ok('proforma labor input uses Rupiah separators'); else bad('proforma labor input not formatted');
+    await page.click('[data-modal-close]');
+  } else bad('missing proforma button after diagnosis');
+
+  const setRes = await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'NON_PPN', default_labor: 350000 });
+  if (setRes.data.tax_mode === 'NON_PPN') ok('invoice settings saved (Non-PPN)'); else bad('settings save failed');
+  const pf = await apiCall(page, 'POST', '/api/invoices/proforma', { work_order_id: woId, labor_cost: 350000, due_days: 14 });
+  if (pf.status === 201) ok('admin created proforma: ' + pf.data.number); else bad('proforma failed: ' + JSON.stringify(pf.data));
+  const pfId = pf.data.id;
+
+  const customerApproval = await apiCall(custPage, 'POST', `/api/invoices/${pfId}/approve`);
+  if (customerApproval.status === 200 && customerApproval.data.approval_status === 'APPROVED') ok('customer approved proforma'); else bad('proforma approval failed: ' + JSON.stringify(customerApproval.data));
+
+  const repairStarted = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/start-repair`);
+  if (repairStarted.status === 200 && repairStarted.data.status === 'REPAIR_STARTED') ok('technician started approved repair'); else bad('start repair failed: ' + JSON.stringify(repairStarted.data));
+  const work = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/work-performed`, { description: 'Test work' });
+  if (work.status === 201) ok('repair work recorded without part usage'); else bad('work record failed: ' + JSON.stringify(work.data));
+  const afterUpload = await apiCall(techPage, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'after', work_order_id: woId, caption: 'after' });
+  if (afterUpload.status === 201) ok('after repair photo uploaded'); else bad('after upload failed: ' + JSON.stringify(afterUpload.data));
   const comp = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/complete`, { summary: 'Test complete' });
   if (comp.status === 200) ok('technician completed job'); else bad('complete failed: ' + JSON.stringify(comp.data));
   await techCtx.close();
 
-  // admin approves -> invoice with evidence
-  const reportId = comp.data.report_id;
-  const appr = await apiCall(page, 'POST', `/api/service-reports/${reportId}/approve`, { labor_cost: 400000, due_days: 14 });
-  const invId = appr.data.invoice_id;
-  if (invId) ok('invoice created on approval'); else bad('no invoice created');
+  const invId = comp.data.invoice_id;
+  if (comp.status === 200 && invId === pfId) ok('technician completion auto-approves report and reuses existing proforma'); else bad('completion did not reuse proforma: ' + JSON.stringify(comp.data));
+  const invoicesBeforePayment = await db.prepare('SELECT id, type, status FROM invoices WHERE work_order_id = ? ORDER BY created_at').all(woId);
+  if (invoicesBeforePayment.length === 1 && invoicesBeforePayment[0].id === pfId && invoicesBeforePayment[0].type === 'PROFORMA') ok('no duplicate final invoice exists before payment');
+  else bad('unexpected invoices before payment: ' + JSON.stringify(invoicesBeforePayment));
+
   const invDet = await apiCall(page, 'GET', '/api/invoices/' + invId);
   const evPhotos = invDet.data.evidence?.photos?.length || 0;
   const evChk = invDet.data.evidence?.checklist?.total_items || 0;
-  if (evPhotos > 0) ok(`invoice evidence has ${evPhotos} photo(s) for attachment`); else bad('no photos in invoice evidence');
+  if (evPhotos >= 4) ok(`invoice evidence has ${evPhotos} required photos`); else bad('invoice evidence is missing required photos');
   if (evChk > 0) ok(`invoice evidence has checklist (${evChk} items) for attachment`); else bad('no checklist in invoice evidence');
 
-  // customer sees checklist on ticket detail
-  const custCtx2 = await browser.newContext();
-  const custPage2 = await custCtx2.newPage();
-  await login(custPage2, 'ratna@denttech.id', 'customer123');
-  const custWo = await apiCall(custPage2, 'GET', '/api/work-orders/' + woId);
+  // customer sees checklist immediately after technician completion
+  const custWo = await apiCall(custPage, 'GET', '/api/work-orders/' + woId);
   const custChk = custWo.data.checklist?.total_items || 0;
   if (custChk > 0) ok(`customer sees filled checklist (${custChk} items) after approval`); else bad('customer cannot see checklist');
-  await custCtx2.close();
+  await custCtx.close();
   await ctx.close();
 
-  // ===== 4. Admin UI buttons (checklist PDF, proforma, edit, downloads) =====
+  // ===== 4. Admin UI buttons (checklist PDF, edit, downloads) =====
   console.log('=== 4. Admin UI buttons ===');
   ctx = await browser.newContext();
   page = await ctx.newPage();
@@ -119,13 +150,6 @@ async function apiCall(page, method, path, body) {
   await login(page, 'admin@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/workorder-detail.html?id=' + woId, { waitUntil: 'networkidle' });
   if (await page.$('#btn-dl-checklist')) ok('Download Checklist (PDF) button present'); else bad('missing checklist download button');
-  if (await page.$('#btn-proforma')) {
-    ok('Buat Proforma Invoice button present');
-    await page.click('#btn-proforma');
-    await page.waitForTimeout(200);
-    if ((await page.inputValue('#pf-labor')).includes('.')) ok('proforma labor input uses Rupiah separators'); else bad('proforma labor input not formatted');
-    await page.click('[data-modal-close]');
-  } else bad('missing proforma button');
   await page.goto(BASE + '/admin/tickets.html', { waitUntil: 'networkidle' });
   if (await page.$('[data-edit]')) ok('Edit button present on tickets list'); else bad('missing edit button on tickets');
   await page.goto(BASE + '/admin/ticket-detail.html?id=' + newTicketId, { waitUntil: 'networkidle' });
@@ -157,20 +181,19 @@ async function apiCall(page, method, path, body) {
   const after = await apiCall(page, 'GET', '/api/tickets/' + newTicketId);
   if (after.data.ticket.problem === 'Edited problem' && after.data.ticket.equipment_brand === 'TUTTNAUER 2540M-EDITED') ok('ticket fields updated'); else bad('ticket fields not updated');
 
-  // ===== 6. Invoice settings + Proforma + watermark =====
-  console.log('=== 6. Invoice settings + Proforma ===');
-  const setRes = await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'NON_PPN', default_labor: 350000 });
-  if (setRes.data.tax_mode === 'NON_PPN') ok('invoice settings saved (Non-PPN)'); else bad('settings save failed');
-  const pf = await apiCall(page, 'POST', '/api/invoices/proforma', { work_order_id: woId, labor_cost: 350000, due_days: 14 });
-  if (pf.status === 201) ok('proforma invoice created: ' + pf.data.number); else bad('proforma failed: ' + JSON.stringify(pf.data));
-  const pfDet = await apiCall(page, 'GET', '/api/invoices/' + pf.data.id);
-  if (pfDet.data.invoice.type === 'PROFORMA') ok('invoice marked as PROFORMA'); else bad('type not PROFORMA');
+  // ===== 6. Existing proforma payment conversion + watermark =====
+  console.log('=== 6. Existing Proforma Payment ===');
+  const pfDet = await apiCall(page, 'GET', '/api/invoices/' + pfId);
+  if (pfDet.data.invoice.type === 'PROFORMA') ok('invoice remains PROFORMA before payment'); else bad('type not PROFORMA before payment');
   if (pfDet.data.invoice.tax_rate === 0) ok('Non-PPN applied (tax_rate 0)'); else bad('tax_rate should be 0, got ' + pfDet.data.invoice.tax_rate);
   const pfPhotos = pfDet.data.evidence?.photos?.length || 0;
-  if (pfPhotos > 0) ok('proforma carries photo attachments'); else bad('proforma has no photo attachments');
-  // pay the proforma -> status PAID (watermark LUNAS)
-  const pay = await apiCall(page, 'POST', `/api/invoices/${pf.data.id}/pay`, { method: 'TRANSFER', reference: 'PF-1' });
-  if (pay.status === 200) ok('proforma paid (watermark -> LUNAS)'); else bad('pay proforma failed');
+  if (pfPhotos >= 4) ok('proforma carries all required photo attachments'); else bad('proforma is missing photo attachments');
+  // Payment converts this same record to FINAL/PAID; no second invoice is created.
+  const pay = await apiCall(page, 'POST', `/api/invoices/${pfId}/pay`, { method: 'TRANSFER', reference: 'PF-1' });
+  if (pay.status === 200) ok('proforma paid (watermark -> LUNAS)'); else bad('pay proforma failed: ' + JSON.stringify(pay.data));
+  const invoicesAfterPayment = await db.prepare('SELECT id, type, status, proforma_number FROM invoices WHERE work_order_id = ? ORDER BY created_at').all(woId);
+  if (invoicesAfterPayment.length === 1 && invoicesAfterPayment[0].id === pfId && invoicesAfterPayment[0].type === 'FINAL' && invoicesAfterPayment[0].status === 'PAID') ok('payment converts the existing proforma without duplication');
+  else bad('unexpected invoices after payment: ' + JSON.stringify(invoicesAfterPayment));
   // restore settings to PPN
   await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'PPN' });
   await ctx.close();

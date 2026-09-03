@@ -5,7 +5,11 @@ export const TICKET_STATUS = {
   OPEN: { label: 'Open', cls: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-500' },
   REVIEWING: { label: 'Reviewing', cls: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-500' },
   ASSIGNED: { label: 'Assigned', cls: 'bg-violet-50 text-violet-700 ring-violet-200', dot: 'bg-violet-500' },
-  IN_PROGRESS: { label: 'In Progress', cls: 'bg-sky-50 text-sky-700 ring-sky-200', dot: 'bg-sky-500' },
+  IN_PROGRESS: { label: 'Inspection', cls: 'bg-sky-50 text-sky-700 ring-sky-200', dot: 'bg-sky-500' },
+  WAITING_QUOTATION: { label: 'Menunggu Proforma', cls: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-500' },
+  WAITING_CUSTOMER_APPROVAL: { label: 'Menunggu Approval', cls: 'bg-violet-50 text-violet-700 ring-violet-200', dot: 'bg-violet-500' },
+  REPAIR_AUTHORIZED: { label: 'Perbaikan Disetujui', cls: 'bg-teal-50 text-teal-700 ring-teal-200', dot: 'bg-teal-500' },
+  REPAIR_IN_PROGRESS: { label: 'Perbaikan Berlangsung', cls: 'bg-sky-50 text-sky-700 ring-sky-200', dot: 'bg-sky-500' },
   COMPLETED: { label: 'Completed', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
   CLOSED: { label: 'Closed', cls: 'bg-slate-100 text-slate-600 ring-slate-200', dot: 'bg-slate-400' },
   CANCELLED: { label: 'Cancelled', cls: 'bg-red-50 text-red-700 ring-red-200', dot: 'bg-red-500' }
@@ -13,7 +17,11 @@ export const TICKET_STATUS = {
 
 export const WO_STATUS = {
   ASSIGNED: { label: 'Assigned', cls: 'bg-violet-50 text-violet-700 ring-violet-200' },
-  STARTED: { label: 'In Progress', cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
+  STARTED: { label: 'Inspection', cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
+  WAITING_QUOTATION: { label: 'Menunggu Proforma', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  WAITING_CUSTOMER_APPROVAL: { label: 'Menunggu Approval Customer', cls: 'bg-violet-50 text-violet-700 ring-violet-200' },
+  REPAIR_AUTHORIZED: { label: 'Perbaikan Disetujui', cls: 'bg-teal-50 text-teal-700 ring-teal-200' },
+  REPAIR_STARTED: { label: 'Perbaikan Berlangsung', cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
   COMPLETED: { label: 'Completed', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   APPROVED: { label: 'Approved', cls: 'bg-teal-50 text-teal-700 ring-teal-200' },
   CANCELLED: { label: 'Cancelled', cls: 'bg-red-50 text-red-700 ring-red-200' }
@@ -185,8 +193,8 @@ export function fileToDataUrl(file, maxDim = 1400, quality = 0.82) {
 // ---------- Photo grid + lightbox ----------
 export function photoGrid(photos, { showKind = true } = {}) {
   if (!photos || !photos.length) return '';
-  const kindLabel = { before: 'BEFORE', after: 'AFTER', request: 'REQUEST', other: 'FOTO' };
-  const kindCls = { before: 'bg-slate-700', after: 'bg-emerald-600', request: 'bg-amber-600', other: 'bg-slate-500' };
+  const kindLabel = { before: 'BEFORE', after: 'AFTER', request: 'REQUEST', equipment_brand: 'MEREK', equipment_serial: 'SERIAL', part_replacement: 'PENGGANTIAN PART', other: 'FOTO' };
+  const kindCls = { before: 'bg-slate-700', after: 'bg-emerald-600', request: 'bg-amber-600', equipment_brand: 'bg-blue-600', equipment_serial: 'bg-violet-600', part_replacement: 'bg-red-600', other: 'bg-slate-500' };
   return `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
     ${photos.map((p) => `
       <figure class="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" data-photo="${p.url}" data-caption="${esc(p.caption || '')}">

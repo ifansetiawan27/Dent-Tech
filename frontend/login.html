@@ -86,23 +86,6 @@
           <p class="text-sm text-slate-500 text-center mt-6">Belum punya akun? <a href="/signup.html" class="font-semibold text-blue-600 hover:underline">Daftarkan klinik Anda</a></p>
         </div>
 
-        <div class="mt-6 card p-5">
-          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Akun demo</p>
-          <div class="grid gap-2">
-            <button class="demo-btn flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors text-sm" data-email="admin@denttech.id" data-password="admin123">
-              <span class="flex items-center gap-2"><i data-lucide="shield-check" class="w-4 h-4 text-blue-600"></i> Admin</span>
-              <span class="text-xs text-slate-400">admin@denttech.id</span>
-            </button>
-            <button class="demo-btn flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-colors text-sm" data-email="budi@denttech.id" data-password="tech123">
-              <span class="flex items-center gap-2"><i data-lucide="hard-hat" class="w-4 h-4 text-emerald-600"></i> Technician</span>
-              <span class="text-xs text-slate-400">budi@denttech.id</span>
-            </button>
-            <button class="demo-btn flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 transition-colors text-sm" data-email="ratna@denttech.id" data-password="customer123">
-              <span class="flex items-center gap-2"><i data-lucide="user-check" class="w-4 h-4 text-amber-600"></i> Customer</span>
-              <span class="text-xs text-slate-400">ratna@denttech.id</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -166,13 +149,6 @@
       doLogin(email, password);
     });
 
-    document.querySelectorAll('.demo-btn').forEach((b) => {
-      b.addEventListener('click', () => {
-        document.getElementById('email').value = b.dataset.email;
-        document.getElementById('password').value = b.dataset.password;
-        doLogin(b.dataset.email, b.dataset.password);
-      });
-    });
   </script>
 </body>
 </html>

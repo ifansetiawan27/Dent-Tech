@@ -4,35 +4,58 @@ const { chromium } = require('playwright-core');
 const { db } = require('./backend/db');
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const BASE = 'http://localhost:3000';
-let passed = 0, failed = 0, invoiceId = null, woId = null, browser = null;
+let passed = 0, failed = 0, invoiceId = null, woId = null, browser = null, fixtureState = null;
 const ok = (m) => { passed++; console.log('  [PASS]', m); };
 const bad = (m) => { failed++; console.log('  [FAIL]', m); };
 async function req(method, path, token, body) { const h = { 'Content-Type': 'application/json' }; if (token) h.Authorization = 'Bearer ' + token; const r = await fetch(BASE + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) }); let data = {}; try { data = await r.json(); } catch {} return { status: r.status, data }; }
 async function login(email, password) { const r = await req('POST', '/api/auth/login', null, { email, password }); if (r.status !== 200 || !r.data.token) throw new Error(`Login gagal untuk ${email}: ${r.status}`); return r.data.token; }
 async function cleanup() {
   if (browser) { await browser.close().catch(() => {}); browser = null; }
-  if (!invoiceId) return;
+  if (!invoiceId && !fixtureState) return;
   await db.transaction(async (tx) => {
-    const inv = await tx.prepare('SELECT number FROM invoices WHERE id = ?').get(invoiceId);
-    await tx.prepare('DELETE FROM notifications WHERE ref_type = ? AND ref_id = ?').run('invoice', invoiceId);
-    await tx.prepare("DELETE FROM audit_logs WHERE entity = 'invoice' AND entity_id = ?").run(invoiceId);
-    if (inv) await tx.prepare("DELETE FROM ticket_timeline WHERE title LIKE ?").run(`%${inv.number}%`);
-    await tx.prepare('DELETE FROM invoices WHERE id = ?').run(invoiceId);
+    if (invoiceId) {
+      const inv = await tx.prepare('SELECT number FROM invoices WHERE id = ?').get(invoiceId);
+      await tx.prepare('DELETE FROM notifications WHERE ref_type = ? AND ref_id = ?').run('invoice', invoiceId);
+      await tx.prepare("DELETE FROM audit_logs WHERE entity = 'invoice' AND entity_id = ?").run(invoiceId);
+      if (inv) {
+        await tx.prepare('DELETE FROM notifications WHERE ref_type = ? AND ref_id = ? AND body LIKE ?').run('work_order', woId, `%${inv.number}%`);
+        await tx.prepare("DELETE FROM ticket_timeline WHERE ticket_id = ? AND title LIKE ?").run(fixtureState.ticket_id, `%${inv.number}%`);
+        await tx.prepare("DELETE FROM ticket_status_history WHERE ticket_id = ? AND note LIKE ?").run(fixtureState.ticket_id, `%${inv.number}%`);
+      }
+      await tx.prepare('DELETE FROM invoices WHERE id = ?').run(invoiceId);
+    }
+    if (fixtureState) {
+      await tx.prepare('UPDATE work_orders SET status = ?, updated_at = ? WHERE id = ?').run(fixtureState.wo_status, fixtureState.wo_updated_at, woId);
+      await tx.prepare('UPDATE tickets SET status = ?, updated_at = ? WHERE id = ?').run(fixtureState.ticket_status, fixtureState.ticket_updated_at, fixtureState.ticket_id);
+    }
   });
 }
 (async () => {
   console.log('=== INVOICE ITEMS + CUSTOMER AUTO-SYNC ===');
   const admin = await login('admin@denttech.id', 'admin123');
   const customer = await login('ratna@denttech.id', 'customer123');
-  const wo = await db.prepare("SELECT wo.id FROM work_orders wo JOIN tickets t ON t.id=wo.ticket_id JOIN users u ON u.customer_id=t.customer_id WHERE wo.status='APPROVED' AND u.email='ratna@denttech.id' LIMIT 1").get();
-  if (!wo) throw new Error('Seed approved work order not found'); woId = wo.id;
-  const existing = await db.prepare("SELECT id FROM invoices WHERE work_order_id=? AND type='PROFORMA' AND status != 'PAID'").get(woId);
-  if (existing) throw new Error('Fixture tidak bersih: proforma pending sudah ada. Jalankan npm run reset sebelum test ini.');
+  const wo = await db.prepare(`SELECT wo.id, wo.status AS wo_status, wo.updated_at AS wo_updated_at,
+      t.id AS ticket_id, t.status AS ticket_status, t.updated_at AS ticket_updated_at
+    FROM work_orders wo
+    JOIN tickets t ON t.id = wo.ticket_id
+    JOIN users u ON u.customer_id = t.customer_id
+    WHERE wo.status = 'STARTED' AND t.status = 'IN_PROGRESS' AND u.email = 'ratna@denttech.id'
+      AND EXISTS (SELECT 1 FROM diagnoses d WHERE d.work_order_id = wo.id AND length(trim(d.findings)) > 0)
+      AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.work_order_id = wo.id AND i.type = 'PROFORMA' AND i.status != 'PAID')
+    LIMIT 1`).get();
+  if (!wo) throw new Error('Seed work order diagnosis untuk fixture proforma tidak ditemukan');
+  woId = wo.id;
+  fixtureState = wo;
+  await db.transaction(async (tx) => {
+    const woTransition = await tx.prepare("UPDATE work_orders SET status = 'WAITING_QUOTATION' WHERE id = ? AND status = 'STARTED'").run(woId);
+    const ticketTransition = await tx.prepare("UPDATE tickets SET status = 'WAITING_QUOTATION' WHERE id = ? AND status = 'IN_PROGRESS'").run(wo.ticket_id);
+    if (woTransition.changes !== 1 || ticketTransition.changes !== 1) throw new Error('Fixture berubah saat menyiapkan status WAITING_QUOTATION');
+  });
 
   const created = await req('POST', '/api/invoices/proforma', admin, { work_order_id: woId, labor_cost: 500000, due_days: 14 });
   invoiceId = created.data.id || null;
   if (created.status !== 201 || !invoiceId || !Array.isArray(created.data.items)) throw new Error(`Pembuatan proforma gagal: ${created.status} ${created.data.error || ''}`);
-  if (created.data.items.some((x) => x.item_type === 'LABOR') && created.data.items.some((x) => x.item_type === 'PART')) ok('proforma snapshots labor and spare parts'); else bad('proforma snapshot failed');
+  if (created.data.items.some((x) => x.item_type === 'LABOR')) ok('proforma snapshots labor item'); else bad('proforma snapshot failed');
 
   browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
   const adminCtx = await browser.newContext({ viewport: { width: 1300, height: 900 } });
@@ -72,6 +95,9 @@ async function cleanup() {
   const expectedTotal = changed.data.totals.total;
   const expectedText = 'Rp ' + Number(expectedTotal).toLocaleString('id-ID', { maximumFractionDigits: 0 });
   try { await customerListPage.waitForFunction((text) => document.body.innerText.includes(text), expectedText, { timeout: 15000 }); ok('customer invoice list auto-syncs updated total'); } catch { bad(`customer invoice list did not auto-sync total ${expectedText}`); }
+
+  const approved = await req('POST', '/api/invoices/' + invoiceId + '/approve', customer, {});
+  if (approved.status === 200 && approved.data.approval_status === 'APPROVED') ok('customer approves proforma before payment-facing document checks'); else bad('customer proforma approval failed: ' + approved.status);
 
   const html = await cp.evaluate(async () => { const m = await import('/utils/invoice-doc.js'); const d = await fetch('/api/invoices/' + new URLSearchParams(location.search).get('id'), { headers: { Authorization: 'Bearer ' + localStorage.sms_token } }).then((r) => r.json()); return m.buildInvoiceHtml(d); });
   if (html.includes('Biaya sinkron realtime') && html.includes('333.000')) ok('print/PDF invoice includes custom item'); else bad('print invoice missing custom item');

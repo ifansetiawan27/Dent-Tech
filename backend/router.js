@@ -45,6 +45,7 @@ route('GET', '/api/auth/photo', null, authH.getPhotoHandler);
 route('GET', '/api/users', ['admin'], authH.listUsersHandler);
 route('POST', '/api/users', ['admin'], authH.createUserHandler);
 route('PUT', '/api/users/:id', ['admin'], authH.updateUserHandler);
+route('DELETE', '/api/users/:id', ['admin'], authH.deleteTechnicianHandler);
 
 route('GET', '/api/customers', ['admin'], masterH.listCustomersHandler);
 route('POST', '/api/customers', ['admin'], masterH.createCustomerHandler);
@@ -81,6 +82,8 @@ route('POST', '/api/tickets/:id/internal-notes', ['admin', 'technician'], ticket
 route('GET', '/api/work-orders', ['admin', 'technician'], woH.listWorkOrdersHandler);
 route('GET', '/api/work-orders/:id', [], woH.getWorkOrderHandler);
 route('POST', '/api/work-orders/:id/start', ['admin', 'technician'], woH.startWorkOrderHandler);
+route('POST', '/api/work-orders/:id/submit-diagnosis', ['admin', 'technician'], woH.submitDiagnosisHandler);
+route('POST', '/api/work-orders/:id/start-repair', ['admin', 'technician'], woH.startRepairHandler);
 route('POST', '/api/work-orders/:id/checklist', ['admin', 'technician'], woH.saveChecklistHandler);
 route('POST', '/api/work-orders/:id/diagnosis', ['admin', 'technician'], woH.saveDiagnosisHandler);
 route('POST', '/api/work-orders/:id/work-performed', ['admin', 'technician'], woH.addWorkPerformedHandler);
@@ -102,6 +105,7 @@ route('PUT', '/api/invoice-settings', ['admin'], invoicesH.updateInvoiceSettings
 route('POST', '/api/invoices/proforma', ['admin'], invoicesH.createProformaHandler);
 route('GET', '/api/invoices/:id', ['admin', 'customer'], invoicesH.getInvoiceHandler);
 route('PUT', '/api/invoices/:id', ['admin'], invoicesH.updateInvoiceHandler);
+route('POST', '/api/invoices/:id/approve', ['customer'], invoicesH.approveProformaHandler);
 route('POST', '/api/invoices/:id/pay', ['admin'], invoicesH.payInvoiceHandler);
 route('POST', '/api/invoices/:id/payment-orders', ['customer'], walletH.createInvoicePaymentHandler);
 route('GET', '/api/invoices/:id/payment-orders/:orderId', ['customer'], walletH.invoicePaymentStatusHandler);

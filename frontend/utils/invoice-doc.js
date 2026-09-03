@@ -13,9 +13,9 @@ function watermarkHtml(inv) {
 function photosHtml(evidence) {
   const photos = evidence?.photos || [];
   if (!photos.length) return '';
-  const kindLabel = { before: 'BEFORE', after: 'AFTER', request: 'REQUEST' };
+  const kindLabel = { before: 'BEFORE', after: 'AFTER', request: 'REQUEST', equipment_brand: 'MEREK', equipment_serial: 'SERIAL', part_replacement: 'PENGGANTIAN PART', other: 'FOTO' };
   const figs = photos.map((p) => {
-    const k = ['before', 'after', 'request'].includes(p.kind) ? p.kind : 'request';
+    const k = kindLabel[p.kind] ? p.kind : 'other';
     return `<figure>
       <span class="photo-label ${k}">${kindLabel[k] || 'FOTO'}</span>
       <img src="${p.url}" alt="${esc(p.caption || p.kind)}">
@@ -47,7 +47,7 @@ function bankInfoHtml(bank) {
   if (!bank || (!bank.bank_name && !bank.bank_account_name && !bank.bank_account_number)) return '';
   return `
   <div class="bank">
-    <h4>Transfer Bank Jago</h4>
+    <h4>Transfer Bank${bank.bank_name ? ` — ${esc(bank.bank_name)}` : ''}</h4>
     <div class="muted" style="margin-bottom:4px">Silakan lakukan pembayaran melalui transfer ke rekening berikut:</div>
     <table class="bank-table">
       ${bank.bank_name ? `<tr><td>Nama Bank</td><td><b>${esc(bank.bank_name)}</b></td></tr>` : ''}
@@ -70,9 +70,7 @@ function qrisInfoHtml(order) {
     ${qr ? `<img src="${esc(qr)}" alt="Kode QRIS pembayaran">` : ''}
     <table class="bank-table">
       <tr><td>Order ID</td><td><b>${esc(order.order_id || '-')}</b></td></tr>
-      <tr><td>Nominal</td><td><b>${fmtIDR(order.amount)}</b></td></tr>
-      <tr><td>Biaya QRIS</td><td><b>${fmtIDR(order.gateway_fee || 0)}</b></td></tr>
-      <tr><td>Total Bayar</td><td><b>${fmtIDR(order.total_payment ?? order.amount)}</b></td></tr>
+      <tr><td>Total Bayar</td><td><b>${fmtIDR(order.amount)}</b></td></tr>
       <tr><td>Berlaku Sampai</td><td><b>${order.expired_at ? fmtDateTime(order.expired_at) : '-'}</b></td></tr>
     </table>
     <div class="muted" style="margin-top:6px">Pembayaran diverifikasi otomatis oleh Pakasir.</div>

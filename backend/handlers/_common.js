@@ -2,8 +2,8 @@
 const { db } = require('../db');
 const { uid, now } = require('../util');
 
-const TICKET_STATUSES = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'];
-const WO_STATUSES = ['ASSIGNED', 'STARTED', 'COMPLETED', 'APPROVED', 'CANCELLED'];
+const TICKET_STATUSES = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'];
+const WO_STATUSES = ['ASSIGNED', 'STARTED', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_STARTED', 'COMPLETED', 'APPROVED', 'CANCELLED'];
 
 const TICKET_TRANSITIONS = {
   OPEN: ['REVIEWING', 'CANCELLED'],
@@ -123,6 +123,19 @@ function customerVisible(obj, allowedKeys) {
   return out;
 }
 
+const REQUIRED_PHOTO_KINDS = ['before', 'after', 'equipment_brand', 'equipment_serial'];
+
+async function workOrderPhotoRequirements(workOrderId, executor = db) {
+  const rows = await executor.prepare(`SELECT kind, COUNT(*) AS count FROM attachments
+    WHERE work_order_id = ? AND kind IN ('before','after','equipment_brand','equipment_serial','part_replacement')
+      AND mime IN ('image/jpeg','image/png','image/webp') GROUP BY kind`).all(workOrderId);
+  const counts = Object.fromEntries(rows.map((row) => [row.kind, Number(row.count)]));
+  const partUsed = !!(await executor.prepare('SELECT id FROM part_usages WHERE work_order_id = ? LIMIT 1').get(workOrderId));
+  const required = [...REQUIRED_PHOTO_KINDS, ...(partUsed ? ['part_replacement'] : [])];
+  const missing = required.filter((kind) => !counts[kind]);
+  return { required, counts, missing, part_used: partUsed, complete: missing.length === 0 };
+}
+
 async function buildChecklistState(wo) {
   if (!wo || !wo.checklist_template_id) return null;
   const tpl = await db.prepare('SELECT * FROM checklist_templates WHERE id = ?').get(wo.checklist_template_id);
@@ -164,5 +177,6 @@ module.exports = {
   TICKET_STATUSES, WO_STATUSES, TICKET_TRANSITIONS,
   notify, audit, timeline, setTicketStatus,
   getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder,
-  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, invoiceTotals, customerVisible, buildChecklistState
+  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, invoiceTotals, customerVisible,
+  REQUIRED_PHOTO_KINDS, workOrderPhotoRequirements, buildChecklistState
 };

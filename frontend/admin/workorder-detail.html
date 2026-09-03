@@ -51,7 +51,9 @@
     function render() {
       const { work_order: wo, checklist, diagnosis, work_performed, part_usages, parts_total, photos, service_report } = data;
       const before = photos.filter((p) => p.kind === 'before' || p.kind === 'request');
+      const identity = photos.filter((p) => ['equipment_brand', 'equipment_serial'].includes(p.kind));
       const after = photos.filter((p) => p.kind === 'after');
+      const partPhotos = photos.filter((p) => p.kind === 'part_replacement');
 
       content.innerHTML = `
         <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
@@ -66,8 +68,8 @@
           </div>
           <div class="flex gap-2 flex-wrap justify-end">
             ${checklist ? `<button id="btn-dl-checklist" class="btn-secondary"><i data-lucide="file-down" class="w-4 h-4"></i> Download Checklist (PDF)</button>` : ''}
-            ${['COMPLETED', 'APPROVED'].includes(wo.status) ? `<button id="btn-proforma" class="btn-secondary"><i data-lucide="file-text" class="w-4 h-4"></i> Buat Proforma Invoice</button>` : ''}
-            ${['ASSIGNED', 'STARTED'].includes(wo.status) ? `<button id="btn-resched" class="btn-secondary"><i data-lucide="calendar-clock" class="w-4 h-4"></i> Reschedule</button>` : ''}
+            ${wo.status === 'WAITING_QUOTATION' ? `<button id="btn-proforma" class="btn-secondary"><i data-lucide="file-text" class="w-4 h-4"></i> Buat Proforma Invoice</button>` : ''}
+            ${['ASSIGNED', 'STARTED', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_STARTED'].includes(wo.status) ? `<button id="btn-resched" class="btn-secondary"><i data-lucide="calendar-clock" class="w-4 h-4"></i> Reschedule</button>` : ''}
           </div>
         </div>
 
@@ -121,7 +123,9 @@
             </div>
 
             ${before.length ? `<div class="card p-5"><h3 class="font-semibold text-slate-800 mb-3">Foto Sebelum / Request</h3>${photoGrid(before)}</div>` : ''}
+            ${identity.length ? `<div class="card p-5"><h3 class="font-semibold text-slate-800 mb-3">Identitas Equipment</h3>${photoGrid(identity)}</div>` : ''}
             ${after.length ? `<div class="card p-5"><h3 class="font-semibold text-slate-800 mb-3">Foto Sesudah</h3>${photoGrid(after)}</div>` : ''}
+            ${partPhotos.length ? `<div class="card p-5"><h3 class="font-semibold text-slate-800 mb-3">Bukti Penggantian Part</h3>${photoGrid(partPhotos)}</div>` : ''}
           </div>
 
           <div class="space-y-4">
@@ -150,19 +154,7 @@
                 ${service_report.technician_note ? `<div><p class="text-xs text-slate-400 mb-0.5">Catatan Teknisi</p><p class="text-slate-600 whitespace-pre-wrap">${esc(service_report.technician_note)}</p></div>` : ''}
                 ${service_report.approved_at ? `<div><p class="text-xs text-slate-400 mb-0.5">Disetujui</p><p class="text-slate-700">${fmtDateTime(service_report.approved_at)}</p></div>` : ''}
               </div>
-              ${service_report.status === 'SUBMITTED' ? `
-                <div class="mt-4 pt-4 border-t border-slate-100 space-y-3">
-                  <div>
-                    <label class="label">Biaya Jasa (Rp)</label>
-                    <input id="ap-labor" type="text" inputmode="numeric" class="input" value="${formatIDRInput(500000)}">
-                  </div>
-                  <div>
-                    <label class="label">Jatuh Tempo (hari)</label>
-                    <select id="ap-due" class="input"><option value="7">7 hari</option><option value="14" selected>14 hari</option><option value="30">30 hari</option></select>
-                  </div>
-                  <button id="btn-approve" class="btn-primary w-full"><i data-lucide="check-circle" class="w-4 h-4"></i> Setujui & Buat Invoice</button>
-                  <button id="btn-reject" class="btn-secondary w-full"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Minta Revisi</button>
-                </div>` : ''}
+              ${service_report.status === 'APPROVED' ? `<div class="mt-4 pt-4 border-t border-slate-100 text-xs text-emerald-700">Laporan otomatis disetujui saat teknisi menyelesaikan pekerjaan. Pembayaran customer telah dibuka.</div>` : ''}
             </div>` : ''}
           </div>
         </div>`;
@@ -187,7 +179,7 @@
         const m = openModal({
           title: 'Buat Proforma Invoice', size: 'sm',
           body: `<div class="space-y-4">
-            <p class="text-sm text-slate-500">Proforma invoice untuk <b>${wo.number}</b> akan dikirim ke customer sebagai penagihan, dilampiri foto & checklist teknisi.</p>
+             <p class="text-sm text-slate-500">Proforma biaya perbaikan untuk <b>${wo.number}</b> akan dikirim ke customer untuk disetujui sebelum teknisi mulai memperbaiki unit.</p>
             <div><label class="label">Biaya Jasa (Rp)</label><input id="pf-labor" type="text" inputmode="numeric" class="input" value="${formatIDRInput(settings.default_labor || 500000)}"></div>
             <div><label class="label">Jatuh Tempo (hari)</label>
               <select id="pf-due" class="input"><option value="7">7 hari</option><option value="14" selected>14 hari</option><option value="30">30 hari</option></select>
@@ -233,41 +225,6 @@
         });
       });
 
-      const approveLaborEl = bindIDRInput(document.getElementById('ap-labor'));
-      const btnApprove = document.getElementById('btn-approve');
-      if (btnApprove) btnApprove.addEventListener('click', async () => {
-        const labor = parseIDR(approveLaborEl.value);
-        const due = Number(document.getElementById('ap-due').value) || 14;
-        btnApprove.disabled = true;
-        try {
-          const res = await api.post(`/api/service-reports/${service_report.id}/approve`, { labor_cost: labor, due_days: due });
-          toast(`Laporan disetujui — invoice ${res.invoice_number} dibuat`);
-          load();
-        } catch (e) { toast(e.message, 'error'); btnApprove.disabled = false; }
-      });
-
-      const btnReject = document.getElementById('btn-reject');
-      if (btnReject) btnReject.addEventListener('click', () => {
-        const m = openModal({
-          title: 'Minta Revisi Laporan', size: 'sm',
-          body: `<label class="label">Catatan revisi untuk teknisi</label><textarea id="rj-note" class="input" placeholder="Jelaskan apa yang perlu diperbaiki..."></textarea>`,
-          footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="rj-submit" class="btn-danger">Kirim Revisi</button>`
-        });
-        m.el.querySelector('#rj-submit').addEventListener('click', async () => {
-          try {
-            await api.post(`/api/service-reports/${service_report.id}/reject`, { note: m.el.querySelector('#rj-note').value.trim() });
-            m.close(); toast('Revisi dikirim ke teknisi'); load();
-          } catch (e) { toast(e.message, 'error'); }
-        });
-      });
-
-      (async () => {
-        try {
-          const s = await api.get('/api/invoice-settings');
-          const el = document.getElementById('ap-labor');
-          if (el && s.default_labor) el.value = formatIDRInput(s.default_labor);
-        } catch {}
-      })();
     }
 
     if (woId) load();

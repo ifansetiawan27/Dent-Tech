@@ -13,14 +13,14 @@ async function check(condition, message) { condition ? ok(message) : bad(message
 const user = { id: 'user-1', customer_id: 'customer-1', role: 'customer', name: 'UI Customer', email: 'ui@example.test' };
 const admin = { id: 'admin-1', role: 'admin', name: 'UI Admin', email: 'admin-ui@example.test' };
 const invoice = {
-  invoice: { id: 'inv-1', number: 'INV-UI-001', type: 'INVOICE', status: 'SENT', version: 1, issued_at: '2026-08-31T10:00:00Z', due_at: '2026-09-07' },
+  invoice: { id: 'inv-1', number: 'INV-UI-001', type: 'INVOICE', status: 'SENT', approval_status: 'NOT_REQUIRED', version: 1, issued_at: '2026-08-31T10:00:00Z', due_at: '2026-09-07' },
   totals: { items_total: 250000, discount: 0, tax_rate: 0, tax: 0, total: 250000 },
   items: [{ id: 'item-1', item_type: 'LABOR', description: 'Servis unit', qty: 1, unit: 'unit', unit_price: 250000 }],
   customer: { name: 'UI Customer' }, payments: [], ticket: null, work_order: null, evidence: { photos: [] },
   payment_account: { bank_name: 'Bank Jago', bank_account_name: 'Dent Tech', bank_account_number: '1234567890' },
   payment_options: { bank: { bank_name: 'Bank Jago', bank_account_name: 'Dent Tech', bank_account_number: '1234567890' }, pakasir_qris: null }
 };
-const order = { id: 'order-1', order_id: 'INV-order-1', status: 'PENDING', amount: 250000, gateway_fee: 1750, total_payment: 251750, expired_at: '2026-09-01T10:00:00Z', qr_data_url: QR };
+const order = { id: 'order-1', order_id: 'INV-order-1', status: 'PENDING', amount: 250000, total_payment: 250000, expired_at: '2026-09-01T10:00:00Z', qr_data_url: QR };
 
 async function installMocks(page, mockUser = user) {
   await page.addInitScript((u) => {
@@ -38,8 +38,8 @@ async function installMocks(page, mockUser = user) {
     else if (path === '/api/customers/customer-1') body = { customer: { address: 'Jl. Uji', city: 'Jakarta' } };
     else if (path === '/api/wallet') body = { wallet: { id: 'wallet-1', balance: 0 } };
     else if (path === '/api/wallet/history') body = { wallet: { id: 'wallet-1', balance: 0 }, transactions: [] };
-    else if (path === '/api/wallet/topups' && req.method() === 'POST') { status = 201; body = { order: { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 101000, gateway_fee: 1000 } }; }
-    else if (path === '/api/wallet/topups/topup-1') body = { order: { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 101000, gateway_fee: 1000 }, wallet: { balance: 0 } };
+    else if (path === '/api/wallet/topups' && req.method() === 'POST') { status = 201; body = { order: { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 100000 } }; }
+    else if (path === '/api/wallet/topups/topup-1') body = { order: { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 100000 }, wallet: { balance: 0 } };
     else if (path === '/api/invoices/inv-1' && req.method() === 'GET') body = invoice;
     else if (path === '/api/invoices/inv-1/payment-orders' && req.method() === 'POST') { status = 201; body = { order }; }
     else if (path === '/api/invoices/inv-1/payment-orders/order-1') body = { order };
@@ -85,7 +85,7 @@ async function installMocks(page, mockUser = user) {
   await page.click('#create-topup');
   await page.waitForSelector('#topup-order img');
   const walletText = await page.locator('#topup-order').innerText();
-  await check(walletText.includes('WT-topup-1') && walletText.includes('Rp 101.000') && !walletText.includes('Biaya QRIS'), 'wallet displays order ID and exact total without QRIS fee breakdown');
+  await check(walletText.includes('WT-topup-1') && walletText.includes('Rp 100.000') && !walletText.includes('Biaya QRIS'), 'wallet displays exact zero-fee total without QRIS fee breakdown');
   await check(walletText.includes('diverifikasi otomatis'), 'wallet warns QRIS verification is automatic');
 
   await page.goto(BASE + '/customer/invoice-detail.html?id=inv-1', { waitUntil: 'networkidle' });
@@ -93,7 +93,7 @@ async function installMocks(page, mockUser = user) {
   await page.click('#btn-pay');
   await page.waitForSelector('#payment-order img');
   const invoiceText = await page.locator('#payment-order').innerText();
-  await check(invoiceText.includes('INV-order-1') && invoiceText.includes('Rp 251.750') && invoiceText.includes('Rp 1.750'), 'invoice QRIS displays order, total, and fee');
+  await check(invoiceText.includes('INV-order-1') && invoiceText.includes('Rp 250.000') && !invoiceText.includes('Biaya QRIS') && !invoiceText.includes('Rp 1.750'), 'invoice QRIS displays zero-fee total and hides fee');
   await check(await page.locator('select#cp-method, input#cp-ref').count() === 0, 'manual customer payment confirmation flow is removed');
   const payCalls = [];
   page.on('request', (request) => { if (request.url().includes('/pay')) payCalls.push(request.url()); });

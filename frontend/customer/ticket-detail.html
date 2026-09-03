@@ -38,9 +38,13 @@
       { key: 'OPEN', label: 'Request' },
       { key: 'REVIEWING', label: 'Review' },
       { key: 'ASSIGNED', label: 'Dijadwalkan' },
-      { key: 'IN_PROGRESS', label: 'Dikerjakan' },
+      { key: 'IN_PROGRESS', label: 'Inspeksi' },
+      { key: 'WAITING_QUOTATION', label: 'Proforma' },
+      { key: 'WAITING_CUSTOMER_APPROVAL', label: 'Approval' },
+      { key: 'REPAIR_AUTHORIZED', label: 'Disetujui' },
+      { key: 'REPAIR_IN_PROGRESS', label: 'Perbaikan' },
       { key: 'COMPLETED', label: 'Selesai' },
-      { key: 'CLOSED', label: 'Closed' }
+      { key: 'CLOSED', label: 'Lunas' }
     ];
 
     function stepIndex(status) {
@@ -80,7 +84,7 @@
               <i data-lucide="x-circle" class="w-4 h-4 shrink-0"></i> Ticket ini dibatalkan
             </div>` : `
             <div class="mt-5">
-              <div class="flex items-center">
+               <div class="flex items-center overflow-x-auto pb-1">
                 ${STEPS.map((s, i) => `
                   <div class="flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}">
                     <div class="flex flex-col items-center">
@@ -91,7 +95,7 @@
                     ${i < STEPS.length - 1 ? `<div class="flex-1 h-0.5 mx-1 ${i < idx ? 'bg-blue-600' : 'bg-slate-100'}"></div>` : ''}
                   </div>`).join('')}
               </div>
-              <div class="flex justify-between mt-1.5 text-[9px] text-slate-400 font-medium">
+               <div class="grid grid-cols-10 mt-1.5 text-[8px] text-center text-slate-400 font-medium min-w-[560px]">
                 ${STEPS.map((s, i) => `<span class="${i <= idx ? 'text-blue-600' : ''}">${s.label}</span>`).join('')}
               </div>
             </div>`}
