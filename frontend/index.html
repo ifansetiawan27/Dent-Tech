@@ -25,6 +25,37 @@
     .skip-link { position: fixed; top: .5rem; left: .5rem; z-index: 100; transform: translateY(-150%); border-radius: .5rem; background: #fff; color: #1e40af; padding: .75rem 1rem; font-weight: 700; box-shadow: 0 8px 24px rgba(15,23,42,.2); }
     .skip-link:focus { transform: translateY(0); }
     :focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+    .lucide { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .icon-3d {
+      position: relative;
+      isolation: isolate;
+      border: 1px solid var(--icon-edge);
+      color: var(--icon-color);
+      background: linear-gradient(145deg, var(--icon-highlight), var(--icon-surface));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 -3px 5px rgba(15,23,42,.12), 0 9px 16px -10px var(--icon-shadow);
+      transform: translateY(-1px);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .icon-3d::before {
+      content: '';
+      position: absolute;
+      inset: 3px 5px auto;
+      height: 35%;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,0));
+      pointer-events: none;
+    }
+    .icon-3d .lucide { position: relative; z-index: 1; color: var(--icon-color); filter: drop-shadow(0 1px 0 rgba(255,255,255,.65)); }
+    .group:hover .icon-3d { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -3px 5px rgba(15,23,42,.14), 0 13px 20px -11px var(--icon-shadow); }
+    .icon-3d-blue { --icon-highlight: #ffffff; --icon-surface: #dbeafe; --icon-edge: #bfdbfe; --icon-color: #1d4ed8; --icon-shadow: rgba(37,99,235,.55); }
+    .icon-3d-teal { --icon-highlight: #f0fdfa; --icon-surface: #99f6e4; --icon-edge: #5eead4; --icon-color: #0f766e; --icon-shadow: rgba(13,148,136,.5); }
+    .icon-3d-red { --icon-highlight: #fff7ed; --icon-surface: #fecaca; --icon-edge: #fca5a5; --icon-color: #dc2626; --icon-shadow: rgba(220,38,38,.45); }
+    .icon-3d-dark-blue { --icon-highlight: rgba(96,165,250,.34); --icon-surface: rgba(30,64,175,.48); --icon-edge: rgba(147,197,253,.42); --icon-color: #bfdbfe; --icon-shadow: rgba(0,0,0,.7); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -3px 5px rgba(2,6,23,.3), 0 10px 18px -9px var(--icon-shadow); }
+    .icon-3d-dark-teal { --icon-highlight: rgba(45,212,191,.34); --icon-surface: rgba(15,118,110,.48); --icon-edge: rgba(94,234,212,.42); --icon-color: #99f6e4; --icon-shadow: rgba(0,0,0,.7); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -3px 5px rgba(2,6,23,.3), 0 10px 18px -9px var(--icon-shadow); }
+    .icon-3d-dark-amber { --icon-highlight: rgba(251,191,36,.34); --icon-surface: rgba(180,83,9,.48); --icon-edge: rgba(252,211,77,.42); --icon-color: #fde68a; --icon-shadow: rgba(0,0,0,.7); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -3px 5px rgba(2,6,23,.3), 0 10px 18px -9px var(--icon-shadow); }
+    .icon-on-gradient { filter: drop-shadow(0 2px 2px rgba(15,23,42,.3)); }
+    .icon-glass-3d { box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -4px 8px rgba(15,23,42,.16), 0 10px 18px -13px rgba(15,23,42,.7); }
+    .icon-glass-3d .lucide { filter: drop-shadow(0 2px 2px rgba(15,23,42,.3)); }
     @media (max-width: 767px) {
       #home > .absolute { display: none; }
       .floaty, .floaty-delay { position: static; margin-top: 1rem; animation: none; }
@@ -79,7 +110,7 @@
 
         <div class="flex items-center gap-3">
           <a href="tel:+62895327445799" data-company-phone-link class="hidden md:flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-brand transition">
-            <span class="w-9 h-9 rounded-full bg-brand-soft flex items-center justify-center"><svg class="lucide lucide-phone w-4 h-4 text-brand" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#phone"></use></svg></span>
+            <span class="icon-3d icon-3d-blue w-9 h-9 rounded-full flex items-center justify-center"><svg class="lucide lucide-phone w-4 h-4 text-brand" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#phone"></use></svg></span>
             <span data-company-phone>08953-2744-5799</span>
           </a>
           <a data-auth-cta href="/login.html" class="btn-primary !px-5 hidden sm:inline-flex">
@@ -156,15 +187,15 @@
                 </div>
               </div>
               <div class="mt-6 grid grid-cols-3 gap-3">
-                <div class="bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
+                <div class="icon-glass-3d bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
                   <svg class="lucide lucide-monitor-cog w-5 h-5 text-blue-200 mx-auto" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#monitor-cog"></use></svg>
                   <p class="text-[11px] text-blue-100 mt-2 font-medium">Admin Portal</p>
                 </div>
-                <div class="bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
+                <div class="icon-glass-3d bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
                   <svg class="lucide lucide-hard-hat w-5 h-5 text-emerald-200 mx-auto" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#hard-hat"></use></svg>
                   <p class="text-[11px] text-blue-100 mt-2 font-medium">Technician</p>
                 </div>
-                <div class="bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
+                <div class="icon-glass-3d bg-white/10 border border-white/15 rounded-xl p-3.5 text-center">
                   <svg class="lucide lucide-user-check w-5 h-5 text-amber-200 mx-auto" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#user-check"></use></svg>
                   <p class="text-[11px] text-blue-100 mt-2 font-medium">Customer</p>
                 </div>
@@ -181,7 +212,7 @@
 
           <!-- floating emergency card -->
           <div class="floaty absolute -bottom-7 -left-4 sm:-left-8 bg-white rounded-2xl shadow-lift border border-slate-100 p-4 flex items-center gap-3">
-            <span class="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center"><svg class="lucide lucide-phone-call w-5 h-5 text-red-500" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#phone-call"></use></svg></span>
+            <span class="icon-3d icon-3d-red w-11 h-11 rounded-full flex items-center justify-center"><svg class="lucide lucide-phone-call w-5 h-5 text-red-500" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#phone-call"></use></svg></span>
             <div>
               <p class="text-sm font-bold text-slate-900">Call us for emergency</p>
               <a href="tel:+62895327445799" data-company-phone-link class="text-xs text-brand font-semibold" data-company-phone>08953-2744-5799</a>
@@ -209,17 +240,17 @@
 
       <div class="mt-14 grid md:grid-cols-3 gap-6">
         <div class="reveal card p-8 hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center"><svg class="lucide lucide-target w-6 h-6 text-brand" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#target"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-target w-6 h-6 text-brand" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#target"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Misi Kami</h3>
           <p class="mt-2.5 text-sm text-slate-500 leading-relaxed">Memusatkan operasional service, mengurangi pekerjaan administrasi manual, meningkatkan produktivitas teknisi, serta membangun kepercayaan pelanggan melalui visibilitas penuh.</p>
         </div>
         <div class="reveal card p-8 hover:shadow-soft hover:-translate-y-1 transition duration-300 border-brand/20 bg-gradient-to-b from-brand-soft/40 to-white">
-          <span class="w-12 h-12 rounded-2xl bg-brand flex items-center justify-center"><svg class="lucide lucide-workflow w-6 h-6 text-white" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#workflow"></use></svg></span>
+          <span class="icon-3d icon-3d-dark-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-workflow w-6 h-6 text-white" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#workflow"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">One Unit at a Time!</h3>
           <p class="mt-2.5 text-sm text-slate-500 leading-relaxed">Setiap aktivitas service dapat dilacak — dari permintaan pelanggan hingga riwayat service akhir. Checklist terstandar, bukti foto before/after, dan approval pelanggan dalam satu alur.</p>
         </div>
         <div class="reveal card p-8 hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-med-tealsoft flex items-center justify-center"><svg class="lucide lucide-eye w-6 h-6 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#eye"></use></svg></span>
+          <span class="icon-3d icon-3d-teal w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-eye w-6 h-6 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#eye"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Visi Kami</h3>
           <p class="mt-2.5 text-sm text-slate-500 leading-relaxed">Menjadi platform service management yang profesional dan transparan, dengan riwayat service peralatan yang lengkap, pelacakan spare-part akurat, dan fondasi untuk otomasi masa depan.</p>
         </div>
@@ -242,42 +273,42 @@
       <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- 1 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-wrench w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#wrench"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-wrench w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#wrench"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Repair & Troubleshooting</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Perbaikan dental unit dan peralatan dental lainnya dengan diagnosis terstruktur dan dokumentasi lengkap.</p>
           <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#chevron-right"></use></svg></a>
         </div>
         <!-- 2 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-settings w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#settings"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-settings w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#settings"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Preventive Maintenance</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Perawatan berkala terjadwal untuk memperpanjang usia pakai peralatan dan mencegah kerusakan mendadak.</p>
           <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#chevron-right"></use></svg></a>
         </div>
         <!-- 3 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-plug-zap w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#plug-zap"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-plug-zap w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#plug-zap"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Installation & Commissioning</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Instalasi peralatan dental baru dengan pengujian fungsi dan dokumentasi commissioning yang lengkap.</p>
           <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#chevron-right"></use></svg></a>
         </div>
         <!-- 4 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-search-check w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#search-check"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-search-check w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#search-check"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Inspection & Assessment</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Inspeksi kondisi peralatan dengan checklist terstandar dan laporan hasil yang dapat diakses pelanggan.</p>
           <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#chevron-right"></use></svg></a>
         </div>
         <!-- 5 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-package w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#package"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-package w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#package"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Spare-Part Management</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Pelacakan penggunaan spare-part yang akurat, terintegrasi langsung dengan laporan service dan invoice.</p>
           <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#chevron-right"></use></svg></a>
         </div>
         <!-- 6 -->
         <div class="reveal card p-7 group hover:shadow-soft hover:-translate-y-1 transition duration-300">
-          <span class="w-12 h-12 rounded-2xl bg-brand-soft flex items-center justify-center group-hover:bg-brand transition"><svg class="lucide lucide-file-check-2 w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#file-check-2"></use></svg></span>
+          <span class="icon-3d icon-3d-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-file-check-2 w-6 h-6 text-brand group-hover:text-white transition" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#file-check-2"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-slate-900">Digital Service Report</h3>
           <p class="mt-2 text-sm text-slate-500 leading-relaxed">Laporan service digital dengan foto before/after, approval pelanggan, dan riwayat service yang lengkap.</p>
           <a href="#contact" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">Read More <svg class="lucide lucide-chevron-right w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#chevron-right"></use></svg></a>
@@ -321,7 +352,7 @@
 
       <div class="mt-14 grid md:grid-cols-3 gap-6">
         <div class="reveal bg-white/5 border border-white/10 rounded-2xl p-7 backdrop-blur-sm hover:bg-white/[.08] transition">
-          <span class="w-12 h-12 rounded-2xl bg-blue-500/15 flex items-center justify-center"><svg class="lucide lucide-monitor-cog w-6 h-6 text-blue-400" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#monitor-cog"></use></svg></span>
+          <span class="icon-3d icon-3d-dark-blue w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-monitor-cog w-6 h-6 text-blue-400" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#monitor-cog"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-white">Admin Portal</h3>
           <p class="mt-2 text-sm text-slate-400 leading-relaxed">Kontrol penuh operasional: pelanggan, peralatan, tiket, teknisi, penjadwalan, billing, spare-part, laporan, dan konfigurasi sistem.</p>
           <ul class="mt-4 space-y-2 text-sm text-slate-300">
@@ -331,7 +362,7 @@
           </ul>
         </div>
         <div class="reveal bg-white/5 border border-white/10 rounded-2xl p-7 backdrop-blur-sm hover:bg-white/[.08] transition">
-          <span class="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center"><svg class="lucide lucide-hard-hat w-6 h-6 text-emerald-400" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#hard-hat"></use></svg></span>
+          <span class="icon-3d icon-3d-dark-teal w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-hard-hat w-6 h-6 text-emerald-400" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#hard-hat"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-white">Technician Portal</h3>
           <p class="mt-2 text-sm text-slate-400 leading-relaxed">Terima penugasan, jalankan service, lengkapi checklist detail, dokumentasikan dengan foto, catat spare-part, dan peroleh approval pelanggan.</p>
           <ul class="mt-4 space-y-2 text-sm text-slate-300">
@@ -341,7 +372,7 @@
           </ul>
         </div>
         <div class="reveal bg-white/5 border border-white/10 rounded-2xl p-7 backdrop-blur-sm hover:bg-white/[.08] transition">
-          <span class="w-12 h-12 rounded-2xl bg-amber-500/15 flex items-center justify-center"><svg class="lucide lucide-user-check w-6 h-6 text-amber-400" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#user-check"></use></svg></span>
+          <span class="icon-3d icon-3d-dark-amber w-12 h-12 rounded-2xl flex items-center justify-center"><svg class="lucide lucide-user-check w-6 h-6 text-amber-400" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#user-check"></use></svg></span>
           <h3 class="mt-5 text-lg font-bold text-white">Customer Portal</h3>
           <p class="mt-2 text-sm text-slate-400 leading-relaxed">Ajukan service request, pantau progres, lihat dokumentasi, foto dan laporan, kelola peralatan, serta akses invoice Anda kapan saja.</p>
           <ul class="mt-4 space-y-2 text-sm text-slate-300">
@@ -575,9 +606,9 @@
         <div>
           <h2 class="text-white font-bold text-sm uppercase tracking-widest">Kontak</h2>
           <ul class="mt-5 space-y-4 text-sm">
-            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><svg class="lucide lucide-map-pin w-4 h-4 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#map-pin"></use></svg></span><span class="text-slate-300" data-company-address>Jl. Raya Serpong No. 88, Tangerang Selatan</span></li>
-            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><svg class="lucide lucide-phone w-4 h-4 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#phone"></use></svg></span><a href="tel:+62895327445799" data-company-phone-link class="text-slate-300 hover:text-white transition" data-company-phone>08953-2744-5799</a></li>
-            <li class="flex items-start gap-3"><span class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><svg class="lucide lucide-mail w-4 h-4 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#mail"></use></svg></span><a href="mailto:support@denttech.id" data-company-email-link class="text-slate-300 hover:text-white transition" data-company-email>support@denttech.id</a></li>
+            <li class="flex items-start gap-3"><span class="icon-3d icon-3d-dark-teal w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><svg class="lucide lucide-map-pin w-4 h-4 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#map-pin"></use></svg></span><span class="text-slate-300" data-company-address>Jl. Raya Serpong No. 88, Tangerang Selatan</span></li>
+            <li class="flex items-start gap-3"><span class="icon-3d icon-3d-dark-teal w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><svg class="lucide lucide-phone w-4 h-4 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#phone"></use></svg></span><a href="tel:+62895327445799" data-company-phone-link class="text-slate-300 hover:text-white transition" data-company-phone>08953-2744-5799</a></li>
+            <li class="flex items-start gap-3"><span class="icon-3d icon-3d-dark-teal w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><svg class="lucide lucide-mail w-4 h-4 text-med-teal" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#mail"></use></svg></span><a href="mailto:support@denttech.id" data-company-email-link class="text-slate-300 hover:text-white transition" data-company-email>support@denttech.id</a></li>
           </ul>
           <a data-auth-cta href="/login.html" class="btn-primary mt-6 w-full"><svg class="lucide lucide-calendar-check w-4 h-4" aria-hidden="true"><use href="/assets/landing-icons.svg?v=1#calendar-check"></use></svg><span data-auth-cta-label>Book an Appointment</span></a>
         </div>
