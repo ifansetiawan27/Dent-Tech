@@ -128,6 +128,37 @@ async function uploadPhoto(page, woId, kind) {
   await page.waitForSelector('.tab-pill[data-tab="checklist"]', { timeout: 15000 });
   ok('technician started inspection');
 
+  const equipmentIdentity = {
+    name: 'Dental Unit Ruang 2',
+    typeModel: 'GNATUS S200',
+    serialNumber: 'GN-S200-BROWSER-001'
+  };
+  await page.click('#btn-equipment-identity');
+  await page.waitForSelector('#eq-save', { timeout: 10000 });
+  await page.fill('#eq-name', equipmentIdentity.name);
+  await page.fill('#eq-type-model', equipmentIdentity.typeModel);
+  await page.fill('#eq-serial', equipmentIdentity.serialNumber);
+  await clickForResponse(page, '#eq-save', `/api/work-orders/${woId}/equipment-identity`, 'PUT');
+  await waitForApiState(page, '/api/work-orders/' + woId, (detail) =>
+    detail.work_order?.equipment_identity_confirmed_at &&
+    detail.work_order?.serviced_equipment_name === 'Dental Unit Ruang 2' &&
+    detail.work_order?.serviced_equipment_type_model === 'GNATUS S200' &&
+    detail.work_order?.serviced_equipment_serial_number === 'GN-S200-BROWSER-001');
+  await page.waitForFunction(({ name, typeModel, serialNumber }) => {
+    const values = [...document.querySelectorAll('.card')]
+      .find((card) => card.textContent.includes('Alat yang Diservice'))
+      ?.querySelectorAll('dd');
+    return values?.length === 3 && values[0].textContent.trim() === name &&
+      values[1].textContent.trim() === typeModel && values[2].textContent.trim() === serialNumber;
+  }, equipmentIdentity, { timeout: 15000 });
+  const displayedEquipmentIdentity = await page.locator('.card', { hasText: 'Alat yang Diservice' }).locator('dd').allTextContents();
+  if (displayedEquipmentIdentity.length === 3 &&
+      displayedEquipmentIdentity[0].trim() === equipmentIdentity.name &&
+      displayedEquipmentIdentity[1].trim() === equipmentIdentity.typeModel &&
+      displayedEquipmentIdentity[2].trim() === equipmentIdentity.serialNumber) {
+    ok('technician confirmed equipment identity and displayed values match');
+  } else bad('equipment identity display mismatch: ' + JSON.stringify(displayedEquipmentIdentity));
+
   const checklistItems = await page.locator('.chk-btn[data-result="PASS"]').count();
   for (let i = 0; i < checklistItems; i++) {
     const responsePromise = page.waitForResponse((response) =>

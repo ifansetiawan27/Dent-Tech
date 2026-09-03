@@ -70,6 +70,21 @@ $chk = Req 'POST' "$base/api/work-orders/$WO/checklist" $TT @{items=$items}
 if ($chk.checklist.complete) { Ok "inspection checklist complete" } else { Bad "checklist not complete: $($chk|ConvertTo-Json)" }
 $diag = Req 'POST' "$base/api/work-orders/$WO/diagnosis" $TT @{findings='Unit bermasalah pada power supply'; root_cause='Kabel power putus'; recommendation='Ganti kabel power'}
 if ($diag.ok) { Ok "diagnosis saved" } else { Bad "diagnosis: $($diag|ConvertTo-Json)" }
+$submitWithoutIdentity = Req 'POST' "$base/api/work-orders/$WO/submit-diagnosis" $TT $null
+$submitWithoutIdentityBody = if ($submitWithoutIdentity.body) { $submitWithoutIdentity.body | ConvertFrom-Json } else { $null }
+if ($submitWithoutIdentity.__error -and $submitWithoutIdentity.code -eq 400) {
+  Ok "submit diagnosis blocked before equipment confirmation"
+} else { Bad "submit diagnosis should require equipment identity: $($submitWithoutIdentity|ConvertTo-Json)" }
+$currentWo = Req 'GET' "$base/api/work-orders/$WO" $TT $null
+$equipmentIdentity = Req 'PUT' "$base/api/work-orders/$WO/equipment-identity" $TT @{
+  name='Dental Unit Ruang Operasi'
+  type_model='GNATUS S200'
+  serial_number='GN-S200-API-001'
+  version=[int]$currentWo.work_order.equipment_identity_version
+}
+if ($equipmentIdentity.ok -and $equipmentIdentity.equipment_identity.name -eq 'Dental Unit Ruang Operasi' -and $equipmentIdentity.equipment_identity.type_model -eq 'GNATUS S200' -and $equipmentIdentity.equipment_identity.serial_number -eq 'GN-S200-API-001') {
+  Ok "technician confirmed equipment identity with current version"
+} else { Bad "equipment identity confirmation: $($equipmentIdentity|ConvertTo-Json)" }
 # lifecycle evidence must be JPG, PNG, or WebP; this is a tiny PNG data URL
 $pngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 foreach ($evidence in @(

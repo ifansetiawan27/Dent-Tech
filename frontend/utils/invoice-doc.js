@@ -149,6 +149,7 @@ ${DOC_BASE_CSS}
       ${ticket ? `<div>Ref: <b>${esc(ticket.number)}</b></div>` : ''}
       ${work_order ? `<div>Work Order: <b>${esc(work_order.number)}</b></div>` : ''}
     </div>
+    ${work_order?.equipment_identity_confirmed_at ? `<div class="col"><h4>Alat yang Diservice</h4><div><b>${esc(work_order.equipment_name || '-')}</b></div><div class="muted">Tipe/Model: ${esc(work_order.equipment_type_model || '-')}</div><div class="muted">Serial Number: ${esc(work_order.equipment_serial_number || '-')}</div></div>` : ''}
   </div>
 
   <table class="grid">

@@ -49,6 +49,10 @@ async function apiCall(page, method, path, body) {
   await login(page, 'budi@denttech.id', 'tech123');
   await apiCall(page, 'POST', `/api/work-orders/${woId}/start`);
   const woD = await apiCall(page, 'GET', '/api/work-orders/' + woId);
+  await apiCall(page, 'PUT', `/api/work-orders/${woId}/equipment-identity`, {
+    name: 'Dental Unit', type_model: 'GNATUS', serial_number: 'VISUAL-AUDIT-001',
+    version: Number(woD.data.work_order.equipment_identity_version || 0)
+  });
   const items = woD.data.checklist.sections.flatMap((s) => s.items);
   await apiCall(page, 'POST', `/api/work-orders/${woId}/checklist`, { items: items.map((i) => ({ item_id: i.id, result: 'PASS', note: '' })) });
   await apiCall(page, 'POST', `/api/work-orders/${woId}/diagnosis`, { findings: 'F', root_cause: 'R', recommendation: 'X' });

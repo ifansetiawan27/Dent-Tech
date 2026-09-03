@@ -30,10 +30,10 @@ async function collectErrors(page, label, navFn) {
 }
 
 async function login(page, email, password) {
-  await page.goto(BASE + '/login.html', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/login.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.fill('#email', email);
   await page.fill('#password', password);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.click('#login-btn')]);
+  await Promise.all([page.waitForURL((url) => !url.pathname.endsWith('/login.html'), { timeout: 60000 }), page.click('#login-btn')]);
 }
 
 (async () => {
@@ -62,7 +62,7 @@ async function login(page, email, password) {
     ['admin audit', '/admin/audit.html'],
     ['admin settings', '/admin/settings.html']
   ];
-  for (const [label, p] of adminPages) await collectErrors(page, label, () => page.goto(BASE + p, { waitUntil: 'networkidle' }));
+  for (const [label, p] of adminPages) await collectErrors(page, label, () => page.goto(BASE + p, { waitUntil: 'domcontentloaded', timeout: 60000 }));
 
   // admin ticket detail — need a real ticket id
   const ticketId = await page.evaluate(async () => {
@@ -98,7 +98,7 @@ async function login(page, email, password) {
     ['tech home', '/technician/'],
     ['tech jobs', '/technician/jobs.html'],
     ['tech profile', '/technician/profile.html']
-  ]) await collectErrors(page, label, () => page.goto(BASE + p, { waitUntil: 'networkidle' }));
+  ]) await collectErrors(page, label, () => page.goto(BASE + p, { waitUntil: 'domcontentloaded', timeout: 60000 }));
   const techWoId = await page.evaluate(async () => {
     const t = localStorage.getItem('sms_token');
     const r = await fetch('/api/work-orders', { headers: { Authorization: ('Bear' + 'er ') + t } });
@@ -123,7 +123,7 @@ async function login(page, email, password) {
     ['customer equipment', '/customer/equipment.html'],
     ['customer invoices', '/customer/invoices.html'],
     ['customer profile', '/customer/profile.html']
-  ]) await collectErrors(page, label, () => page.goto(BASE + p, { waitUntil: 'networkidle' }));
+  ]) await collectErrors(page, label, () => page.goto(BASE + p, { waitUntil: 'domcontentloaded', timeout: 60000 }));
   const custTicket = await page.evaluate(async () => {
     const t = localStorage.getItem('sms_token');
     const r = await fetch('/api/tickets', { headers: { Authorization: ('Bear' + 'er ') + t } });

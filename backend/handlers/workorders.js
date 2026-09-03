@@ -65,8 +65,12 @@ async function getWorkOrderHandler(ctx) {
     const approved = report && report.status === 'APPROVED';
     return sendJSON(ctx.res, 200, {
       work_order: {
-        id: wo.id, number: wo.number, status: wo.status, scheduled_date: wo.scheduled_date, time_window: wo.time_window,
-        started_at: wo.started_at, completed_at: wo.completed_at, technician_name: wo.technician_name
+         id: wo.id, number: wo.number, status: wo.status, scheduled_date: wo.scheduled_date, time_window: wo.time_window,
+         started_at: wo.started_at, completed_at: wo.completed_at, technician_name: wo.technician_name,
+         serviced_equipment_name: wo.serviced_equipment_name,
+         serviced_equipment_type_model: wo.serviced_equipment_type_model,
+         serviced_equipment_serial_number: wo.serviced_equipment_serial_number,
+         equipment_identity_confirmed_at: wo.equipment_identity_confirmed_at
       },
       photos: photos.filter((p) => p.visibility !== 'INTERNAL'),
       checklist: approved ? checklist : null,
@@ -107,6 +111,41 @@ async function startWorkOrderHandler(ctx) {
   sendJSON(ctx.res, 200, { ok: true });
 }
 
+async function updateEquipmentIdentityHandler(ctx) {
+  const name = typeof ctx.body.name === 'string' ? ctx.body.name.trim() : '';
+  const typeModel = typeof ctx.body.type_model === 'string' ? ctx.body.type_model.trim() : '';
+  const serialNumber = typeof ctx.body.serial_number === 'string' ? ctx.body.serial_number.trim() : '';
+  const version = Number(ctx.body.version);
+  if (!name || !typeModel || !serialNumber) return sendJSON(ctx.res, 400, { error: 'Nama alat, tipe/model, dan serial number wajib diisi' });
+  if (name.length > 200 || typeModel.length > 200 || serialNumber.length > 150) return sendJSON(ctx.res, 400, { error: 'Data identitas alat terlalu panjang' });
+  if (!Number.isInteger(version) || version < 0) return sendJSON(ctx.res, 400, { error: 'Versi identitas alat tidak valid' });
+
+  let updated;
+  try {
+    await db.transaction(async (tx) => {
+      const wo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(ctx.params.id);
+      if (!wo) { const e = new Error('Work order tidak ditemukan'); e.status = 404; throw e; }
+      if (wo.technician_id !== ctx.user.id) { const e = new Error('Work order bukan milik Anda'); e.status = 403; throw e; }
+      if (wo.status !== 'STARTED') { const e = new Error('Identitas alat hanya dapat dicatat saat inspeksi berlangsung'); e.status = 409; throw e; }
+      if (Number(wo.equipment_identity_version || 0) !== version) { const e = new Error('Data identitas alat telah berubah. Muat ulang halaman.'); e.status = 409; throw e; }
+      const confirmedAt = now();
+      await tx.prepare(`UPDATE work_orders SET serviced_equipment_name = ?, serviced_equipment_type_model = ?,
+        serviced_equipment_serial_number = ?, equipment_identity_confirmed_at = ?, equipment_identity_confirmed_by = ?,
+        equipment_identity_version = equipment_identity_version + 1, updated_at = ? WHERE id = ?`)
+        .run(name, typeModel, serialNumber, confirmedAt, ctx.user.id, confirmedAt, wo.id);
+      updated = {
+        name, type_model: typeModel, serial_number: serialNumber, confirmed_at: confirmedAt,
+        confirmed_by: ctx.user.id, version: version + 1
+      };
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
+  }
+  audit(ctx.user, 'UPDATE', 'work_order', ctx.params.id, `Konfirmasi alat diservis: ${name} / ${typeModel} / ${serialNumber}`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, equipment_identity: updated });
+}
+
 async function submitDiagnosisHandler(ctx) {
   const wo = await getWorkOrder(ctx.params.id);
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
@@ -117,6 +156,9 @@ async function submitDiagnosisHandler(ctx) {
   if (!checklist.complete) return sendJSON(ctx.res, 400, { error: `Checklist wajib belum lengkap (${checklist.required_done}/${checklist.required_total})` });
   const diagnosis = await db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id);
   if (!diagnosis || !String(diagnosis.findings || '').trim()) return sendJSON(ctx.res, 400, { error: 'Diagnosis wajib diisi sebelum dikirim ke admin' });
+  if (!wo.equipment_identity_confirmed_at || !String(wo.serviced_equipment_name || '').trim() || !String(wo.serviced_equipment_type_model || '').trim() || !String(wo.serviced_equipment_serial_number || '').trim()) {
+    return sendJSON(ctx.res, 400, { error: 'Konfirmasi nama, tipe/model, dan serial number alat sebelum mengirim diagnosis', code: 'EQUIPMENT_IDENTITY_REQUIRED' });
+  }
   const inspectionEvidence = await db.prepare(`SELECT kind FROM attachments WHERE work_order_id = ?
     AND kind IN ('before','equipment_brand','equipment_serial') AND mime IN ('image/jpeg','image/png','image/webp')`).all(wo.id);
   const capturedKinds = new Set(inspectionEvidence.map((photo) => photo.kind));
@@ -310,7 +352,7 @@ async function completeWorkOrderHandler(ctx) {
 }
 
 module.exports = {
-  listWorkOrdersHandler, getWorkOrderHandler, startWorkOrderHandler, submitDiagnosisHandler, startRepairHandler,
+  listWorkOrdersHandler, getWorkOrderHandler, startWorkOrderHandler, updateEquipmentIdentityHandler, submitDiagnosisHandler, startRepairHandler,
   saveChecklistHandler, saveDiagnosisHandler, addWorkPerformedHandler,
   addPartUsageHandler, removePartUsageHandler, rescheduleHandler, completeWorkOrderHandler,
   buildChecklistState

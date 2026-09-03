@@ -224,11 +224,16 @@ async function assignTicketHandler(ctx) {
     }
   }
 
+  const equipment = t.equipment_id ? await db.prepare('SELECT * FROM equipment WHERE id = ?').get(t.equipment_id) : null;
+  const servicedName = equipment?.name || t.equipment_brand || t.equipment_type || '';
+  const servicedTypeModel = equipment?.model || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ') || equipment?.category || '';
+  const servicedSerial = equipment?.serial_number || '';
   const woId = uid();
   const woNumber = await nextNumber('WO');
-  await db.prepare(`INSERT INTO work_orders (id, number, ticket_id, technician_id, checklist_template_id, scheduled_date, time_window, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'ASSIGNED', ?, ?)`)
-    .run(woId, woNumber, t.id, tech.id, template ? template.id : null, scheduled_date, time_window, now(), now());
+  await db.prepare(`INSERT INTO work_orders (id, number, ticket_id, technician_id, checklist_template_id, scheduled_date, time_window, status,
+    serviced_equipment_name, serviced_equipment_type_model, serviced_equipment_serial_number, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, ?, ?, ?)`)
+    .run(woId, woNumber, t.id, tech.id, template ? template.id : null, scheduled_date, time_window, servicedName, servicedTypeModel, servicedSerial, now(), now());
   await setTicketStatus(t, 'ASSIGNED', ctx.user, `Ditugaskan ke ${tech.name}`);
   await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
   timeline(t.id, 'ASSIGNMENT', 'Teknisi ditugaskan', `${tech.name} dijadwalkan ${scheduled_date} ${time_window}`.trim(), 'CUSTOMER_VISIBLE', ctx.user.id);

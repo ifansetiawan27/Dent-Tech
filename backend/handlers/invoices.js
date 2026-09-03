@@ -63,7 +63,13 @@ async function invoiceDetail(inv, user, executor = db) {
     invoice: inv, totals, items, customer, payments,
     payment_account: await readBankSettings(),
     payment_options: { bank: await readBankSettings(), pakasir_qris: pakasirQris },
-    work_order: wo ? { id: wo.id, number: wo.number, status: wo.status, scheduled_date: wo.scheduled_date } : null,
+    work_order: wo ? {
+      id: wo.id, number: wo.number, status: wo.status, scheduled_date: wo.scheduled_date,
+      equipment_name: wo.serviced_equipment_name,
+      equipment_type_model: wo.serviced_equipment_type_model,
+      equipment_serial_number: wo.serviced_equipment_serial_number,
+      equipment_identity_confirmed_at: wo.equipment_identity_confirmed_at
+    } : null,
     ticket, evidence
   };
 }

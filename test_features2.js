@@ -79,6 +79,14 @@ async function apiCall(page, method, path, body) {
   const started = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/start`);
   if (started.status === 200) ok('technician started inspection'); else bad('start inspection failed: ' + JSON.stringify(started.data));
   const woForChk = await apiCall(techPage, 'GET', '/api/work-orders/' + woId);
+  const identity = await apiCall(techPage, 'PUT', `/api/work-orders/${woId}/equipment-identity`, {
+    name: 'Autoclave Test Unit',
+    type_model: 'TUTTNAUER 2540M',
+    serial_number: 'AUTO-FEATURES2-001',
+    version: woForChk.data.work_order.equipment_identity_version
+  });
+  if (woForChk.data.work_order.status === 'STARTED' && identity.status === 200 && identity.data.equipment_identity.version === woForChk.data.work_order.equipment_identity_version + 1) ok('equipment identity confirmed while STARTED using current version');
+  else bad('equipment identity confirmation failed: ' + JSON.stringify({ status: woForChk.data.work_order.status, identity: identity.data }));
   const allItems = woForChk.data.checklist.sections.flatMap((s) => s.items);
   const fill = allItems.map((it) => ({ item_id: it.id, result: 'PASS', note: '' }));
   const checklistSaved = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/checklist`, { items: fill });

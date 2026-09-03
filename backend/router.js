@@ -82,6 +82,7 @@ route('POST', '/api/tickets/:id/internal-notes', ['admin', 'technician'], ticket
 route('GET', '/api/work-orders', ['admin', 'technician'], woH.listWorkOrdersHandler);
 route('GET', '/api/work-orders/:id', [], woH.getWorkOrderHandler);
 route('POST', '/api/work-orders/:id/start', ['admin', 'technician'], woH.startWorkOrderHandler);
+route('PUT', '/api/work-orders/:id/equipment-identity', ['technician'], woH.updateEquipmentIdentityHandler);
 route('POST', '/api/work-orders/:id/submit-diagnosis', ['admin', 'technician'], woH.submitDiagnosisHandler);
 route('POST', '/api/work-orders/:id/start-repair', ['admin', 'technician'], woH.startRepairHandler);
 route('POST', '/api/work-orders/:id/checklist', ['admin', 'technician'], woH.saveChecklistHandler);
