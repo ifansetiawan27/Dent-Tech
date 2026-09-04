@@ -3,6 +3,7 @@ const QRCode = require('qrcode');
 const { db } = require('../db');
 const { uid, now, sendJSON } = require('../util');
 const defaultPakasir = require('../pakasir');
+const { getEnv } = require('../runtime');
 const { getInvoiceItems, invoiceTotals, audit, notify, timeline, getTicket } = require('./_common');
 
 const TOPUP_AMOUNT = 100000;
@@ -58,7 +59,7 @@ async function orderWithQr(order) {
   return result;
 }
 async function insertPendingOrder(executor, { kind, customerId, invoiceId = null, amount }) {
-  const project = process.env.PAKASIR_PROJECT || 'dent-tech';
+  const project = getEnv('PAKASIR_PROJECT', 'dent-tech');
   const id = uid();
   const orderId = `${kind === 'WALLET_TOPUP' ? 'WT' : 'INV'}-${id}`;
   const ts = now();

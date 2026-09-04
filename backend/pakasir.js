@@ -1,5 +1,7 @@
 'use strict';
 
+const { getEnv } = require('./runtime');
+
 const BASE_URL = 'https://app.pakasir.com/api';
 const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -13,9 +15,9 @@ class PakasirError extends Error {
 }
 
 function config() {
-  const apiKey = process.env.PAKASIR_API_KEY;
+  const apiKey = getEnv('PAKASIR_API_KEY');
   if (!apiKey) throw new PakasirError('Layanan pembayaran belum dikonfigurasi', 'PAYMENT_SERVICE_UNAVAILABLE', 503);
-  return { apiKey, project: process.env.PAKASIR_PROJECT || 'dent-tech' };
+  return { apiKey, project: getEnv('PAKASIR_PROJECT', 'dent-tech') };
 }
 
 function positiveInteger(value, field) {

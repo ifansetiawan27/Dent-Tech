@@ -1,60 +1,83 @@
 ﻿'use strict';
-const { Pool, types } = require('pg');
+const { Pool, Client, types } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
+const { currentRuntime, getDbExecutor, getEnv } = require('./runtime');
 
 // COUNT/SUM di Postgres menghasilkan bigint (OID 20) yang defaultnya
 // dikembalikan sebagai string oleh node-postgres; konversi ke number.
 types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
 
-// File disimpan di Supabase Storage (lihat storage.js), bukan disk lokal,
-// agar persisten di serverless (Vercel) maupun lokal.
+let localPool = null;
+let localAdmin = null;
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || !SUPABASE_SECRET_KEY || !DATABASE_URL) {
-  throw new Error('SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY, dan DATABASE_URL wajib diatur di .env');
+function requiredEnv(name) {
+  const value = getEnv(name);
+  if (!value) throw new Error(`${name} wajib dikonfigurasi`);
+  return value;
 }
 
-// Client admin tidak boleh pernah dipakai untuk signIn user. signIn mengubah Authorization
-// client dan dapat membuat operasi Storage berikutnya terkena RLS sebagai user biasa.
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+function getLocalPool() {
+  if (!localPool) {
+    localPool = new Pool({ connectionString: requiredEnv('DATABASE_URL'), ssl: { rejectUnauthorized: false } });
+    localPool.on('error', (e) => console.error('[PG POOL ERROR]', e.message));
+  }
+  return localPool;
+}
+
+function executor() {
+  return getDbExecutor() || getLocalPool();
+}
+
+function getSupabaseAdmin() {
+  const runtime = currentRuntime();
+  if (runtime?.supabaseAdmin) return runtime.supabaseAdmin;
+  if (!localAdmin) {
+    localAdmin = createClient(requiredEnv('SUPABASE_URL'), requiredEnv('SUPABASE_SECRET_KEY'), {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+  }
+  return localAdmin;
+}
+
+// Proxy mempertahankan kompatibilitas seluruh handler tanpa menyimpan client lintas request Worker.
+const supabaseAdmin = new Proxy({}, {
+  get(_target, property) {
+    const client = getSupabaseAdmin();
+    const value = client[property];
+    return typeof value === 'function' ? value.bind(client) : value;
+  }
 });
 
 function createAuthClient() {
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  return createClient(requiredEnv('SUPABASE_URL'), requiredEnv('SUPABASE_PUBLISHABLE_KEY'), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
 }
-
-const pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
-pool.on('error', (e) => console.error('[PG POOL ERROR]', e.message));
 
 function toPgSql(sql) {
   let i = 0;
   return sql.replace(/\?/g, () => '$' + (++i));
 }
 
-function prepareWith(executor, sql) {
+function prepareWith(target, sql) {
   const pgSql = toPgSql(sql);
   return {
-    get: async (...params) => (await executor.query(pgSql, params)).rows[0],
-    all: async (...params) => (await executor.query(pgSql, params)).rows,
+    get: async (...params) => (await target.query(pgSql, params)).rows[0],
+    all: async (...params) => (await target.query(pgSql, params)).rows,
     run: async (...params) => {
-      const r = await executor.query(pgSql, params);
-      return { changes: r.rowCount };
+      const result = await target.query(pgSql, params);
+      return { changes: result.rowCount };
     }
   };
 }
 
 function prepare(sql) {
-  return prepareWith(pool, sql);
+  return prepareWith(executor(), sql);
 }
 
 async function transaction(fn) {
-  const client = await pool.connect();
+  const requestClient = getDbExecutor();
+  const client = requestClient || await getLocalPool().connect();
   try {
     await client.query('BEGIN');
     const tx = {
@@ -64,18 +87,25 @@ async function transaction(fn) {
     const result = await fn(tx);
     await client.query('COMMIT');
     return result;
-  } catch (e) {
+  } catch (error) {
     await client.query('ROLLBACK');
-    throw e;
+    throw error;
   } finally {
-    client.release();
+    if (!requestClient) client.release();
   }
 }
 
 const db = {
   prepare,
   transaction,
-  query: async (sql, params = []) => (await pool.query(sql, params)).rows
+  query: async (sql, params = []) => (await executor().query(sql, params)).rows
 };
 
-module.exports = { db, supabaseAdmin, createAuthClient };
+async function createWorkerDbClient(connectionString) {
+  if (!connectionString) throw new Error('Binding HYPERDRIVE wajib dikonfigurasi');
+  const client = new Client({ connectionString });
+  await client.connect();
+  return client;
+}
+
+module.exports = { db, supabaseAdmin, getSupabaseAdmin, createAuthClient, createWorkerDbClient };
