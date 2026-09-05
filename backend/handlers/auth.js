@@ -30,7 +30,8 @@ async function createAuthUser(email, password, name, role) {
     email,
     password,
     email_confirm: true,
-    user_metadata: { name, role }
+    user_metadata: { name },
+    app_metadata: { role }
   });
   if (error) throw new Error(error.message);
   return data.user;
