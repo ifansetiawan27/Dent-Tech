@@ -108,7 +108,7 @@ async function financeTotals() {
   ]);
   const topup = topupA.data.order;
   const pendingTopups = (await db.prepare("SELECT COUNT(*) AS c FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING'").get(created.customer)).c;
-  ok([200, 201].includes(topupA.status) && [200, 201].includes(topupB.status) && topupA.data.order.id === topupB.data.order.id && pendingTopups === 1 && createCalls === 1 && /^data:image\/png;base64,/.test(topupA.data.order.qr_data_url) && /^data:image\/png;base64,/.test(topupB.data.order.qr_data_url), 'concurrent topup creation returns one provisioned QRIS order');
+  ok([200, 201].includes(topupA.status) && [200, 201].includes(topupB.status) && topupA.data.order.id === topupB.data.order.id && pendingTopups === 1 && createCalls === 1 && /^data:image\/svg\+xml;base64,/.test(topupA.data.order.qr_data_url) && /^data:image\/svg\+xml;base64,/.test(topupB.data.order.qr_data_url), 'concurrent topup creation returns one Worker-compatible QRIS order');
   const repeatedTopup = await invoke(walletH.createTopupHandler, { user });
   ok(repeatedTopup.status === 200 && repeatedTopup.data.order.id === topup.id && createCalls === 1, 'repeated topup reuses the active QRIS order');
   completed.add(topup.order_id);

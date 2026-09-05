@@ -53,16 +53,21 @@ async function invoiceDetail(inv, user, executor = db) {
     evidence.diagnosis = (await db.prepare('SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1').get(wo.id)) || null;
   }
 
-  const paymentOrder = await executor.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' ORDER BY created_at DESC LIMIT 1").get(inv.id);
+  const paymentOrder = await executor.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' ORDER BY (status = 'PENDING') DESC, created_at DESC LIMIT 1").get(inv.id);
   let pakasirQris = null;
   if (paymentOrder) {
     const { orderWithQr } = require('./wallet');
-    pakasirQris = await orderWithQr(paymentOrder);
+    try { pakasirQris = await orderWithQr(paymentOrder); }
+    catch (error) {
+      console.error(`[invoice-qris] invoice=${inv.id} order=${paymentOrder.id} message=${error?.message || error}`);
+      pakasirQris = { id: paymentOrder.id, order_id: paymentOrder.order_id, amount: Number(paymentOrder.amount), status: paymentOrder.status, expired_at: paymentOrder.expired_at };
+    }
   }
+  const bankSettings = await readBankSettings();
   return {
     invoice: inv, totals, items, customer, payments,
-    payment_account: await readBankSettings(),
-    payment_options: { bank: await readBankSettings(), pakasir_qris: pakasirQris },
+    payment_account: bankSettings,
+    payment_options: { bank: bankSettings, pakasir_qris: pakasirQris },
     work_order: wo ? {
       id: wo.id, number: wo.number, status: wo.status, scheduled_date: wo.scheduled_date,
       equipment_name: wo.serviced_equipment_name,

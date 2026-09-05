@@ -59,7 +59,7 @@ function bankInfoHtml(bank) {
 
 function safeQrDataUrl(value) {
   const src = String(value || '');
-  return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
+  return /^data:image\/(?:png|jpeg|webp|svg\+xml);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
 }
 
 function qrisInfoHtml(order) {

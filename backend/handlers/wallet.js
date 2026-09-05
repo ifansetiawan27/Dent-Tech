@@ -59,7 +59,10 @@ function publicOrder(order) {
 }
 async function orderWithQr(order) {
   const result = publicOrder(order);
-  if (order && order.payment_number && order.status === 'PENDING') result.qr_data_url = await QRCode.toDataURL(order.payment_number, { errorCorrectionLevel: 'M', margin: 2, width: 360 });
+  if (order && order.payment_number && order.status === 'PENDING') {
+    const svg = await QRCode.toString(order.payment_number, { type: 'svg', errorCorrectionLevel: 'M', margin: 2, width: 360 });
+    result.qr_data_url = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
+  }
   return result;
 }
 async function insertPendingOrder(executor, { kind, customerId, invoiceId = null, amount }) {
