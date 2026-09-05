@@ -102,9 +102,15 @@ async function financeTotals() {
   ok(r.status === 409 && r.data.code === 'INSUFFICIENT_WALLET_BALANCE' && r.data.required === 100000, 'insufficient balance returns structured 409');
   ok(scheduledEmails === 0, 'failed appointment schedules no email');
 
-  r = await invoke(walletH.createTopupHandler, { user });
-  const topup = r.data.order;
-  ok(r.status === 201 && topup.amount === 100000 && /^data:image\/png;base64,/.test(topup.qr_data_url), 'topup creates server-side QR data URL');
+  const [topupA, topupB] = await Promise.all([
+    invoke(walletH.createTopupHandler, { user }),
+    invoke(walletH.createTopupHandler, { user })
+  ]);
+  const topup = topupA.data.order;
+  const pendingTopups = (await db.prepare("SELECT COUNT(*) AS c FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING'").get(created.customer)).c;
+  ok([200, 201].includes(topupA.status) && [200, 201].includes(topupB.status) && topupA.data.order.id === topupB.data.order.id && pendingTopups === 1 && createCalls === 1 && /^data:image\/png;base64,/.test(topupA.data.order.qr_data_url) && /^data:image\/png;base64,/.test(topupB.data.order.qr_data_url), 'concurrent topup creation returns one provisioned QRIS order');
+  const repeatedTopup = await invoke(walletH.createTopupHandler, { user });
+  ok(repeatedTopup.status === 200 && repeatedTopup.data.order.id === topup.id && createCalls === 1, 'repeated topup reuses the active QRIS order');
   completed.add(topup.order_id);
   await Promise.all([
     walletH.settleVerifiedOrder(topup.order_id, { project: 'dent-tech', order_id: topup.order_id, amount: 100000, status: 'completed', completed_at: now() }),
@@ -113,6 +119,8 @@ async function financeTotals() {
   const wallet = await db.prepare('SELECT balance FROM wallet_accounts WHERE customer_id = ?').get(created.customer);
   const credits = (await db.prepare('SELECT COUNT(*) AS c FROM wallet_transactions WHERE payment_order_id = ?').get(topup.id)).c;
   ok(Number(wallet.balance) === 100000 && credits === 1, 'concurrent topup settlement credits exactly once');
+  const history = await invoke(walletH.walletHistoryHandler, { user });
+  ok(history.status === 200 && history.data.active_order === null && Number(history.data.wallet.balance) === 100000, 'wallet history reconciles and returns current balance');
 
   r = await invoke(ticketsH.createTicketHandler, { user, body: ticketBody }); created.ticket = r.data.id;
   const debit = await db.prepare('SELECT amount, balance_after FROM wallet_transactions WHERE ticket_id = ?').get(created.ticket);

@@ -51,7 +51,7 @@
           <div><h2 class="font-bold">Top Up QRIS</h2><p class="text-xs text-slate-500 mt-0.5">Order ID: <span class="font-mono">${esc(order.order_id || '-')}</span></p></div>
           <span class="text-xs font-bold rounded-full px-2.5 py-1 ${status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${esc(status)}</span>
         </div>
-        ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS top up wallet" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : ''}
+        ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS top up wallet" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : status === 'PENDING' ? '<p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 mt-4">QRIS belum tersedia. Silakan muat ulang halaman atau buat order baru setelah order ini kedaluwarsa.</p>' : ''}
         <dl class="space-y-2 text-sm mt-3">
           <div class="flex justify-between gap-3"><dt class="text-slate-500">Saldo masuk</dt><dd class="font-semibold">${fmtIDR(order.amount)}</dd></div>
           <div class="flex justify-between gap-3 border-t border-slate-200 pt-2"><dt class="font-bold">Total pembayaran</dt><dd class="font-bold text-blue-700">${fmtIDR(order.amount)}</dd></div>
@@ -96,7 +96,9 @@
       const result = await api.get('/api/wallet/history');
       state.wallet = result.wallet;
       state.transactions = result.transactions || [];
+      state.order = result.active_order || null;
       render();
+      if (state.order?.status === 'PENDING') schedulePoll(state.order.id);
     }
 
     async function createTopup() {

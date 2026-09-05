@@ -22,7 +22,7 @@ const invoice = {
 };
 const order = { id: 'order-1', order_id: 'INV-order-1', status: 'PENDING', amount: 250000, total_payment: 250000, expired_at: '2026-09-01T10:00:00Z', qr_data_url: QR };
 
-async function installMocks(page, mockUser = user) {
+async function installMocks(page, mockUser = user, options = {}) {
   await page.addInitScript((u) => {
     localStorage.setItem('sms_token', 'mock-token');
     localStorage.setItem('sms_user', JSON.stringify(u));
@@ -37,7 +37,7 @@ async function installMocks(page, mockUser = user) {
     else if (path === '/api/dashboard') body = { stats: { active_tickets: 0, equipment: 0, unpaid_invoices: 1 }, wallet: { balance: 0 }, recent_tickets: [], active_ticket: null };
     else if (path === '/api/customers/customer-1') body = { customer: { address: 'Jl. Uji', city: 'Jakarta' } };
     else if (path === '/api/wallet') body = { wallet: { id: 'wallet-1', balance: 0 } };
-    else if (path === '/api/wallet/history') body = { wallet: { id: 'wallet-1', balance: 0 }, transactions: [] };
+    else if (path === '/api/wallet/history') body = { wallet: { id: 'wallet-1', balance: 0 }, transactions: [], active_order: options.activeTopup || null };
     else if (path === '/api/wallet/topups' && req.method() === 'POST') { status = 201; body = { order: { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 100000 } }; }
     else if (path === '/api/wallet/topups/topup-1') body = { order: { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 100000 }, wallet: { balance: 0 } };
     else if (path === '/api/invoices/inv-1' && req.method() === 'GET') body = invoice;
@@ -88,6 +88,19 @@ async function installMocks(page, mockUser = user) {
   const walletText = await page.locator('#topup-order').innerText();
   await check(walletText.includes('WT-topup-1') && walletText.includes('Rp 100.000') && !walletText.includes('Biaya QRIS'), 'wallet displays exact zero-fee total without QRIS fee breakdown');
   await check(walletText.includes('diverifikasi otomatis'), 'wallet warns QRIS verification is automatic');
+
+  const restoredPage = await context.newPage();
+  const restoredTopup = { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 100000 };
+  await installMocks(restoredPage, user, { activeTopup: restoredTopup });
+  let restoredPolls = 0;
+  restoredPage.on('request', (request) => { if (new URL(request.url()).pathname === '/api/wallet/topups/topup-1') restoredPolls++; });
+  await restoredPage.goto(BASE + '/customer/wallet.html', { waitUntil: 'networkidle' });
+  await restoredPage.waitForSelector('#topup-order img');
+  await check((await restoredPage.locator('#topup-order').innerText()).includes('WT-topup-1'), 'wallet restores the active QRIS order after reload');
+  await check(await restoredPage.locator('#create-topup').isDisabled(), 'wallet blocks duplicate topup while restored QRIS is pending');
+  await restoredPage.waitForTimeout(4500);
+  await check(restoredPolls > 0, 'wallet resumes status polling for the restored QRIS order');
+  await restoredPage.close();
 
   await page.goto(BASE + '/customer/invoice-detail.html?id=inv-1', { waitUntil: 'networkidle' });
   await check(await page.locator('text=Transfer Bank').count() > 0 && (await page.locator('body').innerText()).includes('Bank Jago'), 'invoice displays configured Bank Jago transfer information');

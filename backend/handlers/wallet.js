@@ -158,14 +158,46 @@ async function getWalletHandler(ctx) {
   sendJSON(ctx.res, 200, { wallet: { ...wallet, balance: Number(wallet.balance) } });
 }
 async function walletHistoryHandler(ctx) {
-  const wallet = await ensureWallet(ctx.user.customer_id);
+  await ensureWallet(ctx.user.customer_id);
+  let activeOrder = await db.prepare("SELECT * FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1").get(ctx.user.customer_id);
+  if (activeOrder) {
+    try {
+      await reconcileOrder(activeOrder);
+      activeOrder = await db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(activeOrder.id);
+    } catch (error) {
+      console.error(`[wallet-reconcile] order=${activeOrder.order_id} code=${error?.code || 'UNKNOWN'} message=${error?.message || error}`);
+    }
+  }
+  const currentWallet = await walletFor(ctx.user.customer_id);
   const transactions = await db.prepare(`SELECT id, type, amount, balance_after, payment_order_id, ticket_id, description, created_at FROM wallet_transactions WHERE customer_id = ? ORDER BY created_at DESC LIMIT 100`).all(ctx.user.customer_id);
-  sendJSON(ctx.res, 200, { wallet: { ...wallet, balance: Number(wallet.balance) }, transactions: transactions.map((row) => ({ ...row, amount: Number(row.amount), balance_after: Number(row.balance_after) })) });
+  sendJSON(ctx.res, 200, {
+    wallet: { ...currentWallet, balance: Number(currentWallet.balance) },
+    transactions: transactions.map((row) => ({ ...row, amount: Number(row.amount), balance_after: Number(row.balance_after) })),
+    active_order: activeOrder?.status === 'PENDING' ? await orderWithQr(activeOrder) : null
+  });
 }
 async function createTopupHandler(ctx) {
   await ensureWallet(ctx.user.customer_id);
-  try { sendJSON(ctx.res, 201, { order: await orderWithQr(await createOrder({ kind: 'WALLET_TOPUP', customerId: ctx.user.customer_id, amount: TOPUP_AMOUNT })) }); }
-  catch (error) { paymentError(ctx, error); }
+  try {
+    let existing = await db.prepare("SELECT * FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1").get(ctx.user.customer_id);
+    if (existing) {
+      try {
+        await reconcileOrder(existing);
+      } catch (error) {
+        console.error(`[wallet-reconcile] order=${existing.order_id} code=${error?.code || 'UNKNOWN'} message=${error?.message || error}`);
+      }
+    }
+
+    const choice = await db.transaction(async (tx) => {
+      await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`wallet-topup:${ctx.user.customer_id}`]);
+      const pending = await tx.prepare("SELECT * FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(ctx.user.customer_id);
+      if (pending?.payment_number) return { created: false, order: pending };
+      if (pending) return { created: false, order: await provisionQris(pending, tx) };
+      const order = await insertPendingOrder(tx, { kind: 'WALLET_TOPUP', customerId: ctx.user.customer_id, amount: TOPUP_AMOUNT });
+      return { created: true, order: await provisionQris(order, tx) };
+    });
+    sendJSON(ctx.res, choice.created ? 201 : 200, { order: await orderWithQr(choice.order) });
+  } catch (error) { paymentError(ctx, error); }
 }
 async function topupStatusHandler(ctx) {
   const order = await db.prepare("SELECT * FROM payment_orders WHERE id = ? AND customer_id = ? AND kind = 'WALLET_TOPUP'").get(ctx.params.id, ctx.user.customer_id);
