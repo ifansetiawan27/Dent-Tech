@@ -23,7 +23,7 @@ function placeholderSvg(fileId, label, color) {
   <rect width="800" height="600" fill="${color}"/>
   <rect x="20" y="20" width="760" height="560" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" rx="16"/>
   <text x="400" y="280" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#ffffff" text-anchor="middle">${label}</text>
-  <text x="400" y="330" font-family="Arial, sans-serif" font-size="20" fill="#ffffff" fill-opacity="0.85" text-anchor="middle">Dent Tech - Service Evidence</text>
+  <text x="400" y="330" font-family="Arial, sans-serif" font-size="20" fill="#ffffff" fill-opacity="0.85" text-anchor="middle">Dent Tech.id - Service Evidence</text>
   <text x="400" y="360" font-family="Arial, sans-serif" font-size="14" fill="#ffffff" fill-opacity="0.7" text-anchor="middle">${fileId}</text>
 </svg>`;
 }
@@ -51,7 +51,7 @@ async function seed() {
   const count = (await db.prepare('SELECT COUNT(*) AS c FROM users').get()).c;
   if (count > 0) return false;
 
-  await db.prepare("INSERT INTO settings (key, value) VALUES ('company_name', 'Dent Tech') ON CONFLICT (key) DO NOTHING").run();
+  await db.prepare("INSERT INTO settings (key, value) VALUES ('company_name', 'Dent Tech.id') ON CONFLICT (key) DO NOTHING").run();
   await db.prepare("INSERT INTO settings (key, value) VALUES ('company_address', 'Jl. Raya Serpong No. 88, Tangerang Selatan') ON CONFLICT (key) DO NOTHING").run();
   await db.prepare("INSERT INTO settings (key, value) VALUES ('company_phone', '08953-2744-5799') ON CONFLICT (key) DO NOTHING").run();
   await db.prepare("INSERT INTO settings (key, value) VALUES ('company_email', 'support@denttech.id') ON CONFLICT (key) DO NOTHING").run();

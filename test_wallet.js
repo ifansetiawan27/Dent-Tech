@@ -74,6 +74,7 @@ async function financeTotals() {
   const emailPreview = appointmentEmail({ id: 'ticket-test', number: 'TKT-TEST', customerName: '<Clinic>', actorName: 'Test', actorRole: 'customer', serviceType: 'Repair', priority: 'MEDIUM', problem: '<script>alert(1)</script>', adminUrl: 'https://denttech.id/admin/ticket-detail.html?id=ticket-test' });
   ok(SUPPORT_EMAIL === 'support@denttech.id' && FORWARD_DESTINATION === 'ifansetiawan64@gmail.com', 'appointment email recipients are fixed');
   ok(emailPreview.html.includes('&lt;script&gt;') && !emailPreview.html.includes('<script>'), 'appointment email escapes customer HTML');
+  ok(emailPreview.html.includes('Dent Tech.id') && !emailPreview.html.includes('Dent Tech Service Management System'), 'appointment email uses current company branding');
   let sentMessage = null;
   class FakeEmailMessage {
     constructor(from, to, raw) { Object.assign(this, { from, to, raw }); }

@@ -125,7 +125,7 @@ ${DOC_BASE_CSS}
   <div class="head">
     <div>
       <div class="brand"><img class="logo" src="/assets/logo.png?v=2" alt="Logo">
-        <div><div class="co">${esc(company?.company_name || 'Dent Tech')}</div>
+        <div><div class="co">${esc(company?.company_name || 'Dent Tech.id')}</div>
         <div class="co-sub">${esc(company?.company_address || '')}</div>
         <div class="co-sub">${esc(company?.company_phone || '')} · ${esc(company?.company_email || '')}</div></div>
       </div>
@@ -174,7 +174,7 @@ ${DOC_BASE_CSS}
   ${photosHtml(evidence)}
   ${checklistHtml(evidence)}
 
-  <div class="foot">Dokumen ini dibuat otomatis oleh Service Management System ${esc(company?.company_name || 'Dent Tech')}.</div>
+  <div class="foot">Dokumen ini dibuat otomatis oleh Service Management System ${esc(company?.company_name || 'Dent Tech.id')}.</div>
 </body></html>`;
 }
 

@@ -25,7 +25,7 @@ export function buildChecklistHtml(data) {
 <style>${DOC_BASE_CSS}</style></head><body>
   <div class="head">
     <div class="brand"><img class="logo" src="/assets/logo.png?v=2" alt="Logo">
-      <div><div class="co">${esc(company?.company_name || 'Dent Tech')}</div>
+      <div><div class="co">${esc(company?.company_name || 'Dent Tech.id')}</div>
       <div class="co-sub">${esc(company?.company_address || '')}</div>
       <div class="co-sub">${esc(company?.company_phone || '')}</div></div>
     </div>
@@ -69,7 +69,7 @@ export function buildChecklistHtml(data) {
     <div class="col"><h4>Dicetak</h4><div>${fmtDateTime(new Date().toISOString())}</div></div>
   </div>
 
-  <div class="foot">Dokumen ini dibuat otomatis oleh Service Management System ${esc(company?.company_name || 'Dent Tech')}.</div>
+  <div class="foot">Dokumen ini dibuat otomatis oleh Service Management System ${esc(company?.company_name || 'Dent Tech.id')}.</div>
 </body></html>`;
 }
 

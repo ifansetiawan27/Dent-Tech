@@ -39,7 +39,7 @@ function appointmentEmail(snapshot) {
   return {
     subject,
     text: `Appointment/service request baru telah dibuat.\n\n${textRows}\n\nBuka: ${snapshot.adminUrl}`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a"><h2 style="color:#1d4ed8">Appointment Baru</h2><p>Request service baru telah tersimpan di Dent Tech.</p><table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:12px">${htmlRows}</table><p style="margin-top:20px"><a href="${htmlEscape(snapshot.adminUrl)}" style="display:inline-block;padding:11px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">Buka Ticket di Admin Portal</a></p><p style="font-size:12px;color:#94a3b8">Pesan otomatis dari Dent Tech Service Management System.</p></div>`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a"><h2 style="color:#1d4ed8">Appointment Baru</h2><p>Request service baru telah tersimpan di Dent Tech.id.</p><table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:12px">${htmlRows}</table><p style="margin-top:20px"><a href="${htmlEscape(snapshot.adminUrl)}" style="display:inline-block;padding:11px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">Buka Ticket di Admin Portal</a></p><p style="font-size:12px;color:#94a3b8">Pesan otomatis dari Dent Tech.id Service Management System.</p></div>`,
   };
 }
 
@@ -52,8 +52,8 @@ async function sendAppointmentEmail(env, snapshot, dependencies = {}) {
   const createMimeMessage = dependencies.createMimeMessage || (await import('mimetext')).createMimeMessage;
   const content = appointmentEmail(snapshot);
   const mime = createMimeMessage();
-  mime.setSender({ name: 'Dent Tech Notification', addr: SENDER_EMAIL });
-  mime.setRecipient({ name: 'Dent Tech Support', addr: SUPPORT_EMAIL });
+  mime.setSender({ name: 'Dent Tech.id Notification', addr: SENDER_EMAIL });
+  mime.setRecipient({ name: 'Dent Tech.id Support', addr: SUPPORT_EMAIL });
   mime.setSubject(content.subject);
   mime.addMessage({ contentType: 'text/plain', data: content.text });
   mime.addMessage({ contentType: 'text/html', data: content.html });

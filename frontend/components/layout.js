@@ -150,7 +150,7 @@ export function initAdminLayout(activeKey) {
     <div class="flex items-center gap-3 px-5 h-16 border-b border-slate-800">
       <img src="/assets/logo.png?v=2" alt="Logo" class="w-9 h-9 object-contain">
       <div>
-        <p class="text-white font-bold leading-tight">Dent Tech</p>
+        <p class="text-white font-bold leading-tight">Dent Tech.id</p>
         <p class="text-[11px] text-slate-400 leading-tight">Admin Portal</p>
       </div>
     </div>
@@ -177,7 +177,7 @@ export function initAdminLayout(activeKey) {
     <button id="mobile-menu-btn" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600"><i data-lucide="menu" class="w-5 h-5"></i></button>
     <div class="lg:hidden flex items-center gap-2">
       <img src="/assets/logo.png?v=2" alt="Logo" class="w-8 h-8 object-contain">
-      <span class="font-bold text-slate-800">Dent Tech</span>
+      <span class="font-bold text-slate-800">Dent Tech.id</span>
     </div>
     <div class="flex-1"></div>
     <button id="notif-bell" class="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600">
@@ -200,7 +200,7 @@ export function initAdminLayout(activeKey) {
       <div class="flex items-center justify-between px-5 h-16 border-b border-slate-800">
         <div class="flex items-center gap-2">
           <img src="/assets/logo.png?v=2" alt="Logo" class="w-8 h-8 object-contain">
-          <span class="text-white font-bold">Dent Tech</span>
+          <span class="text-white font-bold">Dent Tech.id</span>
         </div>
         <button data-drawer-close class="p-2 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
@@ -244,7 +244,7 @@ export function initMobileLayout(activeKey, role) {
   topbar.innerHTML = `
     <img src="/assets/logo.png?v=2" alt="Logo" class="w-9 h-9 object-contain">
     <div>
-      <p class="font-bold text-slate-800 leading-tight">Dent Tech</p>
+      <p class="font-bold text-slate-800 leading-tight">Dent Tech.id</p>
       <p class="text-[11px] text-slate-400 leading-tight">${portalLabel}</p>
     </div>
     <div class="flex-1"></div>

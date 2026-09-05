@@ -44,7 +44,7 @@ if (mapMatch) {
     .replace(/ role="img"/, '')
     .replace(/ aria-label="[^"]*"/, '');
   fs.writeFileSync(mapPath, mapSvg);
-  html = html.replace(mapPattern, '<img src="/assets/coverage-map.svg?v=1" alt="Peta area layanan Dent Tech di Indonesia" width="1000" height="368" loading="lazy" decoding="async" class="w-full h-auto select-none">');
+  html = html.replace(mapPattern, '<img src="/assets/coverage-map.svg?v=1" alt="Peta area layanan Dent Tech.id di Indonesia" width="1000" height="368" loading="lazy" decoding="async" class="w-full h-auto select-none">');
 }
 
 if (count === 0 && !html.includes('class="lucide lucide-')) throw new Error('Tidak ada ikon landing yang ditemukan');

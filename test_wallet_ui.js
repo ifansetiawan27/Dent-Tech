@@ -75,6 +75,7 @@ async function installMocks(page, mockUser = user) {
   await page.waitForSelector('[data-wallet-card]');
   await check(await page.locator('#content > :first-child').getAttribute('data-wallet-card') !== null, 'wallet is the first customer home content card');
   await check((await page.locator('[data-wallet-card]').innerText()).includes('Rp 100.000'), 'home wallet explains fixed onsite fee');
+  await check((await page.locator('body').innerText()).includes('Dent Tech.id'), 'customer portal uses current company branding');
 
   await page.goto(BASE + '/customer/request.html', { waitUntil: 'networkidle' });
   await check(await page.locator('#rq-submit').isDisabled(), 'request submit is blocked when wallet balance is insufficient');
@@ -90,6 +91,11 @@ async function installMocks(page, mockUser = user) {
 
   await page.goto(BASE + '/customer/invoice-detail.html?id=inv-1', { waitUntil: 'networkidle' });
   await check(await page.locator('text=Transfer Bank').count() > 0 && (await page.locator('body').innerText()).includes('Bank Jago'), 'invoice displays configured Bank Jago transfer information');
+  const invoiceDocument = await page.evaluate(async (invoiceData) => {
+    const { buildInvoiceHtml } = await import('/utils/invoice-doc.js');
+    return buildInvoiceHtml({ ...invoiceData, company: { company_name: '' } });
+  }, invoice);
+  await check(invoiceDocument.includes('Dent Tech.id') && !invoiceDocument.includes('Dent Tech Service Management System'), 'invoice document fallback uses current company branding');
   await page.click('#btn-pay');
   await page.waitForSelector('#payment-order img');
   const invoiceText = await page.locator('#payment-order').innerText();
