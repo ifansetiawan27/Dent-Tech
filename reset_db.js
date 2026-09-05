@@ -4,6 +4,15 @@ const { db, supabaseAdmin } = require('./backend/db');
 const { seed } = require('./backend/seed');
 const { BUCKET } = require('./backend/storage');
 
+// SAFETY GUARD: reset_db wipes the ENTIRE database pointed to by .env (which is the
+// live production Supabase). It may only run against a disposable test database and
+// only when explicitly requested with the --demo flag.
+if (!process.argv.includes('--demo')) {
+  console.error('REFUSED: reset_db menghapus seluruh database yang ditunjuk .env (production).');
+  console.error('Hanya jalankan terhadap database testing terpisah dengan flag eksplisit: node reset_db.js --demo');
+  process.exit(1);
+}
+
 const TABLES = ['users','tokens','customers','customer_contacts','equipment','tickets','ticket_status_history','ticket_timeline','work_orders','checklist_templates','checklist_template_items','checklist_responses','diagnoses','work_performed','parts','part_usages','expenses','attachments','service_reports','invoice_items','invoices','payments','wallet_transactions','wallet_accounts','payment_orders','finance_income','notifications','audit_logs','settings'];
 
 (async () => {

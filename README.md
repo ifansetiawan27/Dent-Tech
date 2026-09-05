@@ -31,19 +31,19 @@ node backend/server.js
 
 Buka **http://localhost:3000**
 
-Database dibuat & di-seed otomatis saat pertama kali dijalankan.
+Database production (Supabase) **tidak pernah** di-seed otomatis oleh server. Untuk pengembangan lokal dengan data demo, jalankan reset eksplisit (lihat bagian [Testing](#testing)).
 
 ### Akun demo
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | `admin@denttech.id` | `admin123` |
+| Admin | `support@denttech.id` | `admin123` |
 | Technician | `budi@denttech.id` | `tech123` |
 | Technician | `sari@denttech.id` | `tech123` |
 | Customer (Klinik Senyum Sehat) | `ratna@denttech.id` | `customer123` |
 | Customer (RS Medika Farma) | `hendra@denttech.id` | `customer123` |
 
-Halaman login juga menyediakan tombol quick-login akun demo.
+> **Penting:** akun admin ini sama dengan **akun production** (https://denttech.id). Jangan pernah menghapus atau menonaktifkannya.
 
 ---
 
@@ -136,8 +136,10 @@ Dent Tech/
 
 ## Testing
 
+> **PERINGATAN:** `.env` menunjuk ke **database production**. Suite yang melakukan reset DB (`node audit.js`, `node reset_db.js --demo`) akan MENGHAPUS semua data production. Hanya jalankan jika `.env` sudah diarahkan ke database testing terpisah.
+
 ```bash
-# Jalankan SEMUA suite audit secara berurutan (auto reset DB antar-suite)
+# Jalankan SEMUA suite audit (reset DB per suite — HANYA di database testing!)
 node audit.js
 
 # Atau per-suite:
@@ -147,6 +149,7 @@ node test_flow.js         # Alur bisnis penuh via UI (11)
 node test_newfeatures.js  # Fitur portal: request/merk/alamat, foto profil, download (10)
 node test_features2.js    # Fitur baru: checklist 21, sync, edit ticket, proforma, filter report (28)
 node visual_audit.js      # Audit visual/DOM (11)
+node test_wallet_ui.js    # UI wallet (fully mocked, AMAN untuk production)
 ```
 
 Status terakhir (audit menyeluruh): **97/97 test PASS** — 27 API · 31 halaman · 11 alur · 28 fitur baru (+ 11 audit visual).
@@ -157,12 +160,13 @@ Status terakhir (audit menyeluruh): **97/97 test PASS** — 27 API · 31 halaman
 
 ## Reset Data Demo
 
-Hapus folder `data/` lalu jalankan ulang server — database & seed dibuat ulang otomatis.
+Reset database dan isi ulang data demo — **hanya untuk database testing**, tidak pernah untuk production:
 
-```powershell
-Remove-Item -Recurse -Force data
-node backend/server.js
+```bash
+node reset_db.js --demo
 ```
+
+Tanpa flag `--demo`, script menolak dijalankan sebagai pengaman terhadap database production.
 
 ---
 

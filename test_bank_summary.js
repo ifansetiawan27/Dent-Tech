@@ -19,7 +19,7 @@ async function login(page, email, password) {
   const ctx1 = await browser.newContext();
   const page = await ctx1.newPage();
   page.on('pageerror', (e) => console.log('    [pageerror]', e.message.slice(0, 160)));
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/invoices.html', { waitUntil: 'networkidle' });
   await page.click('#btn-settings');
   await page.waitForSelector('#set-bank', { timeout: 5000 });
@@ -76,7 +76,7 @@ async function login(page, email, password) {
   const ctx2 = await browser.newContext();
   const page2 = await ctx2.newPage();
   page2.on('pageerror', (e) => console.log('    [pageerror]', e.message.slice(0, 160)));
-  await login(page2, 'admin@denttech.id', 'admin123');
+  await login(page2, 'support@denttech.id', 'admin123');
   await page2.goto(BASE + '/admin/customers.html', { waitUntil: 'networkidle' });
   await page2.waitForSelector('table', { timeout: 8000 });
   const tableText = await page2.textContent('table');

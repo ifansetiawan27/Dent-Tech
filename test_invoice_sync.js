@@ -32,7 +32,7 @@ async function cleanup() {
 }
 (async () => {
   console.log('=== INVOICE ITEMS + CUSTOMER AUTO-SYNC ===');
-  const admin = await login('admin@denttech.id', 'admin123');
+  const admin = await login('support@denttech.id', 'admin123');
   const customer = await login('ratna@denttech.id', 'customer123');
   const wo = await db.prepare(`SELECT wo.id, wo.status AS wo_status, wo.updated_at AS wo_updated_at,
       t.id AS ticket_id, t.status AS ticket_status, t.updated_at AS ticket_updated_at
@@ -60,7 +60,7 @@ async function cleanup() {
   browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
   const adminCtx = await browser.newContext({ viewport: { width: 1300, height: 900 } });
   const adminPage = await adminCtx.newPage();
-  await adminPage.goto(BASE + '/login.html', { waitUntil: 'networkidle' }); await adminPage.fill('#email', 'admin@denttech.id'); await adminPage.fill('#password', 'admin123'); await Promise.all([adminPage.waitForNavigation({ waitUntil: 'networkidle' }), adminPage.click('#login-btn')]);
+  await adminPage.goto(BASE + '/login.html', { waitUntil: 'networkidle' }); await adminPage.fill('#email', 'support@denttech.id'); await adminPage.fill('#password', 'admin123'); await Promise.all([adminPage.waitForNavigation({ waitUntil: 'networkidle' }), adminPage.click('#login-btn')]);
   await adminPage.goto(BASE + '/admin/invoice-detail.html?id=' + invoiceId, { waitUntil: 'networkidle' });
   await adminPage.click('#btn-edit'); await adminPage.click('#ed-add-item'); await adminPage.fill('[data-field="description"]', 'Biaya transportasi teknisi'); await adminPage.fill('[data-field="qty"]', '2'); await adminPage.fill('[data-field="unit"]', 'trip'); await adminPage.fill('[data-field="unit_price"]', '125000');
   if ((await adminPage.inputValue('[data-field="unit_price"]')) === '125.000') ok('admin custom item price uses Rupiah formatter'); else bad('custom item Rupiah formatter');

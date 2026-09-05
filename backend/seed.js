@@ -60,11 +60,11 @@ async function seed() {
     db.prepare('INSERT INTO users (id, email, password_hash, name, role, phone, customer_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
       .run(id, email, 'supabase-auth', name, role, phone, customer_id, created_at);
 
-  const uAdmin = await createAuthUser('admin@denttech.id', 'admin123', 'Andi Wijaya', 'admin');
+  const uAdmin = await createAuthUser('support@denttech.id', 'admin123', 'Dent Tech.id Support', 'admin');
   const uBudi = await createAuthUser('budi@denttech.id', 'tech123', 'Budi Santoso', 'technician');
   const uSari = await createAuthUser('sari@denttech.id', 'tech123', 'Sari Rahma', 'technician');
   const uLia = await createAuthUser('lia@denttech.id', 'tech123', 'Lia Puspita', 'technician');
-  await insUser(uAdmin, 'admin@denttech.id', 'Andi Wijaya', 'admin', '+62 812 9000 1001', null, iso(90));
+  await insUser(uAdmin, 'support@denttech.id', 'Dent Tech.id Support', 'admin', '+62 812 9000 1001', null, iso(90));
   await insUser(uBudi, 'budi@denttech.id', 'Budi Santoso', 'technician', '+62 812 9000 1002', null, iso(90));
   await insUser(uSari, 'sari@denttech.id', 'Sari Rahma', 'technician', '+62 812 9000 1003', null, iso(80));
   await insUser(uLia, 'lia@denttech.id', 'Lia Puspita', 'technician', '+62 812 9000 1004', null, iso(70));
@@ -245,7 +245,7 @@ async function seed() {
   // ---------- Audit logs ----------
   const insAudit = (...p) => db.prepare('INSERT INTO audit_logs (id, user_id, user_name, role, action, entity, entity_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(...p);
   await insAudit(uid(), uRatna, 'Ratna Dewi', 'customer', 'CREATE', 'ticket', t3, 'Membuat ticket TKT-2026-000003', '127.0.0.1', iso(0, 8, 20));
-  await insAudit(uid(), uAdmin, 'Andi Wijaya', 'admin', 'UPDATE', 'ticket', t4, 'Review ticket TKT-2026-000004', '127.0.0.1', iso(0, 7, 30));
+  await insAudit(uid(), uAdmin, 'Dent Tech.id Support', 'admin', 'UPDATE', 'ticket', t4, 'Review ticket TKT-2026-000004', '127.0.0.1', iso(0, 7, 30));
   await insAudit(uid(), uBudi, 'Budi Santoso', 'technician', 'UPDATE', 'work_order', wo2, 'Memulai work order WO-2026-000002', '127.0.0.1', iso(0, 9, 10));
 
   // ---------- Sequence counters ----------

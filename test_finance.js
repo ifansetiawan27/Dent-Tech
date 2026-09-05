@@ -20,7 +20,7 @@ async function login(email, password) {
 
 (async () => {
   console.log('=== FINANCE MODULE ===');
-  const admin = await login('admin@denttech.id', 'admin123');
+  const admin = await login('support@denttech.id', 'admin123');
   if (!admin) throw new Error('Admin login failed');
 
   const summary = await req('GET', '/api/finance/summary', admin);

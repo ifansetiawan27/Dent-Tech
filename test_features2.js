@@ -34,7 +34,7 @@ async function apiCall(page, method, path, body) {
   console.log('=== 1. Checklist Library (21 equipment templates) ===');
   let ctx = await browser.newContext();
   let page = await ctx.newPage();
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   const tpl = await apiCall(page, 'GET', '/api/checklist-templates');
   if (tpl.data.templates.length === 21) ok('21 checklist templates exist');
   else bad('expected 21 templates, got ' + tpl.data.templates.length);
@@ -164,7 +164,7 @@ async function apiCall(page, method, path, body) {
   ctx = await browser.newContext();
   page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('    [pageerror]', e.message.slice(0, 120)));
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/workorder-detail.html?id=' + woId, { waitUntil: 'networkidle' });
   if (await page.$('#btn-dl-checklist')) ok('Download Checklist (PDF) button present'); else bad('missing checklist download button');
   await page.goto(BASE + '/admin/tickets.html', { waitUntil: 'networkidle' });
@@ -192,7 +192,7 @@ async function apiCall(page, method, path, body) {
   console.log('=== 5. Ticket edit ===');
   ctx = await browser.newContext();
   page = await ctx.newPage();
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   const upd = await apiCall(page, 'PUT', '/api/tickets/' + newTicketId, { problem: 'Edited problem', priority: 'URGENT', equipment_brand: 'TUTTNAUER 2540M-EDITED' });
   if (upd.status === 200) ok('ticket edit endpoint works'); else bad('ticket edit failed: ' + JSON.stringify(upd.data));
   const after = await apiCall(page, 'GET', '/api/tickets/' + newTicketId);
@@ -219,7 +219,7 @@ async function apiCall(page, method, path, body) {
   console.log('=== 7. Reports date filter ===');
   ctx = await browser.newContext();
   page = await ctx.newPage();
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   const an = await apiCall(page, 'GET', '/api/reports/analytics?from=' + ds + '&to=' + ds);
   if (an.data.summary && typeof an.data.summary.total_tickets === 'number') ok('analytics with date filter returns summary'); else bad('analytics filter failed');
   if (an.data.by_equipment_type) ok('analytics includes by_equipment_type'); else bad('missing by_equipment_type');

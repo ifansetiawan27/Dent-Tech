@@ -4,6 +4,9 @@ const path = require('path');
 const net = require('net');
 const http = require('http');
 
+// WARNING: audit resets the database pointed to by .env via reset_db.js --demo.
+// Only run against a disposable test database — NEVER against production.
+
 const ROOT = __dirname;
 const DATA = path.join(ROOT, 'data');
 const PORT = 3000;
@@ -44,7 +47,7 @@ function wipeDb() {
   let lastError;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      execFileSync(process.execPath, ['reset_db.js'], { cwd: ROOT, stdio: 'inherit' });
+      execFileSync(process.execPath, ['reset_db.js', '--demo'], { cwd: ROOT, stdio: 'inherit' });
       return;
     } catch (error) {
       lastError = error;

@@ -5,7 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const { sendJSON, readBody, loadSecret } = require('./util');
 const auth = require('./auth');
-const { seed } = require('./seed');
 
 const { matchRoute } = require('./router');
 
@@ -72,8 +71,6 @@ const server = http.createServer(async (req, res) => {
 (async () => {
   try {
     await loadSecret();
-    const seeded = await seed();
-    if (seeded) console.log('[SEED] Data demo berhasil dibuat di Supabase');
   } catch (e) {
     console.error('[STARTUP ERROR]', e);
   }

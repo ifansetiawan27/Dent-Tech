@@ -79,7 +79,7 @@ async function login(page, email, password) {
   await ctx.close();
   const ctx2 = await browser.newContext();
   const page2 = await ctx2.newPage();
-  await login(page2, 'admin@denttech.id', 'admin123');
+  await login(page2, 'support@denttech.id', 'admin123');
   const adminInv = await page2.evaluate(async () => {
     const t = localStorage.getItem('sms_token');
     const r = await fetch('/api/invoices', { headers: { Authorization: ('Bear' + 'er ') + t } });

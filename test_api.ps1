@@ -21,13 +21,13 @@ function Req($method, $uri, $token, $body) {
 }
 
 Write-Output "=== 1. AUTH ==="
-$admin = Req 'POST' "$base/api/auth/login" $null @{email='admin@denttech.id';password='admin123'}
+$admin = Req 'POST' "$base/api/auth/login" $null @{email='support@denttech.id';password='admin123'}
 if ($admin.token) { Ok "admin login"; $AT=$admin.token } else { Bad "admin login" }
 $tech = Req 'POST' "$base/api/auth/login" $null @{email='budi@denttech.id';password='tech123'}
 if ($tech.token) { Ok "technician login"; $TT=$tech.token } else { Bad "technician login" }
 $cust = Req 'POST' "$base/api/auth/login" $null @{email='hendra@denttech.id';password='customer123'}
 if ($cust.token) { Ok "customer login (hendra/RS Medika Farma)"; $CT=$cust.token } else { Bad "customer login" }
-$badlogin = Req 'POST' "$base/api/auth/login" $null @{email='admin@denttech.id';password='wrong'}
+$badlogin = Req 'POST' "$base/api/auth/login" $null @{email='support@denttech.id';password='wrong'}
 if ($badlogin.__error -and $badlogin.code -eq 401) { Ok "wrong password rejected 401" } else { Bad "wrong password should 401" }
 $noauth = Req 'GET' "$base/api/tickets" $null $null
 if ($noauth.__error -and $noauth.code -eq 401) { Ok "unauthenticated rejected 401" } else { Bad "unauthenticated should 401" }

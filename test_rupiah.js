@@ -8,7 +8,7 @@ function bad(m) { failed++; console.log('  [FAIL]', m); }
 
 async function login(page) {
   await page.goto(BASE + '/login.html', { waitUntil: 'networkidle' });
-  await page.fill('#email', 'admin@denttech.id');
+  await page.fill('#email', 'support@denttech.id');
   await page.fill('#password', 'admin123');
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.click('#login-btn')]);
 }

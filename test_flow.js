@@ -98,7 +98,7 @@ async function uploadPhoto(page, woId, kind) {
   // ============ STEP 2: Admin assigns technician via UI ============
   console.log('=== STEP 2: Admin assigns technician (UI) ===');
   ({ ctx, page } = await freshPage(browser));
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/ticket-detail.html?id=' + custTicketId, { waitUntil: 'networkidle' });
   await page.waitForSelector('#btn-assign', { timeout: 15000 });
   await page.click('#btn-assign');
@@ -209,7 +209,7 @@ async function uploadPhoto(page, woId, kind) {
   // ============ STEP 4: Admin creates proforma via work order UI ============
   console.log('=== STEP 4: Admin creates proforma (work order UI) ===');
   ({ ctx, page } = await freshPage(browser));
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   await page.goto(BASE + '/admin/workorder-detail.html?id=' + woId, { waitUntil: 'networkidle' });
   await page.waitForSelector('#btn-proforma', { timeout: 15000 });
   await page.click('#btn-proforma');

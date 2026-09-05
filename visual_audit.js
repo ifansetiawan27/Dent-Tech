@@ -37,7 +37,7 @@ async function apiCall(page, method, path, body) {
   await ctx.close();
 
   ctx = await browser.newContext(); page = await ctx.newPage();
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   const techs = await apiCall(page, 'GET', '/api/users?role=technician');
   const techId = techs.data.users.find((u) => u.email === 'budi@denttech.id').id;
   const today = new Date(); const ds = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -64,7 +64,7 @@ async function apiCall(page, method, path, body) {
   await ctx.close();
 
   ctx = await browser.newContext(); page = await ctx.newPage();
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   await apiCall(page, 'PUT', '/api/invoice-settings', { tax_mode: 'NON_PPN' });
   const pf = await apiCall(page, 'POST', '/api/invoices/proforma', { work_order_id: woId, labor_cost: 500000 });
   const pfId = pf.data.id;
@@ -84,7 +84,7 @@ async function apiCall(page, method, path, body) {
   await ctx.close();
 
   ctx = await browser.newContext(); page = await ctx.newPage();
-  await login(page, 'admin@denttech.id', 'admin123');
+  await login(page, 'support@denttech.id', 'admin123');
   const invId = comp.data.invoice_id;
 
   // === 1. Checklist Library renders 21 templates ===

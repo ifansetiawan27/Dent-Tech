@@ -50,7 +50,7 @@ async function login(page, email, password) {
   await page.waitForSelector('#login-error:not(.hidden)', { timeout: 10000 });
   if ((await page.textContent('#login-error-msg')).includes('Email atau password salah')) ok('invalid login displays backend error');
   else bad('invalid login does not display backend error');
-  await collectErrors(page, 'admin login', () => login(page, 'admin@denttech.id', 'admin123'));
+  await collectErrors(page, 'admin login', () => login(page, 'support@denttech.id', 'admin123'));
   if (!page.url().includes('/admin/')) bad('admin not redirected to /admin/ (url=' + page.url() + ')');
 
   const adminPages = [
