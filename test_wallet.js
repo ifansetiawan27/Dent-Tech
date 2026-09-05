@@ -23,7 +23,7 @@ const completed = new Set();
 walletH.setPakasirClient({
   async createQris({ orderId, amount }) {
     createCalls++;
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await new Promise((resolve) => setTimeout(resolve, 250));
     return { project: process.env.PAKASIR_PROJECT || 'dent-tech', order_id: orderId, amount, fee: 0, total_payment: amount, payment_method: 'qris', payment_number: `QR-${orderId}`, expired_at: new Date(Date.now() + 3600000).toISOString() };
   },
   async transactionDetail({ orderId, amount, project }) {

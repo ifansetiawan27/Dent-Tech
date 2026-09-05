@@ -33,13 +33,13 @@ async function request(url, options = {}) {
     const response = await fetch(url, { ...options, signal: controller.signal });
     const text = await response.text();
     let data;
-    try { data = JSON.parse(text); } catch { throw new PakasirError('Respons layanan pembayaran tidak valid'); }
-    if (!response.ok) throw new PakasirError(`Layanan pembayaran gagal (${response.status})`);
+    try { data = JSON.parse(text); } catch { throw new PakasirError('Respons layanan pembayaran tidak valid', 'PAYMENT_SERVICE_UNAVAILABLE', 502); }
+    if (!response.ok) throw new PakasirError(`Layanan pembayaran menolak permintaan (${response.status})`, 'PAYMENT_SERVICE_UNAVAILABLE', response.status >= 500 ? 503 : 502);
     return data;
   } catch (error) {
     if (error instanceof PakasirError) throw error;
     if (error.name === 'AbortError') throw new PakasirError('Layanan pembayaran melewati batas waktu', 'PAYMENT_TIMEOUT', 504);
-    throw new PakasirError('Layanan pembayaran tidak dapat dihubungi');
+    throw new PakasirError('Layanan pembayaran tidak dapat dihubungi', 'PAYMENT_SERVICE_UNAVAILABLE', 503);
   } finally {
     clearTimeout(timer);
   }
@@ -61,7 +61,7 @@ async function createQris({ orderId, amount }) {
   });
   const payment = data && data.payment;
   validateIdentity(payment, { project, orderId: String(orderId), amount: normalizedAmount });
-  if (!payment.payment_number || payment.payment_method !== 'qris') throw new PakasirError('Data QRIS dari layanan pembayaran tidak lengkap');
+  if (!payment.payment_number || payment.payment_method !== 'qris') throw new PakasirError('Data QRIS dari layanan pembayaran tidak lengkap', 'PAYMENT_RESPONSE_MISMATCH');
   return payment;
 }
 
@@ -73,7 +73,7 @@ async function transactionDetail({ orderId, amount, project: expectedProject }) 
   const data = await request(`${BASE_URL}/transactiondetail?${query}`);
   const transaction = data && data.transaction;
   validateIdentity(transaction, { project, orderId: String(orderId), amount: normalizedAmount });
-  if (typeof transaction.status !== 'string') throw new PakasirError('Status transaksi dari layanan pembayaran tidak valid');
+  if (typeof transaction.status !== 'string') throw new PakasirError('Status transaksi dari layanan pembayaran tidak valid', 'PAYMENT_RESPONSE_MISMATCH');
   return transaction;
 }
 

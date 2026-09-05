@@ -36,6 +36,7 @@
     const content = document.getElementById('content');
     let state = { wallet: { balance: 0 }, transactions: [], order: null };
     let pollTimer = null;
+    let pollFailures = 0;
 
     function safeQrSrc(value) {
       const src = String(value || '');
@@ -126,6 +127,7 @@
         const result = await api.get('/api/wallet/topups/' + encodeURIComponent(id));
         state.order = result.order;
         state.wallet = result.wallet || state.wallet;
+        pollFailures = 0;
         render();
         if (result.order?.status === 'COMPLETED') {
           toast('Top up berhasil dan saldo telah diperbarui');
@@ -134,8 +136,9 @@
           schedulePoll(id);
         }
       } catch (e) {
-        toast(e.message, 'error');
-        schedulePoll(id, 6000);
+        pollFailures++;
+        if (pollFailures === 1) toast(e.message, 'error');
+        if (pollFailures < 5) schedulePoll(id, Math.min(30000, 6000 * pollFailures));
       }
     }
 

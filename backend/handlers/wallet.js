@@ -21,7 +21,11 @@ function safePaymentError(error) {
   if (error && allowed.has(error.code)) return { status: Math.min(599, Math.max(400, Number(error.status) || 400)), error: error.message, code: error.code };
   return { status: 502, error: 'Layanan pembayaran gagal', code: 'PAYMENT_GATEWAY_ERROR' };
 }
-function paymentError(ctx, error) { const safe = safePaymentError(error); sendJSON(ctx.res, safe.status, { error: safe.error, code: safe.code }); }
+function paymentError(ctx, error) {
+  const safe = safePaymentError(error);
+  console.error(`[payment-error] path=${ctx.req?.url || '-'} code=${error?.code || 'UNKNOWN'} status=${error?.status || 0} message=${error?.message || error}`);
+  sendJSON(ctx.res, safe.status, { error: safe.error, code: safe.code });
+}
 function callbackInvalid(ctx, status = 400) { sendJSON(ctx.res, status, { error: 'Callback tidak valid', code: 'INVALID_CALLBACK' }); }
 function callbackAllowed(ip) {
   const key = String(ip || 'unknown');
@@ -78,12 +82,21 @@ async function provisionQris(order, executor = db) {
     await executor.prepare(`UPDATE payment_orders SET payment_number = ?, gateway_fee = ?, total_payment = ?, expired_at = ?, updated_at = ? WHERE id = ? AND status = 'PENDING'`)
       .run(payment.payment_number, payment.fee == null ? null : Number(payment.fee), totalPayment, payment.expired_at || null, now(), order.id);
   } catch (error) {
-    await transitionOrder(order.id, 'FAILED', executor);
+    try { await transitionOrder(order.id, 'FAILED', executor); }
+    catch (transitionError) { console.error(`[payment-transition] order=${order.order_id} code=${transitionError?.code || 'UNKNOWN'} message=${transitionError?.message || transitionError}`); }
     throw error;
   }
   return executor.prepare('SELECT * FROM payment_orders WHERE id = ?').get(order.id);
 }
 async function createOrder(args) { return provisionQris(await insertPendingOrder(db, args)); }
+async function waitForProvisionedOrder(id, attempts = 20, delayMs = 100) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const order = await db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
+    if (!order || order.status !== 'PENDING' || order.payment_number) return order;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
+}
 async function transitionOrder(id, status, executor = db, extra = {}) {
   if (!ORDER_TERMINAL_STATUSES.has(status)) throw appError('Status pembayaran tidak valid', 'INVALID_PAYMENT_STATE', 400);
   const fields = ['status = ?', 'updated_at = ?'];
@@ -191,13 +204,21 @@ async function createTopupHandler(ctx) {
     const choice = await db.transaction(async (tx) => {
       await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`wallet-topup:${ctx.user.customer_id}`]);
       const pending = await tx.prepare("SELECT * FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(ctx.user.customer_id);
-      if (pending?.payment_number) return { created: false, order: pending };
-      if (pending) return { created: false, order: await provisionQris(pending, tx) };
-      const order = await insertPendingOrder(tx, { kind: 'WALLET_TOPUP', customerId: ctx.user.customer_id, amount: TOPUP_AMOUNT });
-      return { created: true, order: await provisionQris(order, tx) };
+      if (pending) return { created: false, order: pending };
+      return { created: true, order: await insertPendingOrder(tx, { kind: 'WALLET_TOPUP', customerId: ctx.user.customer_id, amount: TOPUP_AMOUNT }) };
     });
-    sendJSON(ctx.res, choice.created ? 201 : 200, { order: await orderWithQr(choice.order) });
-  } catch (error) { paymentError(ctx, error); }
+    const order = choice.created
+      ? await provisionQris(choice.order)
+      : choice.order.payment_number ? choice.order : await waitForProvisionedOrder(choice.order.id);
+    if (!order?.payment_number || order.status !== 'PENDING') throw appError('QRIS gagal disiapkan. Silakan buat QRIS baru.', 'PAYMENT_SERVICE_UNAVAILABLE', 503);
+    sendJSON(ctx.res, choice.created ? 201 : 200, { order: await orderWithQr(order) });
+  } catch (error) {
+    if (error?.code === '23505') {
+      const pending = await db.prepare("SELECT * FROM payment_orders WHERE customer_id = ? AND kind = 'WALLET_TOPUP' AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1").get(ctx.user.customer_id);
+      if (pending?.payment_number) return sendJSON(ctx.res, 200, { order: await orderWithQr(pending) });
+    }
+    paymentError(ctx, error);
+  }
 }
 async function topupStatusHandler(ctx) {
   const order = await db.prepare("SELECT * FROM payment_orders WHERE id = ? AND customer_id = ? AND kind = 'WALLET_TOPUP'").get(ctx.params.id, ctx.user.customer_id);
