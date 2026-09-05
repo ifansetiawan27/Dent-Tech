@@ -1,6 +1,7 @@
 'use strict';
 const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig } = require('../util');
+const { scheduleAppointmentEmail } = require('../email');
 const {
   audit, timeline, setTicketStatus, getTicket, canAccessTicket,
   notify, TICKET_TRANSITIONS
@@ -108,6 +109,29 @@ async function createTicketHandler(ctx) {
   } catch (error) {
     if (error.status) return sendJSON(ctx.res, error.status, { error: error.message, code: error.code, balance: error.balance, required: 100000 });
     throw error;
+  }
+  if (ctx.user.role === 'customer') {
+    const customer = await db.prepare('SELECT name FROM customers WHERE id = ?').get(customer_id);
+    scheduleAppointmentEmail(ctx, {
+      id,
+      number,
+      customerName: customer?.name || '',
+      actorName: ctx.user.name || '',
+      actorRole: ctx.user.role,
+      contactName: contact_name,
+      contactPhone: contact_phone,
+      serviceType: service_type,
+      priority,
+      equipmentType: equipment?.name || equipment_type,
+      equipmentBrand: equipment?.model || equipment_brand,
+      problem,
+      description,
+      serviceAddress: service_address,
+      preferredDate: preferred_date,
+      preferredTime: preferred_time,
+      createdAt: ts,
+      adminUrl: `https://denttech.id/admin/ticket-detail.html?id=${encodeURIComponent(id)}`
+    });
   }
   notify({ role: 'admin', title: `Ticket baru ${number}`, body: `${problem} (${priority})`, type: 'TICKET', ref_type: 'ticket', ref_id: id });
   audit(ctx.user, 'CREATE', 'ticket', id, `Membuat ticket ${number}`, ctx.ip);

@@ -22,4 +22,22 @@ function getDbExecutor() {
   return currentRuntime()?.dbClient || null;
 }
 
-module.exports = { runWithRuntime, currentRuntime, getEnv, getDbExecutor };
+function trackTask(task, label = 'background') {
+  const promise = Promise.resolve(task).catch((error) => {
+    console.error(`[${label}]`, error?.message || error);
+  });
+  const runtime = currentRuntime();
+  if (runtime?.pendingTasks) runtime.pendingTasks.push(promise);
+  return promise;
+}
+
+async function flushTasks() {
+  const runtime = currentRuntime();
+  if (!runtime?.pendingTasks?.length) return;
+  while (runtime.pendingTasks.length) {
+    const batch = runtime.pendingTasks.splice(0);
+    await Promise.allSettled(batch);
+  }
+}
+
+module.exports = { runWithRuntime, currentRuntime, getEnv, getDbExecutor, trackTask, flushTasks };

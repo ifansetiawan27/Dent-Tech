@@ -9,7 +9,7 @@ import httpAdapter from './backend/http-adapter.js';
 const { matchRoute } = backendRouter;
 const { currentUser } = backendAuth;
 const { createWorkerDbClient } = backendDb;
-const { runWithRuntime } = backendRuntime;
+const { runWithRuntime, flushTasks } = backendRuntime;
 const { loadSecret } = backendUtil;
 const { WorkerResponseAdapter, requestAdapter, readWorkerBody } = httpAdapter;
 
@@ -43,6 +43,7 @@ async function handleApi(request, env, executionCtx) {
     env,
     dbClient: client,
     executionCtx,
+    pendingTasks: [],
     supabaseAdmin: createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
     })
@@ -64,7 +65,8 @@ async function handleApi(request, env, executionCtx) {
       }
       const query = Object.fromEntries(url.searchParams.entries());
       const ip = request.headers.get('CF-Connecting-IP') || '';
-      await route.handler({ req, res, user, params, query, body, ip, executionCtx });
+      await route.handler({ req, res, user, params, query, body, ip, executionCtx, runtimeEnv: env });
+      await flushTasks();
       return res.toResponse();
     });
   } catch (error) {
@@ -72,6 +74,7 @@ async function handleApi(request, env, executionCtx) {
     const status = error?.message === 'Payload too large' ? 413 : 500;
     return json(status, { error: error?.message === 'Invalid JSON body' ? 'Format request tidak valid' : 'Terjadi kesalahan pada server' });
   } finally {
+    await runWithRuntime(runtime, flushTasks);
     await client.end().catch(() => {});
   }
 }

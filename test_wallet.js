@@ -7,12 +7,17 @@ const ticketsH = require('./backend/handlers/tickets');
 const invoicesH = require('./backend/handlers/invoices');
 const financeH = require('./backend/handlers/finance');
 const { snapshotWorkOrderInvoiceItems } = require('./backend/handlers/_common');
+const { SUPPORT_EMAIL, FORWARD_DESTINATION, appointmentEmail, sendAppointmentEmail, scheduleAppointmentEmail } = require('./backend/email');
 
-let passed = 0, failed = 0, createCalls = 0;
+let passed = 0, failed = 0, createCalls = 0, scheduledEmails = 0;
 const created = { customer: null, otherCustomer: null, user: null, invoice: null, ticket: null };
 const ok = (condition, message) => { if (condition) { passed++; console.log('  [PASS]', message); } else { failed++; console.log('  [FAIL]', message); } };
 function response() { return { status: 0, data: null, headersSent: false, writeHead(code) { this.status = code; this.headersSent = true; }, end(body) { this.data = JSON.parse(body); } }; }
-async function invoke(handler, { user, params = {}, query = {}, body = {}, ip = 'test' }) { const res = response(); await handler({ res, user, params, query, body, ip }); return res; }
+async function invoke(handler, { user, params = {}, query = {}, body = {}, ip = 'test' }) {
+  const res = response();
+  await handler({ res, user, params, query, body, ip, runtimeEnv: {}, executionCtx: { waitUntil() { scheduledEmails++; } } });
+  return res;
+}
 
 const completed = new Set();
 walletH.setPakasirClient({
@@ -66,9 +71,35 @@ async function financeTotals() {
   const user = { id: created.user, name: 'Wallet Test', role: 'customer', customer_id: created.customer };
   const admin = { id: 'test-admin', name: 'Test Admin', role: 'admin', customer_id: null };
   const ticketBody = { equipment_type: 'Dental Unit', service_type: 'Repair', priority: 'MEDIUM', problem: 'Focused wallet test' };
+  const emailPreview = appointmentEmail({ id: 'ticket-test', number: 'TKT-TEST', customerName: '<Clinic>', actorName: 'Test', actorRole: 'customer', serviceType: 'Repair', priority: 'MEDIUM', problem: '<script>alert(1)</script>', adminUrl: 'https://denttech.id/admin/ticket-detail.html?id=ticket-test' });
+  ok(SUPPORT_EMAIL === 'support@denttech.id' && FORWARD_DESTINATION === 'ifansetiawan64@gmail.com', 'appointment email recipients are fixed');
+  ok(emailPreview.html.includes('&lt;script&gt;') && !emailPreview.html.includes('<script>'), 'appointment email escapes customer HTML');
+  let sentMessage = null;
+  class FakeEmailMessage {
+    constructor(from, to, raw) { Object.assign(this, { from, to, raw }); }
+  }
+  const fakeMime = {
+    sender: null, recipient: null, subject: '', messages: [],
+    setSender(value) { this.sender = value; },
+    setRecipient(value) { this.recipient = value; },
+    setSubject(value) { this.subject = value; },
+    addMessage(value) { this.messages.push(value); },
+    asRaw() { return JSON.stringify(this); }
+  };
+  const emailResult = await sendAppointmentEmail({ EMAIL: { async send(message) { sentMessage = message; } } },
+    { id: 'ticket-test', number: 'TKT-TEST', customerName: 'Clinic', actorName: 'Test', actorRole: 'customer', serviceType: 'Repair', priority: 'MEDIUM', problem: 'Problem', adminUrl: 'https://denttech.id/admin/ticket-detail.html?id=ticket-test' },
+    { EmailMessage: FakeEmailMessage, createMimeMessage: () => fakeMime });
+  ok(emailResult.sent && sentMessage.from === 'notifications@denttech.id' && sentMessage.to === FORWARD_DESTINATION && fakeMime.recipient.addr === SUPPORT_EMAIL && fakeMime.messages.length === 2, 'appointment email builds and sends multipart message');
+  let waitedTask = null;
+  const scheduled = scheduleAppointmentEmail({ runtimeEnv: { EMAIL: { async send() {} } }, executionCtx: { waitUntil(task) { waitedTask = task; } } },
+    { id: 'scheduled-test', number: 'TKT-SCHEDULED', priority: 'LOW', adminUrl: 'https://denttech.id' },
+    { EmailMessage: FakeEmailMessage, createMimeMessage: () => ({ ...fakeMime, messages: [] }) });
+  ok(scheduled && waitedTask === scheduled, 'appointment email registers Worker waitUntil task');
+  await scheduled;
 
   let r = await invoke(ticketsH.createTicketHandler, { user, body: ticketBody });
   ok(r.status === 409 && r.data.code === 'INSUFFICIENT_WALLET_BALANCE' && r.data.required === 100000, 'insufficient balance returns structured 409');
+  ok(scheduledEmails === 0, 'failed appointment schedules no email');
 
   r = await invoke(walletH.createTopupHandler, { user });
   const topup = r.data.order;
@@ -86,6 +117,7 @@ async function financeTotals() {
   const debit = await db.prepare('SELECT amount, balance_after FROM wallet_transactions WHERE ticket_id = ?').get(created.ticket);
   const onsite = await db.prepare('SELECT amount FROM finance_income WHERE ticket_id = ?').get(created.ticket);
   ok(r.status === 201 && Number(debit.amount) === 100000 && Number(debit.balance_after) === 0 && Number(onsite.amount) === 100000, 'customer ticket atomically debits onsite fee and recognizes revenue');
+  ok(scheduledEmails === 0, 'local tests do not send real appointment email');
 
   created.invoice = uid();
   await db.prepare(`INSERT INTO invoices (id, number, customer_id, labor_cost, discount, tax_rate, status, type, issued_at, created_at, updated_at, version)

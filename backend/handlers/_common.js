@@ -1,5 +1,6 @@
 'use strict';
 const { db } = require('../db');
+const { trackTask } = require('../runtime');
 const { uid, now } = require('../util');
 
 const TICKET_STATUSES = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'];
@@ -16,21 +17,18 @@ const TICKET_TRANSITIONS = {
 };
 
 function notify({ user_id = null, role = null, customer_id = null, title, body = '', type = 'INFO', ref_type = '', ref_id = '' }) {
-  db.prepare('INSERT INTO notifications (id, user_id, role, customer_id, title, body, type, ref_type, ref_id, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)')
-    .run(uid(), user_id, role, customer_id, title, body, type, ref_type, ref_id, now())
-    .catch((e) => console.error('[notify]', e.message));
+  return trackTask(db.prepare('INSERT INTO notifications (id, user_id, role, customer_id, title, body, type, ref_type, ref_id, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)')
+    .run(uid(), user_id, role, customer_id, title, body, type, ref_type, ref_id, now()), 'notify');
 }
 
 function audit(user, action, entity, entityId, details, ip = '') {
-  db.prepare('INSERT INTO audit_logs (id, user_id, user_name, role, action, entity, entity_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(uid(), user ? user.id : null, user ? user.name : '', user ? user.role : '', action, entity, entityId, details, ip, now())
-    .catch((e) => console.error('[audit]', e.message));
+  return trackTask(db.prepare('INSERT INTO audit_logs (id, user_id, user_name, role, action, entity, entity_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(uid(), user ? user.id : null, user ? user.name : '', user ? user.role : '', action, entity, entityId, details, ip, now()), 'audit');
 }
 
 function timeline(ticketId, type, title, description, visibility, createdBy) {
-  db.prepare('INSERT INTO ticket_timeline (id, ticket_id, type, title, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(uid(), ticketId, type, title, description || '', visibility || 'CUSTOMER_VISIBLE', createdBy || null, now())
-    .catch((e) => console.error('[timeline]', e.message));
+  return trackTask(db.prepare('INSERT INTO ticket_timeline (id, ticket_id, type, title, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(uid(), ticketId, type, title, description || '', visibility || 'CUSTOMER_VISIBLE', createdBy || null, now()), 'timeline');
 }
 
 async function setTicketStatus(ticket, toStatus, user, note = '') {

@@ -35,6 +35,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "dotenv": "^17.4.2",
+    "mimetext": "3.0.27",
     "pg": "^8.23.0",
     "playwright-core": "^1.62.1",
     "qrcode": "1.5.4"
