@@ -33,7 +33,7 @@ async function installMocks(page, mockUser = user, options = {}) {
     const path = new URL(req.url()).pathname;
     let status = 200;
     let body;
-    if (path === '/api/auth/me') body = { user: mockUser, settings: {}, unread_notifications: 0 };
+    if (path === '/api/auth/me') body = { user: mockUser, settings: { company_name: 'Dent Tech.id', company_address: 'Jakarta', company_phone: '021', company_email: 'support@denttech.id' }, unread_notifications: 0 };
     else if (path === '/api/notifications') body = { notifications: [] };
     else if (path === '/api/dashboard') body = { stats: { active_tickets: 0, equipment: 0, unpaid_invoices: 1 }, wallet: { balance: 0 }, recent_tickets: [], active_ticket: null };
     else if (path === '/api/customers/customer-1') body = { customer: { address: 'Jl. Uji', city: 'Jakarta' } };
@@ -48,18 +48,18 @@ async function installMocks(page, mockUser = user, options = {}) {
     else if (path === '/api/finance/summary') body = {
       income: 350000, total_cash_inflow: 450000, wallet_topups: 200000, wallet_liability: 125000,
       onsite_fee_revenue: 100000, invoice_payments: 250000, expense: 50000, net: 300000,
-      income_count: 2, expense_count: 1, by_category: [],
-      monthly: [{ month: '2026-08', income: 350000, cash_inflow: 450000, expense: 50000 }]
+      income_count: 2, expense_count: 1, by_category: [{ category: 'SPARE_PART', total: 50000, cnt: 1 }],
+      monthly: [{ month: '2026-08', invoice_payments: 250000, wallet_topups: 200000, onsite_fee_revenue: 100000, income: 350000, cash_inflow: 450000, expense: 50000 }]
     };
     else if (path === '/api/finance/income') body = {
       payments: [], total: 350000, total_cash_inflow: 450000,
       rows: [
-        { id: 'payment-1', type: 'INVOICE_PAYMENT', amount: 250000, paid_at: '2026-08-31T10:00:00Z', invoice_number: 'INV-UI-001', customer_name: 'UI Customer', method: 'QRIS', cash_flow: true, revenue: true },
+        { id: 'payment-1', type: 'INVOICE_PAYMENT', amount: 250000, paid_at: '2026-08-31T10:00:00Z', invoice_id: 'inv-1', invoice_number: 'INV-UI-001', customer_id: 'customer-1', customer_code: 'CUS-001', customer_name: 'UI Customer', reference: '\t=unsafe', method: 'QRIS', cash_flow: true, revenue: true },
         { id: 'topup-1', type: 'WALLET_TOPUP_CASH', amount: 200000, paid_at: '2026-08-30T10:00:00Z', description: 'Top-up wallet', customer_name: 'UI Customer', cash_flow: true, revenue: false },
         { id: 'onsite-1', type: 'ONSITE_FEE_REVENUE', amount: 100000, paid_at: '2026-08-29T10:00:00Z', description: 'Biaya inspeksi onsite', customer_name: 'UI Customer', cash_flow: false, revenue: true }
       ]
     };
-    else if (path === '/api/finance/expenses') body = { expenses: [], total: 50000 };
+    else if (path === '/api/finance/expenses') body = { expenses: [{ id: 'expense-1', category: 'SPARE_PART', description: '<Pembelian, seal>', part_id: 'part-1', part_code: 'PRT-001', part_name: 'Seal', part_unit: 'pcs', qty: 2, unit_cost: 25000, amount: 50000, restocked: 1, expense_date: '2026-08-31', created_by: 'admin-1', created_at: '2026-08-31T11:00:00Z' }], total: 50000 };
     else body = {};
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   });
@@ -134,6 +134,19 @@ async function installMocks(page, mockUser = user, options = {}) {
   await check(incomeText.includes('Kas masuk') && incomeText.includes('Pendapatan'), 'finance rows distinguish cash flow from recognized revenue');
   const trendText = await adminPage.locator('#trend').innerText();
   await check(trendText.includes('Pendapatan Diakui') && trendText.includes('Kas Masuk') && trendText.includes('Pengeluaran'), 'monthly trend displays recognized revenue, cash inflow, and expense');
+  await check(!(await adminPage.locator('#btn-finance-pdf').isDisabled()) && !(await adminPage.locator('#btn-finance-csv').isDisabled()), 'finance detailed download buttons enable after complete data load');
+  const financeDocument = await adminPage.evaluate(async () => {
+    const mod = await import('/utils/finance-doc.js');
+    const summary = await fetch('/api/finance/summary').then((response) => response.json());
+    const income = await fetch('/api/finance/income').then((response) => response.json());
+    const expenses = await fetch('/api/finance/expenses').then((response) => response.json());
+    return {
+      html: mod.buildFinanceHtml({ summary, income, expenses }, { company_name: 'Dent Tech.id' }, { from: '2026-08-01', to: '2026-08-31' }),
+      csv: mod.buildFinanceCsv({ summary, income, expenses }, { from: '2026-08-01', to: '2026-08-31' })
+    };
+  });
+  await check(financeDocument.html.includes('Laporan Keuangan Rinci') && financeDocument.html.includes('Liabilitas Wallet Saat Ini') && financeDocument.html.includes('PRT-001') && financeDocument.html.includes('&lt;Pembelian, seal&gt;'), 'finance PDF includes detailed escaped summary, income, and expense data');
+  await check(financeDocument.csv.charCodeAt(0) === 0xFEFF && financeDocument.csv.includes("'\t=unsafe") && financeDocument.csv.includes('PRT-001') && financeDocument.csv.includes(',25000,') && financeDocument.csv.includes(',300000\r\n'), 'finance CSV is Excel-compatible, detailed, formula-safe, and preserves numeric values');
 
   await browser.close();
   console.log(`\nWALLET UI RESULT: ${passed} passed, ${failed} failed`);
