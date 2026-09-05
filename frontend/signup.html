@@ -9,9 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=2">
+  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 </head>
 <body class="min-h-screen bg-slate-50 font-sans antialiased">
+  <button id="theme-toggle" class="fixed top-4 right-4 z-50 p-2.5 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100" type="button" aria-label="Ganti tema"></button>
   <div class="min-h-screen flex items-center justify-center p-6">
     <div class="w-full max-w-lg fade-up">
       <div class="flex items-center gap-3 mb-8 justify-center">
@@ -77,8 +79,10 @@
   <script type="module">
     import { setToken, setUser, getToken, getUser, portalHome } from '/utils/auth.js';
     import { api } from '/services/api.js';
+    import { bindThemeToggle } from '/utils/theme.js';
 
     lucide.createIcons();
+    bindThemeToggle(document.getElementById('theme-toggle'));
 
     if (getToken() && getUser()) window.location.href = portalHome(getUser().role);
 

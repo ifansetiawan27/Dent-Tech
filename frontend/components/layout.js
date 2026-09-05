@@ -3,6 +3,7 @@ import { getUser, logout } from '../utils/auth.js';
 import { esc, timeAgo } from '../utils/format.js';
 import { refreshIcons } from './ui.js';
 import { avatarHtml } from './avatar.js';
+import { bindThemeToggle } from '../utils/theme.js';
 
 function initials(name = '') {
   return name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
@@ -172,7 +173,7 @@ export function initAdminLayout(activeKey) {
   document.body.prepend(sidebar);
 
   const topbar = document.createElement('header');
-  topbar.className = 'sticky top-0 z-30 h-16 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center gap-3 px-4 sm:px-6 lg:pl-[17.5rem]';
+  topbar.className = 'sticky top-0 z-30 h-16 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center gap-3 px-4 sm:px-6 lg:pl-[18.5rem]';
   topbar.innerHTML = `
     <button id="mobile-menu-btn" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600"><i data-lucide="menu" class="w-5 h-5"></i></button>
     <div class="lg:hidden flex items-center gap-2">
@@ -180,6 +181,7 @@ export function initAdminLayout(activeKey) {
       <span class="font-bold text-slate-800">Dent Tech.id</span>
     </div>
     <div class="flex-1"></div>
+    <button id="theme-toggle" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600" type="button"></button>
     <button id="notif-bell" class="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600">
       <i data-lucide="bell" class="w-5 h-5"></i>
       <span data-notif-badge class="hidden absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center"></span>
@@ -188,9 +190,9 @@ export function initAdminLayout(activeKey) {
       <div class="overflow-hidden rounded-full">${avatarHtml(user, 'w-8 h-8', 'text-xs')}</div>
     </button>`;
   const main = document.querySelector('main');
-  main.classList.add('lg:pl-64');
+  main.classList.add('lg:pl-[19rem]');
   main.parentElement.insertBefore(topbar, main);
-
+  bindThemeToggle(document.getElementById('theme-toggle'));
   // mobile drawer
   const drawer = document.createElement('div');
   drawer.className = 'hidden fixed inset-0 z-50 lg:hidden';
@@ -248,6 +250,7 @@ export function initMobileLayout(activeKey, role) {
       <p class="text-[11px] text-slate-400 leading-tight">${portalLabel}</p>
     </div>
     <div class="flex-1"></div>
+    <button id="theme-toggle" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600" type="button"></button>
     <button id="notif-bell" class="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600">
       <i data-lucide="bell" class="w-5 h-5"></i>
       <span data-notif-badge class="hidden absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center"></span>
@@ -257,6 +260,7 @@ export function initMobileLayout(activeKey, role) {
     </button>`;
   const main = document.querySelector('main');
   main.parentElement.insertBefore(topbar, main);
+  bindThemeToggle(document.getElementById('theme-toggle'));
 
   const bottom = document.createElement('nav');
   bottom.className = 'fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]';
