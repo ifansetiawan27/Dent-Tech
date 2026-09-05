@@ -58,7 +58,9 @@ async function getWorkOrderHandler(ctx) {
   const partUsages = await db.prepare(
     `SELECT pu.*, p.name AS part_name, p.code AS part_code, p.unit FROM part_usages pu JOIN parts p ON p.id = pu.part_id WHERE pu.work_order_id = ? ORDER BY pu.created_at ASC`
   ).all(wo.id);
-  const photos = (await db.prepare('SELECT * FROM attachments WHERE work_order_id = ? ORDER BY created_at ASC').all(wo.id)).map(attachmentWithUrl);
+  const photos = (await db.prepare(`SELECT * FROM attachments
+    WHERE work_order_id = ? OR (ticket_id = ? AND work_order_id IS NULL AND kind = 'request')
+    ORDER BY created_at ASC`).all(wo.id, wo.ticket_id)).map(attachmentWithUrl);
   const report = (await db.prepare('SELECT * FROM service_reports WHERE work_order_id = ? ORDER BY created_at DESC LIMIT 1').get(wo.id)) || null;
 
   if (ctx.user.role === 'customer') {
@@ -159,16 +161,23 @@ async function submitDiagnosisHandler(ctx) {
   if (!wo.equipment_identity_confirmed_at || !String(wo.serviced_equipment_name || '').trim() || !String(wo.serviced_equipment_type_model || '').trim() || !String(wo.serviced_equipment_serial_number || '').trim()) {
     return sendJSON(ctx.res, 400, { error: 'Konfirmasi nama, tipe/model, dan serial number alat sebelum mengirim diagnosis', code: 'EQUIPMENT_IDENTITY_REQUIRED' });
   }
-  const inspectionEvidence = await db.prepare(`SELECT kind FROM attachments WHERE work_order_id = ?
-    AND kind IN ('before','equipment_brand','equipment_serial') AND mime IN ('image/jpeg','image/png','image/webp')`).all(wo.id);
-  const capturedKinds = new Set(inspectionEvidence.map((photo) => photo.kind));
-  const missingInspection = ['before', 'equipment_brand', 'equipment_serial'].filter((kind) => !capturedKinds.has(kind));
+  const ts = now();
+  let missingInspection = [];
+  const transition = await db.transaction(async (tx) => {
+    const lockedWo = await tx.prepare('SELECT status FROM work_orders WHERE id = ? FOR UPDATE').get(wo.id);
+    if (!lockedWo || lockedWo.status !== 'STARTED') return false;
+    const inspectionEvidence = await tx.prepare(`SELECT kind FROM attachments WHERE work_order_id = ?
+      AND kind IN ('before','equipment_brand','equipment_serial') AND mime IN ('image/jpeg','image/png','image/webp')`).all(wo.id);
+    const capturedKinds = new Set(inspectionEvidence.map((photo) => photo.kind));
+    missingInspection = ['before', 'equipment_brand', 'equipment_serial'].filter((kind) => !capturedKinds.has(kind));
+    if (missingInspection.length) return false;
+    await tx.prepare("UPDATE work_orders SET status = 'WAITING_QUOTATION', updated_at = ? WHERE id = ?").run(ts, wo.id);
+    return true;
+  });
   if (missingInspection.length) return sendJSON(ctx.res, 400, {
     error: 'Foto inspeksi wajib belum lengkap', code: 'INSPECTION_PHOTOS_MISSING', missing_photo_kinds: missingInspection
   });
-  const ts = now();
-  const transition = await db.prepare("UPDATE work_orders SET status = 'WAITING_QUOTATION', updated_at = ? WHERE id = ? AND status = 'STARTED'").run(ts, wo.id);
-  if (!transition.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
+  if (!transition) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
   const t = await getTicket(wo.ticket_id);
   if (t) {
     await setTicketStatus(t, 'WAITING_QUOTATION', ctx.user, 'Diagnosis selesai, menunggu proforma invoice');
@@ -314,10 +323,6 @@ async function completeWorkOrderHandler(ctx) {
   if (!diagnosis || !diagnosis.findings.trim()) return sendJSON(ctx.res, 400, { error: 'Diagnosis wajib diisi sebelum menyelesaikan pekerjaan' });
   const performed = (await db.prepare('SELECT COUNT(*) AS c FROM work_performed WHERE work_order_id = ?').get(wo.id)).c;
   if (!performed) return sendJSON(ctx.res, 400, { error: 'Catat minimal satu pekerjaan yang dilakukan' });
-  const photoRequirements = await workOrderPhotoRequirements(wo.id);
-  if (!photoRequirements.complete) return sendJSON(ctx.res, 400, {
-    error: 'Foto wajib belum lengkap', code: 'REQUIRED_PHOTOS_MISSING', missing_photo_kinds: photoRequirements.missing
-  });
   const { summary } = ctx.body;
   if (!summary || !String(summary).trim()) return sendJSON(ctx.res, 400, { error: 'Ringkasan service report wajib diisi' });
 
@@ -329,6 +334,8 @@ async function completeWorkOrderHandler(ctx) {
     await db.transaction(async (tx) => {
       const lockedWo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(wo.id);
       if (!lockedWo || lockedWo.status !== 'REPAIR_STARTED') { const e = new Error('Status work order berubah. Muat ulang halaman.'); e.status = 409; throw e; }
+      const photoRequirements = await workOrderPhotoRequirements(lockedWo.id, tx);
+      if (!photoRequirements.complete) { const e = new Error('Foto wajib belum lengkap'); e.status = 400; e.code = 'REQUIRED_PHOTOS_MISSING'; e.missingPhotoKinds = photoRequirements.missing; throw e; }
       t = await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(lockedWo.ticket_id);
       proforma = await tx.prepare("SELECT * FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(lockedWo.id);
       if (!t || !proforma || proforma.approval_status !== 'APPROVED') { const e = new Error('Proforma yang disetujui customer tidak ditemukan'); e.status = 409; throw e; }
@@ -341,7 +348,7 @@ async function completeWorkOrderHandler(ctx) {
         .run(uid(), t.id, t.status, 'COMPLETED', ctx.user.id, 'Pekerjaan selesai; pembayaran tersedia', completedAt);
     });
   } catch (e) {
-    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message, ...(e.code ? { code: e.code } : {}), ...(e.missingPhotoKinds ? { missing_photo_kinds: e.missingPhotoKinds } : {}) });
     throw e;
   }
   timeline(t.id, 'STATUS', 'Service selesai', `Pekerjaan dan laporan ${reportNumber} selesai. Pembayaran ${proforma.number} tersedia.`, 'CUSTOMER_VISIBLE', ctx.user.id);

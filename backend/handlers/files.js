@@ -1,7 +1,7 @@
 'use strict';
 const path = require('path');
 const { db } = require('../db');
-const { saveFile, readFile } = require('../storage');
+const { saveFile, readFile, deleteFile } = require('../storage');
 const { uid, now, sendJSON, verifyFileSig } = require('../util');
 const { audit, getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder } = require('./_common');
 
@@ -41,6 +41,7 @@ async function uploadFileHandler(ctx) {
     if (ctx.user.role === 'technician') {
       const inspectionKind = ['before', 'equipment_brand', 'equipment_serial'].includes(kind);
       const repairKind = ['after', 'part_replacement', 'other'].includes(kind);
+      if (!inspectionKind && !repairKind) return sendJSON(ctx.res, 400, { error: 'Jenis foto teknisi tidak valid' });
       if (inspectionKind && wo.status !== 'STARTED') return sendJSON(ctx.res, 400, { error: 'Bukti inspeksi hanya dapat diupload saat inspeksi berlangsung' });
       if (repairKind && wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Bukti perbaikan hanya dapat diupload saat perbaikan berlangsung' });
     }
@@ -57,11 +58,48 @@ async function uploadFileHandler(ctx) {
   const fileName = `${id}${ALLOWED_MIME[mime]}`;
   await saveFile(fileName, buf, mime);
   const resolvedVisibility = EVIDENCE_KINDS.has(kind) ? 'CUSTOMER_VISIBLE' : normalizedVisibility;
-  await db.prepare(`INSERT INTO attachments (id, ticket_id, work_order_id, kind, file_path, file_name, mime, size, caption, visibility, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, resolvedTicketId || null, work_order_id || null, kind, fileName, file_name || fileName, mime, buf.length, caption, resolvedVisibility, ctx.user.id, now());
+  try {
+    await db.prepare(`INSERT INTO attachments (id, ticket_id, work_order_id, kind, file_path, file_name, mime, size, caption, visibility, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, resolvedTicketId || null, work_order_id || null, kind, fileName, file_name || fileName, mime, buf.length, caption, resolvedVisibility, ctx.user.id, now());
+  } catch (error) {
+    try { await deleteFile(fileName); } catch (cleanupError) { console.error(`[file-cleanup] path=${fileName} message=${cleanupError?.message || cleanupError}`); }
+    throw error;
+  }
   audit(ctx.user, 'CREATE', 'attachment', id, `Upload ${kind} (${mime})`, ctx.ip);
   sendJSON(ctx.res, 201, { id, file_name: fileName });
+}
+
+async function deleteFileHandler(ctx) {
+  let deleted;
+  try {
+    deleted = await db.transaction(async (tx) => {
+      const attachment = await tx.prepare('SELECT * FROM attachments WHERE id = ? FOR UPDATE').get(ctx.params.id);
+      if (!attachment) { const error = new Error('Foto tidak ditemukan'); error.status = 404; throw error; }
+      if (!attachment.work_order_id) { const error = new Error('Lampiran request tidak dapat dihapus dari halaman pekerjaan'); error.status = 409; throw error; }
+      const wo = await tx.prepare('SELECT * FROM work_orders WHERE id = ? FOR UPDATE').get(attachment.work_order_id);
+      if (!wo) { const error = new Error('Foto tidak ditemukan'); error.status = 404; throw error; }
+      if (['COMPLETED', 'APPROVED'].includes(wo.status)) { const error = new Error('Foto tidak dapat dihapus setelah laporan pekerjaan diterbitkan'); error.status = 409; throw error; }
+      if (ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'technician' || attachment.created_by !== ctx.user.id || wo.technician_id !== ctx.user.id) { const error = new Error('Foto tidak ditemukan'); error.status = 404; throw error; }
+        const inspectionKind = ['before', 'equipment_brand', 'equipment_serial'].includes(attachment.kind);
+        const repairKind = ['after', 'part_replacement', 'other'].includes(attachment.kind);
+        if ((!inspectionKind && !repairKind) || (inspectionKind && wo.status !== 'STARTED') || (repairKind && wo.status !== 'REPAIR_STARTED')) { const error = new Error('Foto tidak dapat dihapus setelah tahap pekerjaan dikunci'); error.status = 409; throw error; }
+      }
+      try { await deleteFile(path.basename(attachment.file_path)); }
+      catch (error) {
+        console.error(`[file-delete] attachment=${attachment.id} path=${attachment.file_path} message=${error?.message || error}`);
+        const storageError = new Error('File belum dapat dihapus dari storage. Silakan coba lagi.'); storageError.status = 502; throw storageError;
+      }
+      await tx.prepare('DELETE FROM attachments WHERE id = ?').run(attachment.id);
+      return attachment;
+    });
+  } catch (error) {
+    if (error.status) return sendJSON(ctx.res, error.status, { error: error.message });
+    throw error;
+  }
+  audit(ctx.user, 'DELETE', 'attachment', deleted.id, `Hapus foto ${deleted.kind}`, ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true, storage_deleted: true });
 }
 
 async function getFileHandler(ctx) {
@@ -90,4 +128,4 @@ async function getFileHandler(ctx) {
   ctx.res.end(data);
 }
 
-module.exports = { uploadFileHandler, getFileHandler };
+module.exports = { uploadFileHandler, getFileHandler, deleteFileHandler };

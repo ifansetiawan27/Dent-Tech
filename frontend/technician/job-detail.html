@@ -212,7 +212,7 @@
               <div><h3 class="font-semibold text-slate-800">${title} <span class="text-red-400">*</span></h3><p class="text-xs text-slate-400 mt-0.5">${hint}</p></div>
               ${canUpload ? `<button data-upload="${kind}" class="btn-secondary !py-2 !px-3 text-sm"><i data-lucide="camera" class="w-4 h-4"></i> Upload</button>` : ''}
             </div>
-            ${photos.length ? photoGrid(photos) : '<p class="text-sm text-slate-400">Belum diupload</p>'}
+            ${photos.length ? photoGrid(photos, { deletable: (photo) => canUpload && photo.created_by === data.work_order.technician_id }) : '<p class="text-sm text-slate-400">Belum diupload</p>'}
           </div>`;
         }).join('')}
         <input type="file" id="photo-file" accept="image/*" class="hidden">`;
@@ -445,6 +445,15 @@
       }));
 
       // photos
+      document.querySelectorAll('[data-photo-delete]').forEach((button) => button.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const confirmed = await confirmDialog({ title: 'Hapus Foto', message: 'Foto akan dihapus permanen dan persyaratan pekerjaan akan diperiksa ulang.', confirmLabel: 'Hapus', danger: true });
+        if (!confirmed) return;
+        button.disabled = true;
+        try { await api.del('/api/files/' + encodeURIComponent(button.dataset.photoDelete)); toast('Foto berhasil dihapus'); await load(); }
+        catch (e) { toast(e.message, 'error'); button.disabled = false; }
+      }));
       document.querySelectorAll('[data-upload]').forEach((b) => b.addEventListener('click', () => {
         const fileInput = document.getElementById('photo-file');
         fileInput.dataset.kind = b.dataset.upload;

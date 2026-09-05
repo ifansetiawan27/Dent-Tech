@@ -125,6 +125,7 @@ route('GET', '/api/audit', ['admin'], dashH.auditLogsHandler);
 
 route('POST', '/api/files', [], filesH.uploadFileHandler);
 route('GET', '/api/files/:id', null, filesH.getFileHandler);
+route('DELETE', '/api/files/:id', ['admin', 'technician'], filesH.deleteFileHandler);
 
 route('GET', '/api/finance/summary', ['admin'], finH.financeSummaryHandler);
 route('GET', '/api/finance/income', ['admin'], finH.financeIncomeHandler);

@@ -16,7 +16,8 @@ const invoice = {
   invoice: { id: 'inv-1', number: 'INV-UI-001', type: 'INVOICE', status: 'SENT', approval_status: 'NOT_REQUIRED', version: 1, issued_at: '2026-08-31T10:00:00Z', due_at: '2026-09-07' },
   totals: { items_total: 250000, discount: 0, tax_rate: 0, tax: 0, total: 250000 },
   items: [{ id: 'item-1', item_type: 'LABOR', description: 'Servis unit', qty: 1, unit: 'unit', unit_price: 250000 }],
-  customer: { name: 'UI Customer' }, payments: [], ticket: null, work_order: null, evidence: { photos: [] },
+  customer: { name: 'UI Customer' }, payments: [], ticket: null, work_order: null,
+  evidence: { photos: [], diagnosis: { findings: '<Temuan teknisi>', root_cause: 'Seal aus', recommendation: 'Ganti seal' } },
   payment_account: { bank_name: 'Bank Jago', bank_account_name: 'Dent Tech', bank_account_number: '1234567890' },
   payment_options: { bank: { bank_name: 'Bank Jago', bank_account_name: 'Dent Tech', bank_account_number: '1234567890' }, pakasir_qris: null }
 };
@@ -109,6 +110,7 @@ async function installMocks(page, mockUser = user, options = {}) {
     return buildInvoiceHtml({ ...invoiceData, company: { company_name: '' } });
   }, invoice);
   await check(invoiceDocument.includes('Dent Tech.id') && !invoiceDocument.includes('Dent Tech Service Management System'), 'invoice document fallback uses current company branding');
+  await check(invoiceDocument.includes('Catatan Diagnosis Teknisi') && invoiceDocument.includes('&lt;Temuan teknisi&gt;') && invoiceDocument.includes('Seal aus') && invoiceDocument.includes('Ganti seal') && !invoiceDocument.includes('<Temuan teknisi>'), 'customer invoice PDF includes escaped technician diagnosis');
   await page.click('#btn-pay');
   await page.waitForSelector('#payment-order img');
   const invoiceText = await page.locator('#payment-order').innerText();

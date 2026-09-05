@@ -49,8 +49,14 @@ async function invoiceDetail(inv, user, executor = db) {
     const rawPhotos = await executor.prepare('SELECT * FROM attachments WHERE work_order_id = ? ORDER BY created_at').all(wo.id);
     const visible = (user && user.role === 'customer') ? rawPhotos.filter((p) => p.visibility !== 'INTERNAL') : rawPhotos;
     evidence.photos = visible.map(attachmentWithUrl);
-    evidence.checklist = await buildChecklistState(wo);
-    evidence.diagnosis = (await db.prepare('SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1').get(wo.id)) || null;
+    evidence.checklist = await buildChecklistState(wo, executor);
+    const approvedReport = user?.role === 'customer'
+      ? await executor.prepare("SELECT id FROM service_reports WHERE work_order_id = ? AND status = 'APPROVED' ORDER BY created_at DESC LIMIT 1").get(wo.id)
+      : true;
+    const diagnosisSql = user?.role === 'customer'
+      ? "SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? AND visibility != 'INTERNAL' ORDER BY updated_at DESC LIMIT 1"
+      : 'SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1';
+    evidence.diagnosis = approvedReport ? (await executor.prepare(diagnosisSql).get(wo.id)) || null : null;
   }
 
   const paymentOrder = await executor.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' ORDER BY (status = 'PENDING') DESC, created_at DESC LIMIT 1").get(inv.id);

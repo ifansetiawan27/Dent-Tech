@@ -45,7 +45,8 @@ async function readFile(fileName) {
 
 async function deleteFile(fileName) {
   await ensureBucket();
-  await supabaseAdmin.storage.from(BUCKET).remove([fileName]);
+  const { error } = await supabaseAdmin.storage.from(BUCKET).remove([fileName]);
+  if (error) throw new Error('Gagal menghapus file dari storage: ' + error.message);
 }
 
 module.exports = { saveFile, readFile, deleteFile, BUCKET };

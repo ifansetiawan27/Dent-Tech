@@ -43,6 +43,17 @@ function checklistHtml(evidence) {
     ${rows}`;
 }
 
+function diagnosisHtml(evidence) {
+  const diagnosis = evidence?.diagnosis;
+  if (!diagnosis || ![diagnosis.findings, diagnosis.root_cause, diagnosis.recommendation].some((value) => String(value || '').trim())) return '';
+  return `<div class="section-title">Catatan Diagnosis Teknisi</div>
+    <table class="grid"><tbody>
+      ${diagnosis.findings ? `<tr><th style="width:28%">Temuan</th><td>${esc(diagnosis.findings)}</td></tr>` : ''}
+      ${diagnosis.root_cause ? `<tr><th>Penyebab Utama</th><td>${esc(diagnosis.root_cause)}</td></tr>` : ''}
+      ${diagnosis.recommendation ? `<tr><th>Rekomendasi</th><td>${esc(diagnosis.recommendation)}</td></tr>` : ''}
+    </tbody></table>`;
+}
+
 function bankInfoHtml(bank) {
   if (!bank || (!bank.bank_name && !bank.bank_account_name && !bank.bank_account_number)) return '';
   return `
@@ -171,6 +182,7 @@ ${DOC_BASE_CSS}
     ${payments.map((p) => `<div>${fmtIDR(p.amount)} via ${esc(p.method)}${p.reference ? ' (' + esc(p.reference) + ')' : ''} — ${fmtDateTime(p.paid_at)}</div>`).join('')}
   </div>` : ''}
 
+  ${diagnosisHtml(evidence)}
   ${photosHtml(evidence)}
   ${checklistHtml(evidence)}
 

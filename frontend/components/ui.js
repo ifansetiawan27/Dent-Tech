@@ -191,7 +191,7 @@ export function fileToDataUrl(file, maxDim = 1400, quality = 0.82) {
 }
 
 // ---------- Photo grid + lightbox ----------
-export function photoGrid(photos, { showKind = true } = {}) {
+export function photoGrid(photos, { showKind = true, deletable = false } = {}) {
   if (!photos || !photos.length) return '';
   const kindLabel = { before: 'BEFORE', after: 'AFTER', request: 'REQUEST', equipment_brand: 'MEREK', equipment_serial: 'SERIAL', part_replacement: 'PENGGANTIAN PART', other: 'FOTO' };
   const kindCls = { before: 'bg-slate-700', after: 'bg-emerald-600', request: 'bg-amber-600', equipment_brand: 'bg-blue-600', equipment_serial: 'bg-violet-600', part_replacement: 'bg-red-600', other: 'bg-slate-500' };
@@ -200,6 +200,7 @@ export function photoGrid(photos, { showKind = true } = {}) {
       <figure class="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" data-photo="${p.url}" data-caption="${esc(p.caption || '')}">
         <img src="${p.url}" alt="${esc(p.caption || p.kind)}" loading="lazy" class="w-full h-32 object-cover group-hover:scale-105 transition-transform">
         ${showKind ? `<span class="absolute top-2 left-2 text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${kindCls[p.kind] || kindCls.other}">${kindLabel[p.kind] || 'FOTO'}</span>` : ''}
+        ${(typeof deletable === 'function' ? deletable(p) : deletable) ? `<button type="button" data-photo-delete="${esc(p.id)}" aria-label="Hapus foto" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center shadow hover:bg-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
         ${p.caption ? `<figcaption class="text-[11px] text-slate-500 px-2 py-1 truncate">${esc(p.caption)}</figcaption>` : ''}
       </figure>`).join('')}
   </div>`;
@@ -207,7 +208,8 @@ export function photoGrid(photos, { showKind = true } = {}) {
 
 export function bindLightbox(root = document) {
   root.querySelectorAll('[data-photo]').forEach((el) => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (event) => {
+      if (event.target.closest('[data-photo-delete]')) return;
       const url = el.getAttribute('data-photo');
       const caption = el.getAttribute('data-caption') || '';
       const m = openModal({

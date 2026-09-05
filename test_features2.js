@@ -94,10 +94,17 @@ async function apiCall(page, method, path, body) {
   const diagnosisSaved = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/diagnosis`, { findings: 'Test finding', root_cause: 'rc', recommendation: 'rec' });
   if (diagnosisSaved.status === 200) ok('diagnosis recorded'); else bad('diagnosis save failed: ' + JSON.stringify(diagnosisSaved.data));
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  let removablePhotoId = null;
   for (const kind of ['before', 'equipment_brand', 'equipment_serial']) {
     const upload = await apiCall(techPage, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind, work_order_id: woId, caption: kind });
     if (upload.status === 201) ok(`${kind} inspection photo uploaded`); else bad(`${kind} upload failed: ` + JSON.stringify(upload.data));
+    if (kind === 'before') removablePhotoId = upload.data.id;
   }
+  const deletedPhoto = await apiCall(techPage, 'DELETE', `/api/files/${removablePhotoId}`);
+  const afterDelete = await apiCall(techPage, 'GET', '/api/work-orders/' + woId);
+  if (deletedPhoto.status === 200 && !afterDelete.data.photos.some((photo) => photo.id === removablePhotoId) && afterDelete.data.photo_requirements.missing.includes('before')) ok('technician deletes own photo and requirements resync'); else bad('technician photo deletion failed: ' + JSON.stringify({ deletedPhoto, requirements: afterDelete.data.photo_requirements }));
+  const replacement = await apiCall(techPage, 'POST', '/api/files', { dataUrl: 'data:image/png;base64,' + png, kind: 'before', work_order_id: woId, caption: 'before replacement' });
+  if (replacement.status === 201) ok('technician reuploads required photo after deletion'); else bad('replacement upload failed: ' + JSON.stringify(replacement.data));
   const submitted = await apiCall(techPage, 'POST', `/api/work-orders/${woId}/submit-diagnosis`);
   if (submitted.status === 200 && submitted.data.status === 'WAITING_QUOTATION') ok('diagnosis submitted for quotation'); else bad('submit diagnosis failed: ' + JSON.stringify(submitted.data));
 
@@ -142,11 +149,13 @@ async function apiCall(page, method, path, body) {
   const evChk = invDet.data.evidence?.checklist?.total_items || 0;
   if (evPhotos >= 4) ok(`invoice evidence has ${evPhotos} required photos`); else bad('invoice evidence is missing required photos');
   if (evChk > 0) ok(`invoice evidence has checklist (${evChk} items) for attachment`); else bad('no checklist in invoice evidence');
+  if (invDet.data.evidence?.diagnosis?.findings === 'Test finding' && invDet.data.evidence.diagnosis.root_cause === 'rc' && invDet.data.evidence.diagnosis.recommendation === 'rec') ok('invoice evidence synchronizes technician diagnosis for customer PDF'); else bad('invoice evidence is missing technician diagnosis');
 
-  // customer sees checklist immediately after technician completion
+  // customer sees checklist and diagnosis immediately after technician completion
   const custWo = await apiCall(custPage, 'GET', '/api/work-orders/' + woId);
   const custChk = custWo.data.checklist?.total_items || 0;
   if (custChk > 0) ok(`customer sees filled checklist (${custChk} items) after approval`); else bad('customer cannot see checklist');
+  if (custWo.data.diagnosis?.findings === 'Test finding') ok('customer portal receives approved technician diagnosis'); else bad('customer portal cannot see approved diagnosis');
   await custCtx.close();
   await ctx.close();
 

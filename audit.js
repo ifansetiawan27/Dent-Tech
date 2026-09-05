@@ -104,10 +104,10 @@ function extractResult(out) {
     { name: 'Rupiah inputs (8)', cmd: process.execPath, args: ['test_rupiah.js'], resetBefore: false },
     { name: 'Invoice sync (13)', cmd: process.execPath, args: ['test_invoice_sync.js'], resetBefore: true },
     { name: 'Wallet + Pakasir (19)', cmd: process.execPath, args: ['test_wallet.js'], resetBefore: true },
-    { name: 'Wallet UI (27)', cmd: process.execPath, args: ['test_wallet_ui.js'], resetBefore: false },
+    { name: 'Wallet UI (28)', cmd: process.execPath, args: ['test_wallet_ui.js'], resetBefore: false },
     { name: 'Lifecycle flow (11)', cmd: process.execPath, args: ['test_flow.js'], resetBefore: true },
     { name: 'Portal features (10)', cmd: process.execPath, args: ['test_newfeatures.js'], resetBefore: true },
-    { name: 'New features (30)', cmd: process.execPath, args: ['test_features2.js'], resetBefore: true },
+    { name: 'New features (34)', cmd: process.execPath, args: ['test_features2.js'], resetBefore: true },
     { name: 'Visual audit (11)', cmd: process.execPath, args: ['visual_audit.js'], resetBefore: true }
   ];
 
