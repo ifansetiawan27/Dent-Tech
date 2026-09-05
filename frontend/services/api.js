@@ -18,14 +18,14 @@ async function request(method, path, body) {
     err.network = true;
     throw err;
   }
-  if (res.status === 401) {
+  let data = null;
+  const text = await res.text();
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+  if (res.status === 401 && path !== '/api/auth/login') {
     clearSession();
     window.location.href = '/login.html';
     throw new Error('Sesi berakhir, silakan login kembali');
   }
-  let data = null;
-  const text = await res.text();
-  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
   if (!res.ok) {
     const msg = (data && data.error) ? data.error : `Terjadi kesalahan (${res.status})`;
     const err = new Error(msg);
