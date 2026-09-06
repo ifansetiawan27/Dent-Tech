@@ -136,10 +136,12 @@ async function workOrderPhotoRequirements(workOrderId, executor = db) {
 
 async function buildChecklistState(wo, executor = db) {
   if (!wo || !wo.checklist_template_id) return null;
-  const tpl = await executor.prepare('SELECT * FROM checklist_templates WHERE id = ?').get(wo.checklist_template_id);
+  const [tpl, items, responses] = await Promise.all([
+    executor.prepare('SELECT * FROM checklist_templates WHERE id = ?').get(wo.checklist_template_id),
+    executor.prepare('SELECT * FROM checklist_template_items WHERE template_id = ? ORDER BY sort_order').all(wo.checklist_template_id),
+    executor.prepare('SELECT * FROM checklist_responses WHERE work_order_id = ?').all(wo.id)
+  ]);
   if (!tpl) return null;
-  const items = await executor.prepare('SELECT * FROM checklist_template_items WHERE template_id = ? ORDER BY sort_order').all(tpl.id);
-  const responses = await executor.prepare('SELECT * FROM checklist_responses WHERE work_order_id = ?').all(wo.id);
   const respByItem = new Map(responses.map((r) => [r.item_id, r]));
   const sections = [];
   const sectionMap = new Map();

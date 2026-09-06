@@ -37,29 +37,35 @@ async function snapshotInvoiceItems(tx, invoiceId, workOrderId, laborCost, labor
 }
 
 async function invoiceDetail(inv, user, executor = db) {
-  const items = await getInvoiceItems(inv.id, executor);
+  const [items, customer, payments, wo, ticket, paymentOrder] = await Promise.all([
+    getInvoiceItems(inv.id, executor),
+    executor.prepare('SELECT id, code, name, address, city, phone, email FROM customers WHERE id = ?').get(inv.customer_id),
+    executor.prepare('SELECT * FROM payments WHERE invoice_id = ? ORDER BY paid_at').all(inv.id),
+    inv.work_order_id ? executor.prepare('SELECT * FROM work_orders WHERE id = ?').get(inv.work_order_id) : Promise.resolve(null),
+    inv.ticket_id ? executor.prepare('SELECT number, problem, service_type FROM tickets WHERE id = ?').get(inv.ticket_id) : Promise.resolve(null),
+    executor.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' ORDER BY (status = 'PENDING') DESC, created_at DESC LIMIT 1").get(inv.id)
+  ]);
   const totals = invoiceTotals(inv, items);
-  const customer = await executor.prepare('SELECT id, code, name, address, city, phone, email FROM customers WHERE id = ?').get(inv.customer_id);
-  const payments = await executor.prepare('SELECT * FROM payments WHERE invoice_id = ? ORDER BY paid_at').all(inv.id);
-  const wo = inv.work_order_id ? await executor.prepare('SELECT * FROM work_orders WHERE id = ?').get(inv.work_order_id) : null;
-  const ticket = inv.ticket_id ? await executor.prepare('SELECT number, problem, service_type FROM tickets WHERE id = ?').get(inv.ticket_id) : null;
 
   let evidence = { photos: [], checklist: null, diagnosis: null };
   if (wo) {
-    const rawPhotos = await executor.prepare('SELECT * FROM attachments WHERE work_order_id = ? ORDER BY created_at').all(wo.id);
-    const visible = (user && user.role === 'customer') ? rawPhotos.filter((p) => p.visibility !== 'INTERNAL') : rawPhotos;
-    evidence.photos = visible.map(attachmentWithUrl);
-    evidence.checklist = await buildChecklistState(wo, executor);
-    const approvedReport = user?.role === 'customer'
-      ? await executor.prepare("SELECT id FROM service_reports WHERE work_order_id = ? AND status = 'APPROVED' ORDER BY created_at DESC LIMIT 1").get(wo.id)
-      : true;
     const diagnosisSql = user?.role === 'customer'
       ? "SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? AND visibility != 'INTERNAL' ORDER BY updated_at DESC LIMIT 1"
       : 'SELECT findings, root_cause, recommendation FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1';
-    evidence.diagnosis = approvedReport ? (await executor.prepare(diagnosisSql).get(wo.id)) || null : null;
+    const [rawPhotos, checklist, approvedReport, diagnosisRow] = await Promise.all([
+      executor.prepare('SELECT * FROM attachments WHERE work_order_id = ? ORDER BY created_at').all(wo.id),
+      buildChecklistState(wo, executor),
+      user?.role === 'customer'
+        ? executor.prepare("SELECT id FROM service_reports WHERE work_order_id = ? AND status = 'APPROVED' ORDER BY created_at DESC LIMIT 1").get(wo.id)
+        : Promise.resolve(true),
+      executor.prepare(diagnosisSql).get(wo.id)
+    ]);
+    const visible = (user && user.role === 'customer') ? rawPhotos.filter((p) => p.visibility !== 'INTERNAL') : rawPhotos;
+    evidence.photos = visible.map(attachmentWithUrl);
+    evidence.checklist = checklist;
+    evidence.diagnosis = approvedReport ? diagnosisRow || null : null;
   }
 
-  const paymentOrder = await executor.prepare("SELECT * FROM payment_orders WHERE invoice_id = ? AND kind = 'INVOICE' ORDER BY (status = 'PENDING') DESC, created_at DESC LIMIT 1").get(inv.id);
   let pakasirQris = null;
   if (paymentOrder) {
     const { orderWithQr } = require('./wallet');
@@ -329,16 +335,24 @@ async function approveProformaHandler(ctx) {
 }
 
 async function createProformaHandler(ctx) {
-  const { work_order_id, labor_cost, due_days = 14, items = [] } = ctx.body;
+  const { work_order_id, labor_cost, discount, tax_rate, due_days = 14, items = [] } = ctx.body;
   if (!work_order_id) return sendJSON(ctx.res, 400, { error: 'work_order_id wajib diisi' });
   const labor = labor_cost !== undefined ? Number(labor_cost) : Number(await getSetting('invoice_default_labor', '500000'));
+  const disc = discount === undefined ? 0 : Number(discount);
   const dueDays = Number(due_days);
   if (!Number.isFinite(labor) || labor < 0) return sendJSON(ctx.res, 400, { error: 'Biaya jasa tidak valid' });
+  if (!Number.isFinite(disc) || disc < 0) return sendJSON(ctx.res, 400, { error: 'Diskon tidak valid' });
   if (!Number.isInteger(dueDays) || dueDays < 1 || dueDays > 365) return sendJSON(ctx.res, 400, { error: 'Jatuh tempo harus 1–365 hari' });
   let customItems;
   try { customItems = validateEditableItems(items) || []; }
   catch (e) { return sendJSON(ctx.res, 400, { error: e.message }); }
-  const taxRate = (await getSetting('invoice_tax_mode', 'PPN')) === 'NON_PPN' ? 0 : 11;
+  let taxRate;
+  if (tax_rate !== undefined) {
+    taxRate = Number(tax_rate);
+    if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) return sendJSON(ctx.res, 400, { error: 'PPN tidak valid' });
+  } else {
+    taxRate = (await getSetting('invoice_tax_mode', 'PPN')) === 'NON_PPN' ? 0 : 11;
+  }
   const invId = uid();
   const invNumber = await nextNumber('PI');
   const issued = now();
@@ -354,8 +368,8 @@ async function createProformaHandler(ctx) {
       const existing = await tx.prepare("SELECT id, number FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' AND status != 'PAID'").get(wo.id);
       if (existing) { const e = new Error(`Proforma ${existing.number} sudah ada untuk work order ini`); e.status = 409; throw e; }
        await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, approval_status, issued_at, due_at, created_at, updated_at, version)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'SENT', 'PROFORMA', 'SENT', ?, ?, ?, ?, 1)`)
-         .run(invId, invNumber, t.id, wo.id, t.customer_id, labor, taxRate, issued, due, issued, issued);
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SENT', 'PROFORMA', 'SENT', ?, ?, ?, ?, 1)`)
+         .run(invId, invNumber, t.id, wo.id, t.customer_id, labor, disc, taxRate, issued, due, issued, issued);
        await snapshotInvoiceItems(tx, invId, wo.id, labor, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa', customItems);
        await tx.prepare("UPDATE work_orders SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, wo.id);
        await tx.prepare("UPDATE tickets SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, t.id);

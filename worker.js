@@ -48,6 +48,8 @@ async function handleApi(request, env, executionCtx) {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
     })
   };
+  let backgroundScheduled = false;
+  const finishBackground = () => runWithRuntime(runtime, flushTasks).catch(() => {}).then(() => client.end().catch(() => {}));
 
   try {
     return await runWithRuntime(runtime, async () => {
@@ -66,7 +68,14 @@ async function handleApi(request, env, executionCtx) {
       const query = Object.fromEntries(url.searchParams.entries());
       const ip = request.headers.get('CF-Connecting-IP') || '';
       await route.handler({ req, res, user, params, query, body, ip, executionCtx, runtimeEnv: env });
-      await flushTasks();
+      // Respons dikirim segera; task sekunder (notify/audit/timeline) di-flush
+      // lewat waitUntil agar tidak menambah latency, lalu koneksi DB ditutup.
+      if (executionCtx?.waitUntil) {
+        backgroundScheduled = true;
+        executionCtx.waitUntil(finishBackground());
+      } else {
+        await finishBackground();
+      }
       return res.toResponse();
     });
   } catch (error) {
@@ -74,8 +83,10 @@ async function handleApi(request, env, executionCtx) {
     const status = error?.message === 'Payload too large' ? 413 : 500;
     return json(status, { error: error?.message === 'Invalid JSON body' ? 'Format request tidak valid' : 'Terjadi kesalahan pada server' });
   } finally {
-    await runWithRuntime(runtime, flushTasks);
-    await client.end().catch(() => {});
+    if (!backgroundScheduled) {
+      await runWithRuntime(runtime, flushTasks).catch(() => {});
+      await client.end().catch(() => {});
+    }
   }
 }
 

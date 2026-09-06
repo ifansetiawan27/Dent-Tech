@@ -52,16 +52,20 @@ async function getWorkOrderHandler(ctx) {
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (!await canAccessWorkOrder(ctx.user, wo)) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses ke work order ini' });
 
-  const checklist = await buildChecklistState(wo);
-  const diagnosis = (await db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1').get(wo.id)) || null;
-  const workPerformed = await db.prepare('SELECT * FROM work_performed WHERE work_order_id = ? ORDER BY created_at ASC').all(wo.id);
-  const partUsages = await db.prepare(
-    `SELECT pu.*, p.name AS part_name, p.code AS part_code, p.unit FROM part_usages pu JOIN parts p ON p.id = pu.part_id WHERE pu.work_order_id = ? ORDER BY pu.created_at ASC`
-  ).all(wo.id);
-  const photos = (await db.prepare(`SELECT * FROM attachments
-    WHERE work_order_id = ? OR (ticket_id = ? AND work_order_id IS NULL AND kind = 'request')
-    ORDER BY created_at ASC`).all(wo.id, wo.ticket_id)).map(attachmentWithUrl);
-  const report = (await db.prepare('SELECT * FROM service_reports WHERE work_order_id = ? ORDER BY created_at DESC LIMIT 1').get(wo.id)) || null;
+  const [checklist, diagnosisRow, workPerformed, partUsages, photoRows, report] = await Promise.all([
+    buildChecklistState(wo),
+    db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ? ORDER BY updated_at DESC LIMIT 1').get(wo.id),
+    db.prepare('SELECT * FROM work_performed WHERE work_order_id = ? ORDER BY created_at ASC').all(wo.id),
+    db.prepare(
+      `SELECT pu.*, p.name AS part_name, p.code AS part_code, p.unit FROM part_usages pu JOIN parts p ON p.id = pu.part_id WHERE pu.work_order_id = ? ORDER BY pu.created_at ASC`
+    ).all(wo.id),
+    db.prepare(`SELECT * FROM attachments
+      WHERE work_order_id = ? OR (ticket_id = ? AND work_order_id IS NULL AND kind = 'request')
+      ORDER BY created_at ASC`).all(wo.id, wo.ticket_id),
+    db.prepare('SELECT * FROM service_reports WHERE work_order_id = ? ORDER BY created_at DESC LIMIT 1').get(wo.id)
+  ]);
+  const diagnosis = diagnosisRow || null;
+  const photos = photoRows.map(attachmentWithUrl);
 
   if (ctx.user.role === 'customer') {
     const approved = report && report.status === 'APPROVED';
@@ -153,10 +157,12 @@ async function submitDiagnosisHandler(ctx) {
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'STARTED') return sendJSON(ctx.res, 400, { error: 'Diagnosis hanya dapat dikirim setelah inspeksi dimulai' });
-  const checklist = await buildChecklistState(wo);
+  const [checklist, diagnosis] = await Promise.all([
+    buildChecklistState(wo),
+    db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id)
+  ]);
   if (!checklist) return sendJSON(ctx.res, 400, { error: 'Checklist inspeksi wajib tersedia sebelum diagnosis dikirim' });
   if (!checklist.complete) return sendJSON(ctx.res, 400, { error: `Checklist wajib belum lengkap (${checklist.required_done}/${checklist.required_total})` });
-  const diagnosis = await db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id);
   if (!diagnosis || !String(diagnosis.findings || '').trim()) return sendJSON(ctx.res, 400, { error: 'Diagnosis wajib diisi sebelum dikirim ke admin' });
   if (!wo.equipment_identity_confirmed_at || !String(wo.serviced_equipment_name || '').trim() || !String(wo.serviced_equipment_type_model || '').trim() || !String(wo.serviced_equipment_serial_number || '').trim()) {
     return sendJSON(ctx.res, 400, { error: 'Konfirmasi nama, tipe/model, dan serial number alat sebelum mengirim diagnosis', code: 'EQUIPMENT_IDENTITY_REQUIRED' });
@@ -212,14 +218,29 @@ async function saveChecklistHandler(ctx) {
   if (!['ASSIGNED', 'STARTED'].includes(wo.status)) return sendJSON(ctx.res, 400, { error: 'Checklist hanya bisa diisi sebelum work order selesai' });
   const items = Array.isArray(ctx.body.items) ? ctx.body.items : [];
   if (!items.length) return sendJSON(ctx.res, 400, { error: 'Tidak ada item checklist dikirim' });
-  for (const it of items) {
-    const tplItem = await db.prepare('SELECT * FROM checklist_template_items WHERE id = ?').get(it.item_id);
-    if (!tplItem) continue;
-    if (it.result && !['PASS', 'FAIL', 'NA'].includes(it.result)) continue;
+  // Set-based: 1 lookup + 1 batched upsert (bukan loop query per item)
+  const byItem = new Map(items.map((it) => [it.item_id, it]));
+  const templateItems = await db.prepare('SELECT * FROM checklist_template_items WHERE id = ANY($1::uuid[])')
+    .all([...byItem.keys()]);
+  const valid = [];
+  for (const tplItem of templateItems) {
+    const it = byItem.get(tplItem.id);
+    if (!it || (it.result && !['PASS', 'FAIL', 'NA'].includes(it.result))) continue;
+    valid.push({ tplItem, result: it.result || '', note: it.note || '' });
+  }
+  if (valid.length) {
+    const ts = now();
+    const values = [];
+    const params = [];
+    valid.forEach((entry, i) => {
+      const base = i * 9;
+      values.push(`(${Array.from({ length: 9 }, (_, j) => '$' + (base + j + 1)).join(', ')})`);
+      params.push(uid(), wo.id, entry.tplItem.id, entry.tplItem.section, entry.tplItem.label, entry.tplItem.required, entry.result, entry.note, ts);
+    });
     await db.prepare(`INSERT INTO checklist_responses (id, work_order_id, item_id, section, label, required, result, note, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES ${values.join(', ')}
       ON CONFLICT (work_order_id, item_id) DO UPDATE SET result = excluded.result, note = excluded.note, updated_at = excluded.updated_at`)
-      .run(uid(), wo.id, tplItem.id, tplItem.section, tplItem.label, tplItem.required, it.result || '', it.note || '', now());
+      .run(...params);
   }
   await db.prepare('UPDATE work_orders SET updated_at = ? WHERE id = ?').run(now(), wo.id);
   sendJSON(ctx.res, 200, { ok: true, checklist: await buildChecklistState(wo) });
@@ -314,14 +335,18 @@ async function completeWorkOrderHandler(ctx) {
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Perbaikan harus dimulai setelah proforma disetujui customer' });
 
-  const checklist = await buildChecklistState(wo);
+  const [checklist, diagnosisRow, performedRow] = await Promise.all([
+    buildChecklistState(wo),
+    db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id),
+    db.prepare('SELECT COUNT(*) AS c FROM work_performed WHERE work_order_id = ?').get(wo.id)
+  ]);
+  const diagnosis = diagnosisRow || null;
+  const performed = Number(performedRow ? performedRow.c : 0);
   if (!checklist) return sendJSON(ctx.res, 400, { error: 'Checklist wajib tersedia sebelum menyelesaikan pekerjaan' });
   if (!checklist.complete) {
     return sendJSON(ctx.res, 400, { error: `Checklist wajib belum lengkap (${checklist.required_done}/${checklist.required_total} item wajib diisi)` });
   }
-  const diagnosis = await db.prepare('SELECT * FROM diagnoses WHERE work_order_id = ?').get(wo.id);
   if (!diagnosis || !diagnosis.findings.trim()) return sendJSON(ctx.res, 400, { error: 'Diagnosis wajib diisi sebelum menyelesaikan pekerjaan' });
-  const performed = (await db.prepare('SELECT COUNT(*) AS c FROM work_performed WHERE work_order_id = ?').get(wo.id)).c;
   if (!performed) return sendJSON(ctx.res, 400, { error: 'Catat minimal satu pekerjaan yang dilakukan' });
   const { summary } = ctx.body;
   if (!summary || !String(summary).trim()) return sendJSON(ctx.res, 400, { error: 'Ringkasan service report wajib diisi' });

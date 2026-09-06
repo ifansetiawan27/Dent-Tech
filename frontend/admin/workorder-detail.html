@@ -25,8 +25,9 @@
     import { api } from '/services/api.js';
     import { initAdminLayout } from '/components/layout.js';
     import { spinner, errorState, statusBadge, openModal, toast, refreshIcons, WO_STATUS, PRIORITY, REPORT_STATUS, photoGrid, bindLightbox } from '/components/ui.js';
-    import { fmtDate, fmtDateTime, fmtIDR, formatIDRInput, parseIDR, bindIDRInput, esc } from '/utils/format.js';
-    import { downloadChecklist } from '/utils/checklist-doc.js';
+import { fmtDate, fmtDateTime, fmtIDR, formatIDRInput, parseIDR, bindIDRInput, esc } from '/utils/format.js';
+import { downloadChecklist } from '/utils/checklist-doc.js';
+import { setupInvoiceItemsEditor } from '/components/invoice-form.js';
 
     requireAuth(['admin']);
     initAdminLayout('workorders');
@@ -179,23 +180,43 @@
         let settings = { default_labor: 500000 };
         try { settings = await api.get('/api/invoice-settings'); } catch {}
         const m = openModal({
-          title: 'Buat Proforma Invoice', size: 'sm',
+          title: 'Buat Proforma Invoice', size: 'lg',
           body: `<div class="space-y-4">
              <p class="text-sm text-slate-500">Proforma biaya perbaikan untuk <b>${wo.number}</b> akan dikirim ke customer untuk disetujui sebelum teknisi mulai memperbaiki unit.</p>
-            <div><label class="label">Biaya Jasa (Rp)</label><input id="pf-labor" type="text" inputmode="numeric" class="input" value="${formatIDRInput(settings.default_labor || 500000)}"></div>
-            <div><label class="label">Jatuh Tempo (hari)</label>
-              <select id="pf-due" class="input"><option value="7">7 hari</option><option value="14" selected>14 hari</option><option value="30">30 hari</option></select>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="label">Biaya Jasa (Rp)</label><input id="pf-labor" type="text" inputmode="numeric" class="input" value="${formatIDRInput(settings.default_labor || 500000)}"></div>
+              <div><label class="label">Diskon (Rp)</label><input id="pf-disc" type="text" inputmode="numeric" class="input" value="${formatIDRInput(0)}"></div>
+              <div><label class="label">PPN (%)</label><input id="pf-tax" type="number" min="0" max="100" class="input" value="11"></div>
+              <div><label class="label">Jatuh Tempo (hari)</label>
+                <select id="pf-due" class="input"><option value="7">7 hari</option><option value="14" selected>14 hari</option><option value="30">30 hari</option></select>
+              </div>
+            </div>
+            <div class="border-t border-slate-100 pt-4">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <div><p class="text-sm font-semibold text-slate-700">Item Tambahan</p><p class="text-xs text-slate-400">Tambahkan deskripsi/item lain yang ingin muncul di proforma.</p></div>
+                <button type="button" id="pf-add-item" class="btn-secondary !px-3 !py-2"><i data-lucide="plus" class="w-4 h-4"></i> Item</button>
+              </div>
+              <div id="pf-items" class="space-y-3"></div>
             </div>
           </div>`,
           footer: `<button class="btn-secondary" data-modal-close>Batal</button><button id="pf-submit" class="btn-primary">Buat Proforma</button>`
         });
         const proformaLaborEl = bindIDRInput(m.el.querySelector('#pf-labor'));
+        const proformaDiscEl = bindIDRInput(m.el.querySelector('#pf-disc'));
+        const itemsEditor = setupInvoiceItemsEditor(m.el.querySelector('#pf-items'));
+        m.el.querySelector('#pf-add-item').addEventListener('click', () => itemsEditor.add());
+        refreshIcons();
         m.el.querySelector('#pf-submit').addEventListener('click', async () => {
+          const customItems = itemsEditor.collect();
+          if (customItems.some((it) => !it.description || it.qty <= 0)) return toast('Lengkapi deskripsi dan qty semua item tambahan', 'error');
           try {
             const res = await api.post('/api/invoices/proforma', {
               work_order_id: wo.id,
               labor_cost: parseIDR(proformaLaborEl.value),
-              due_days: Number(m.el.querySelector('#pf-due').value) || 14
+              discount: parseIDR(proformaDiscEl.value),
+              tax_rate: Number(m.el.querySelector('#pf-tax').value) || 0,
+              due_days: Number(m.el.querySelector('#pf-due').value) || 14,
+              items: customItems
             });
             m.close(); toast(`Proforma ${res.number} dibuat`);
             setTimeout(() => location.href = '/admin/invoice-detail.html?id=' + res.id, 500);

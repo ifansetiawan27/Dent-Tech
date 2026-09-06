@@ -385,6 +385,13 @@
       bindTabEvents();
     }
 
+    function updateChecklistBar() {
+      const bar = document.querySelector('.card .h-2 .bg-blue-500');
+      if (bar && data.checklist && data.checklist.total_items) {
+        bar.style.width = Math.round(data.checklist.answered_items / data.checklist.total_items * 100) + '%';
+      }
+    }
+
     function bindTabEvents() {
       // checklist buttons
       document.querySelectorAll('.chk-btn').forEach((b) => b.addEventListener('click', async () => {
@@ -395,14 +402,25 @@
         const cls = { PASS: 'bg-emerald-600', FAIL: 'bg-red-600', NA: 'bg-slate-500' }[result];
         b.className = `chk-btn flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${cls} text-white`;
         if (noteInput) noteInput.classList.toggle('hidden', result !== 'FAIL');
+        // Optimistic: progres diperbarui instan, lalu diselaraskan dari respons server.
+        const target = data.checklist ? data.checklist.sections.flatMap((s) => s.items).find((i) => i.id === itemId) : null;
+        if (target) {
+          const wasAnswered = ['PASS', 'FAIL', 'NA'].includes(target.result);
+          const wasRequiredDone = target.required && wasAnswered;
+          target.result = result;
+          if (noteInput) target.note = noteInput.value;
+          const nowAnswered = ['PASS', 'FAIL', 'NA'].includes(target.result);
+          if (!wasAnswered && nowAnswered) data.checklist.answered_items++;
+          if (target.required) {
+            if (!wasRequiredDone && nowAnswered) data.checklist.required_done++;
+            else if (wasRequiredDone && !nowAnswered) data.checklist.required_done--;
+          }
+        }
+        updateChecklistBar();
         try {
           const res = await api.post(`/api/work-orders/${data.work_order.id}/checklist`, { items: [{ item_id: itemId, result, note: noteInput ? noteInput.value : '' }] });
           data.checklist = res.checklist;
-          const bar = document.querySelector('.card .h-2 .bg-blue-500');
-          if (bar && data.checklist.total_items) {
-            const pct = Math.round(data.checklist.answered_items / data.checklist.total_items * 100);
-            bar.style.width = pct + '%';
-          }
+          updateChecklistBar();
         } catch (e) { toast(e.message, 'error'); }
       }));
       document.querySelectorAll('[data-note]').forEach((inp) => inp.addEventListener('change', async () => {
