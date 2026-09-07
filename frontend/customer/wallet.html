@@ -16,7 +16,7 @@
     <div class="max-w-2xl mx-auto">
       <a href="/customer/" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"><i data-lucide="arrow-left" class="w-4 h-4"></i> Beranda</a>
       <h1 class="text-xl font-bold text-slate-800">Wallet Dent Tech.id</h1>
-      <p class="text-sm text-slate-500 mb-5">Saldo untuk biaya kunjungan onsite</p>
+      <p class="text-sm text-slate-500 mb-5">Saldo untuk pembayaran invoice via QRIS</p>
       <div id="content"></div>
     </div>
   </main>
@@ -70,7 +70,7 @@
           <p class="text-xs font-bold uppercase tracking-widest text-blue-200">Saldo tersedia</p>
           <p id="wallet-balance" class="text-3xl font-extrabold mt-1">${fmtIDR(balance)}</p>
           <div class="mt-4 pt-4 border-t border-white/15 flex items-center justify-between gap-3 text-sm">
-            <span class="text-slate-300">Biaya onsite per request</span><b>${fmtIDR(TOPUP_AMOUNT)}</b>
+            <span class="text-slate-300">Nominal top up</span><b>${fmtIDR(TOPUP_AMOUNT)}</b>
           </div>
         </section>
         ${orderPanel(state.order)}
@@ -88,7 +88,7 @@
               <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-slate-700">${esc(tx.description || tx.type)}</p><p class="text-xs text-slate-400 mt-0.5">${fmtDateTime(tx.created_at)} · Saldo ${fmtIDR(tx.balance_after)}</p></div>
               <p class="text-sm font-bold ${credit ? 'text-emerald-600' : 'text-amber-700'}">${credit ? '+' : '-'}${fmtIDR(tx.amount)}</p>
             </article>`;
-          }).join('')}</div>` : `<div class="card">${emptyState('history', 'Belum ada transaksi', 'Top up dan biaya kunjungan akan tampil di sini.')}</div>`}
+          }).join('')}</div>` : `<div class="card">${emptyState('history', 'Belum ada transaksi', 'Top up dan pembayaran invoice akan tampil di sini.')}</div>`}
         </section>`;
       refreshIcons();
       document.getElementById('create-topup')?.addEventListener('click', createTopup);

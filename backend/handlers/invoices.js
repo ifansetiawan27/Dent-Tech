@@ -2,6 +2,34 @@
 const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig, localDate, getSetting, setSetting } = require('../util');
 const { audit, timeline, notify, getInvoiceItems, snapshotWorkOrderInvoiceItems, invoiceTotals, getTicket, buildChecklistState } = require('./_common');
+const { scheduleCustomerEmail, invoicePaidEmail } = require('../email');
+
+async function sendInvoicePaidEmail(ctx, { invoiceId, invoiceNumber, customerId, ticketId, method, paidAt, total }) {
+  try {
+    const customer = await db.prepare('SELECT name, email FROM customers WHERE id = ?').get(customerId);
+    const customerUser = await db.prepare("SELECT email FROM users WHERE customer_id = ? AND active = 1 ORDER BY created_at ASC LIMIT 1").get(customerId);
+    const to = customer?.email || customerUser?.email || ctx?.user?.email || '';
+    let ticketNumber = '';
+    if (ticketId) {
+      const t = await db.prepare('SELECT number FROM tickets WHERE id = ?').get(ticketId);
+      ticketNumber = t?.number || '';
+    }
+    scheduleCustomerEmail(ctx, {
+      to,
+      content: invoicePaidEmail({
+        invoiceNumber,
+        customerName: customer?.name || '',
+        ticketNumber,
+        totalFormatted: `Rp ${Number(total).toLocaleString('id-ID')}`,
+        method,
+        paidAt,
+        customerUrl: `https://denttech.id/customer/invoice-detail.html?id=${encodeURIComponent(invoiceId)}`
+      })
+    });
+  } catch (e) {
+    console.error(`[invoice-paid-email] invoice=${invoiceNumber} prepare failed: ${e?.message || e}`);
+  }
+}
 
 function attachmentWithUrl(a) {
   const sig = fileSig(a.id);
@@ -260,6 +288,15 @@ async function payInvoiceHandler(ctx) {
     notify({ role: 'admin', title: `Invoice ${inv.number} dibayar`, body: `Rp ${totals.total.toLocaleString('id-ID')} via ${method}`, type: 'INVOICE', ref_type: 'invoice', ref_id: inv.id });
   }
   audit(ctx.user, 'UPDATE', 'invoice', inv.id, `Pembayaran invoice ${inv.number} Rp ${totals.total}`, ctx.ip);
+  await sendInvoicePaidEmail(ctx, {
+    invoiceId: inv.id,
+    invoiceNumber: paidDocumentNumber,
+    customerId: inv.customer_id,
+    ticketId: inv.ticket_id,
+    method: method === 'PAKASIR_QRIS' ? 'QRIS' : method,
+    paidAt,
+    total: totals.total
+  });
   sendJSON(ctx.res, 200, { ok: true, paid_amount: totals.total, invoice_number: paidDocumentNumber });
 }
 

@@ -111,7 +111,8 @@ async function transitionOrder(id, status, executor = db, extra = {}) {
 
 async function settleVerifiedOrder(orderId, transaction) {
   if (!transaction || String(transaction.status).toLowerCase() !== 'completed') return { settled: false, status: transaction ? String(transaction.status).toUpperCase() : 'PENDING' };
-  return db.transaction(async (tx) => {
+  let paidInvoice = null;
+  const result = await db.transaction(async (tx) => {
     const order = await tx.prepare('SELECT * FROM payment_orders WHERE order_id = ? FOR UPDATE').get(orderId);
     if (!order) throw appError('Order pembayaran tidak ditemukan', 'PAYMENT_MISMATCH', 404);
     if (transaction.project !== order.project || transaction.order_id !== order.order_id || Number(transaction.amount) !== Number(order.amount)) throw appError('Data transaksi gateway tidak sesuai dengan order lokal', 'PAYMENT_MISMATCH', 400);
@@ -138,9 +139,11 @@ async function settleVerifiedOrder(orderId, transaction) {
         const expected = Math.round(invoiceTotals(invoice, await getInvoiceItems(invoice.id, tx)).total);
         if (expected !== Number(order.amount)) throw appError('Total invoice telah berubah', 'INVOICE_AMOUNT_CHANGED', 409);
         await tx.prepare('INSERT INTO payments (id, invoice_id, amount, method, reference, paid_at) VALUES (?, ?, ?, ?, ?, ?)').run(uid(), invoice.id, order.amount, 'PAKASIR_QRIS', order.order_id, ts);
+        paidInvoice = { id: invoice.id, number: invoice.number, customerId: invoice.customer_id, ticketId: invoice.ticket_id, total: order.amount };
         if (invoice.type === 'PROFORMA') {
           const { convertPaidProforma } = require('./invoices');
           const invoiceNumber = await convertPaidProforma(tx, invoice, ts);
+          if (paidInvoice) paidInvoice.number = invoiceNumber;
           if (invoice.ticket_id) {
             const ticket = await tx.prepare('SELECT status FROM tickets WHERE id = ? FOR UPDATE').get(invoice.ticket_id);
             if (ticket && ticket.status !== 'CLOSED') {
@@ -156,8 +159,38 @@ async function settleVerifiedOrder(orderId, transaction) {
       } else throw appError('Status invoice tidak dapat dibayar', 'INVOICE_NOT_PAYABLE', 409);
     }
     await transitionOrder(order.id, 'COMPLETED', tx, { completedAt: transaction.completed_at || ts, settledAt: now() });
-    return { settled: true, status: 'COMPLETED', order: { ...order, status: 'COMPLETED', settled_at: ts } };
+    return { settled: true, status: 'COMPLETED', order: { ...order, status: 'COMPLETED', settled_at: ts }, paidInvoice };
   });
+  // Email lunas ke customer dikirim setelah transaksi commit (di luar tx DB gateway)
+  if (result.paidInvoice) {
+    const { scheduleCustomerEmail, invoicePaidEmail } = require('../email');
+    const { currentRuntime } = require('../runtime');
+    const ctxLike = { runtimeEnv: currentRuntime()?.env || null, executionCtx: currentRuntime()?.executionCtx || null, user: null };
+    try {
+      const customer = await db.prepare('SELECT name, email FROM customers WHERE id = ?').get(result.paidInvoice.customerId);
+      const customerUser = await db.prepare("SELECT email FROM users WHERE customer_id = ? AND active = 1 ORDER BY created_at ASC LIMIT 1").get(result.paidInvoice.customerId);
+      let ticketNumber = '';
+      if (result.paidInvoice.ticketId) {
+        const t = await db.prepare('SELECT number FROM tickets WHERE id = ?').get(result.paidInvoice.ticketId);
+        ticketNumber = t?.number || '';
+      }
+      scheduleCustomerEmail(ctxLike, {
+        to: customer?.email || customerUser?.email || '',
+        content: invoicePaidEmail({
+          invoiceNumber: result.paidInvoice.number,
+          customerName: customer?.name || '',
+          ticketNumber,
+          totalFormatted: `Rp ${Number(result.paidInvoice.total).toLocaleString('id-ID')}`,
+          method: 'QRIS',
+          paidAt: result.order.settled_at,
+          customerUrl: `https://denttech.id/customer/invoice-detail.html?id=${encodeURIComponent(result.paidInvoice.id)}`
+        })
+      });
+    } catch (e) {
+      console.error(`[invoice-paid-email] invoice=${result.paidInvoice.number} prepare failed: ${e?.message || e}`);
+    }
+  }
+  return result;
 }
 
 async function reconcileOrder(order) {

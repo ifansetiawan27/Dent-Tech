@@ -1,7 +1,7 @@
 'use strict';
 const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig } = require('../util');
-const { scheduleAppointmentEmail } = require('../email');
+const { scheduleAppointmentEmail, scheduleCustomerEmail, customerRequestEmail } = require('../email');
 const {
   audit, timeline, setTicketStatus, getTicket, canAccessTicket,
   notify, TICKET_TRANSITIONS
@@ -81,41 +81,23 @@ async function createTicketHandler(ctx) {
       await tx.prepare(`INSERT INTO tickets (id, number, customer_id, equipment_id, equipment_type, equipment_brand, service_address, contact_name, contact_phone, service_type, priority, problem, description, preferred_date, preferred_time, status, created_by, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`)
         .run(id, number, customer_id, equipment_id || null, equipment_type, equipment_brand, service_address, contact_name, contact_phone, service_type, priority, problem, description, preferred_date, preferred_time, ctx.user.id, ts, ts);
-      if (ctx.user.role === 'customer') {
-        const wallet = await tx.prepare('SELECT * FROM wallet_accounts WHERE customer_id = ? FOR UPDATE').get(customer_id);
-        if (!wallet || Number(wallet.balance) < 100000) {
-          const error = new Error('Saldo wallet tidak cukup untuk biaya kunjungan onsite');
-          error.status = 409;
-          error.code = 'INSUFFICIENT_WALLET_BALANCE';
-          error.balance = wallet ? Number(wallet.balance) : 0;
-          throw error;
-        }
-        const balance = Number(wallet.balance) - 100000;
-        await tx.prepare('UPDATE wallet_accounts SET balance = ?, updated_at = ? WHERE id = ?').run(balance, ts, wallet.id);
-        await tx.prepare(`INSERT INTO wallet_transactions
-          (id, wallet_id, customer_id, type, amount, balance_after, ticket_id, description, created_at)
-          VALUES (?, ?, ?, 'DEBIT_ONSITE', 100000, ?, ?, ?, ?)`)
-          .run(uid(), wallet.id, customer_id, balance, id, `Biaya kunjungan onsite ${number}`, ts);
-        await tx.prepare(`INSERT INTO finance_income
-          (id, income_type, amount, customer_id, ticket_id, occurred_at, description, created_at)
-          VALUES (?, 'ONSITE_FEE_REVENUE', 100000, ?, ?, ?, ?, ?)`)
-          .run(uid(), customer_id, id, ts, `Biaya kunjungan onsite ${number}`, ts);
-      }
       await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)')
         .run(uid(), id, 'OPEN', ctx.user.id, 'Request dibuat', ts);
       await tx.prepare('INSERT INTO ticket_timeline (id, ticket_id, type, title, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .run(uid(), id, 'REQUEST', 'Service request dibuat', problem, 'CUSTOMER_VISIBLE', ctx.user.id, ts);
     });
   } catch (error) {
-    if (error.status) return sendJSON(ctx.res, error.status, { error: error.message, code: error.code, balance: error.balance, required: 100000 });
+    if (error.status) return sendJSON(ctx.res, error.status, { error: error.message, ...(error.code ? { code: error.code } : {}) });
     throw error;
   }
   if (ctx.user.role === 'customer') {
-    const customer = await db.prepare('SELECT name FROM customers WHERE id = ?').get(customer_id);
+    const customer = await db.prepare('SELECT name, email FROM customers WHERE id = ?').get(customer_id);
+    const customerUser = await db.prepare("SELECT email FROM users WHERE customer_id = ? AND active = 1 ORDER BY created_at ASC LIMIT 1").get(customer_id);
     scheduleAppointmentEmail(ctx, {
       id,
       number,
       customerName: customer?.name || '',
+      customerEmail: customer?.email || customerUser?.email || ctx.user.email || '',
       actorName: ctx.user.name || '',
       actorRole: ctx.user.role,
       contactName: contact_name,
@@ -131,6 +113,23 @@ async function createTicketHandler(ctx) {
       preferredTime: preferred_time,
       createdAt: ts,
       adminUrl: `https://denttech.id/admin/ticket-detail.html?id=${encodeURIComponent(id)}`
+    });
+    scheduleCustomerEmail(ctx, {
+      to: customer?.email || customerUser?.email || ctx.user.email || '',
+      content: customerRequestEmail({
+        number,
+        customerName: customer?.name || '',
+        serviceType: service_type,
+        priority,
+        equipmentType: equipment?.name || equipment_type,
+        equipmentBrand: equipment?.model || equipment_brand,
+        problem,
+        serviceAddress: service_address,
+        preferredDate: preferred_date,
+        preferredTime: preferred_time,
+        createdAt: ts,
+        customerUrl: `https://denttech.id/customer/ticket-detail.html?id=${encodeURIComponent(id)}`
+      })
     });
   }
   notify({ role: 'admin', title: `Ticket baru ${number}`, body: `${problem} (${priority})`, type: 'TICKET', ref_type: 'ticket', ref_id: id });

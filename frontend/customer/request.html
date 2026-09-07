@@ -26,7 +26,7 @@
     import { api } from '/services/api.js';
     import { initMobileLayout } from '/components/layout.js';
     import { spinner, errorState, toast, refreshIcons, fileToDataUrl } from '/components/ui.js';
-    import { esc, fmtIDR, todayStr } from '/utils/format.js';
+    import { esc, todayStr } from '/utils/format.js';
     import { equipmentTypeOptions } from '/utils/constants.js';
 
     requireAuth(['customer']);
@@ -37,33 +37,15 @@
     const content = document.getElementById('content');
     content.innerHTML = spinner('Menyiapkan form request...');
     let pendingPhoto = null;
-    let walletBalance = 0;
-    const ONSITE_FEE = 100000;
 
     try {
       let defaultAddress = '';
-      const [customerResult, walletResult] = await Promise.allSettled([
-        api.get('/api/customers/' + user.customer_id),
-        api.get('/api/wallet')
-      ]);
-      if (customerResult.status === 'fulfilled') {
-        const customer = customerResult.value.customer;
+      const customerResult = await api.get('/api/customers/' + user.customer_id).catch(() => null);
+      if (customerResult?.customer) {
+        const customer = customerResult.customer;
         defaultAddress = [customer.address, customer.city].filter(Boolean).join(', ');
       }
-      if (walletResult.status === 'rejected') throw walletResult.reason;
-      walletBalance = Number(walletResult.value.wallet?.balance || 0);
       content.innerHTML = `
-        <section id="wallet-gate" class="card p-4 mb-4 ${walletBalance >= ONSITE_FEE ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-300 bg-amber-50'}" aria-live="polite">
-          <div class="flex items-start gap-3">
-            <i data-lucide="${walletBalance >= ONSITE_FEE ? 'circle-check' : 'circle-alert'}" class="w-5 h-5 mt-0.5 ${walletBalance >= ONSITE_FEE ? 'text-emerald-600' : 'text-amber-600'} shrink-0"></i>
-            <div class="flex-1">
-              <p class="font-bold text-slate-800">Biaya kunjungan onsite ${fmtIDR(ONSITE_FEE)}</p>
-              <p class="text-sm text-slate-600 mt-1">Biaya inspeksi langsung ini wajib dan dipotong dari wallet saat request berhasil dibuat. Saldo Anda: <b id="wallet-balance">${fmtIDR(walletBalance)}</b>.</p>
-              ${walletBalance < ONSITE_FEE ? '<p class="text-sm font-semibold text-amber-800 mt-2">Saldo belum cukup. Top up sebelum mengirim request.</p>' : ''}
-              <a href="/customer/wallet.html#topup" class="inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 mt-2 hover:underline"><i data-lucide="wallet-cards" class="w-4 h-4"></i> Buka Wallet</a>
-            </div>
-          </div>
-        </section>
         <form id="req-form" class="card p-5 space-y-4" novalidate>
           <div>
             <label class="label">Equipment *</label>
@@ -135,7 +117,7 @@
               <button type="button" id="rq-photo-remove" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/70 text-white flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
           </div>
-          <button type="submit" id="rq-submit" class="btn-primary w-full !py-3" ${walletBalance < ONSITE_FEE ? 'disabled aria-disabled="true"' : ''}><i data-lucide="send" class="w-4 h-4"></i> Kirim Request & TopUp Saldo Jasa Inspeksi ${fmtIDR(ONSITE_FEE)}</button>
+          <button type="submit" id="rq-submit" class="btn-primary w-full !py-3"><i data-lucide="send" class="w-4 h-4"></i> Kirim Request Service</button>
         </form>`;
       refreshIcons();
 
@@ -164,10 +146,6 @@
       document.getElementById('req-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('rq-submit');
-        if (walletBalance < ONSITE_FEE) {
-          toast(`Saldo tidak cukup. Diperlukan ${fmtIDR(ONSITE_FEE)} untuk kunjungan onsite.`, 'warning');
-          return;
-        }
         const body = {
           equipment_type: document.getElementById('rq-eqtype').value,
           equipment_brand: document.getElementById('rq-brand').value.trim(),
@@ -194,24 +172,8 @@
           toast(`Request ${res.number} berhasil dikirim`);
           setTimeout(() => location.href = '/customer/ticket-detail.html?id=' + res.id, 600);
         } catch (err) {
-          if (err.status === 409 && err.data?.code === 'INSUFFICIENT_WALLET_BALANCE') {
-            walletBalance = Number(err.data.balance || 0);
-            const balanceEl = document.getElementById('wallet-balance');
-            if (balanceEl) balanceEl.textContent = fmtIDR(walletBalance);
-            btn.disabled = true;
-            btn.setAttribute('aria-disabled', 'true');
-            toast(`Saldo terbaru ${fmtIDR(walletBalance)} tidak cukup. Diperlukan ${fmtIDR(Number(err.data.required || ONSITE_FEE))}.`, 'warning');
-            try {
-              const refreshed = await api.get('/api/wallet');
-              walletBalance = Number(refreshed.wallet?.balance || 0);
-              if (balanceEl) balanceEl.textContent = fmtIDR(walletBalance);
-              btn.disabled = walletBalance < ONSITE_FEE;
-              btn.setAttribute('aria-disabled', String(btn.disabled));
-            } catch {}
-          } else {
-            toast(err.message, 'error');
-            btn.disabled = false;
-          }
+          toast(err.message, 'error');
+          btn.disabled = false;
         }
       });
     } catch (e) {

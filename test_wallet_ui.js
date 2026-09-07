@@ -75,13 +75,13 @@ async function installMocks(page, mockUser = user, options = {}) {
   await page.goto(BASE + '/customer/', { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-wallet-card]');
   await check(await page.locator('#content > :first-child').getAttribute('data-wallet-card') !== null, 'wallet is the first customer home content card');
-  await check((await page.locator('[data-wallet-card]').innerText()).includes('Rp 100.000'), 'home wallet explains fixed onsite fee');
+  await check(!(await page.locator('[data-wallet-card]').innerText()).includes('onsite'), 'home wallet no longer requires onsite fee top up');
   await check((await page.locator('body').innerText()).includes('Dent Tech.id'), 'customer portal uses current company branding');
 
   await page.goto(BASE + '/customer/request.html', { waitUntil: 'networkidle' });
-  await check(await page.locator('#rq-submit').isDisabled(), 'request submit is blocked when wallet balance is insufficient');
-  await check((await page.locator('#wallet-gate').innerText()).includes('Biaya kunjungan onsite Rp 100.000'), 'request clearly explains direct onsite fee');
-  await check(await page.locator('#wallet-gate a[href="/customer/wallet.html#topup"]').count() === 1, 'request links to wallet top up');
+  await check(!(await page.locator('#rq-submit').isDisabled()), 'request submit is allowed without wallet top up');
+  await check(await page.locator('#wallet-gate').count() === 0, 'request form no longer shows wallet gate');
+  await check((await page.locator('#rq-submit').innerText()).includes('Kirim Request Service'), 'request submit button uses neutral label');
 
   await page.goto(BASE + '/customer/wallet.html', { waitUntil: 'networkidle' });
   await page.click('#create-topup');
