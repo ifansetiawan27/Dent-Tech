@@ -62,7 +62,7 @@ async function signupHandler(ctx) {
   }
 
   const customerId = uid();
-  const code = 'CUS-' + String((await nextNumber('CUS')).split('-')[2]);
+  const code = await nextNumber('CUS');
   const ts = now();
   try {
     await db.transaction(async (tx) => {

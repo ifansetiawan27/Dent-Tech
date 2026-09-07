@@ -99,7 +99,9 @@ async function listNotificationsHandler(ctx) {
 }
 
 async function readNotificationHandler(ctx) {
-  await db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND read_at IS NULL').run(new Date().toISOString(), ctx.params.id);
+  await db.prepare(
+    `UPDATE notifications SET read_at = ? WHERE id = ? AND read_at IS NULL AND (user_id = ? OR (user_id IS NULL AND role = ?) OR (user_id IS NULL AND role IS NULL AND customer_id = ?))`
+  ).run(new Date().toISOString(), ctx.params.id, ctx.user.id, ctx.user.role, ctx.user.customer_id || '');
   sendJSON(ctx.res, 200, { ok: true });
 }
 

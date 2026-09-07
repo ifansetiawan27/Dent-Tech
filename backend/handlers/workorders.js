@@ -294,7 +294,8 @@ async function addPartUsageHandler(ctx) {
   const q = Number(qty);
   if (!q || q <= 0) return sendJSON(ctx.res, 400, { error: 'Jumlah tidak valid' });
   if (part.stock < q) return sendJSON(ctx.res, 400, { error: `Stok tidak mencukupi (tersisa ${part.stock} ${part.unit})` });
-  await db.prepare('UPDATE parts SET stock = stock - ? WHERE id = ?').run(q, part.id);
+  const updated = await db.prepare('UPDATE parts SET stock = stock - ? WHERE id = ? AND stock >= ?').run(q, part.id, q);
+  if (!updated.changes) return sendJSON(ctx.res, 400, { error: `Stok tidak mencukupi (tersisa ${part.stock} ${part.unit})` });
   await db.prepare('INSERT INTO part_usages (id, work_order_id, part_id, qty, unit_price, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(uid(), wo.id, part.id, q, part.price, note, now());
   await db.prepare('UPDATE work_orders SET updated_at = ? WHERE id = ?').run(now(), wo.id);

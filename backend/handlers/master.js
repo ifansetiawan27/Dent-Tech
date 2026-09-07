@@ -48,7 +48,7 @@ async function createCustomerHandler(ctx) {
   const { name, industry = '', phone = '', email = '', address = '', city = '', contacts = [] } = ctx.body;
   if (!name) return sendJSON(ctx.res, 400, { error: 'Nama customer wajib diisi' });
   const id = uid();
-  const code = 'CUS-' + String((await nextNumber('CUS')).split('-')[2]);
+  const code = await nextNumber('CUS');
   const ts = now();
   await db.transaction(async (tx) => {
     await tx.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
