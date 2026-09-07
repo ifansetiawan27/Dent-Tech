@@ -15,11 +15,20 @@ export function portalHome(role) {
   return '/';
 }
 
+// requireAuth melempar 'AUTH_REDIRECT' setelah memulai redirect agar eksekusi modul berhenti.
+// Filter di bawah menekan error tersebut dari console (preventDefault) karena memang disengaja.
+if (typeof window !== 'undefined' && !window.__authRedirectFilterInstalled) {
+  window.__authRedirectFilterInstalled = true;
+  window.addEventListener('error', (e) => {
+    if (e && typeof e.message === 'string' && e.message.includes('AUTH_REDIRECT')) e.preventDefault();
+  });
+}
+
 export function requireAuth(expectedRoles) {
   const token = getToken();
   const user = getUser();
-  if (!token || !user) { window.location.href = '/login.html'; return null; }
-  if (expectedRoles && !expectedRoles.includes(user.role)) { window.location.href = portalHome(user.role); return null; }
+  if (!token || !user) { window.location.href = '/login.html'; throw new Error('AUTH_REDIRECT'); }
+  if (expectedRoles && !expectedRoles.includes(user.role)) { window.location.href = portalHome(user.role); throw new Error('AUTH_REDIRECT'); }
   return user;
 }
 
