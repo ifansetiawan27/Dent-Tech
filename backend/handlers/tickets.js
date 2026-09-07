@@ -28,7 +28,8 @@ function ticketSummary(t) {
 async function listTicketsHandler(ctx) {
   const { status, priority, search, customer_id, page = '1' } = ctx.query;
   const limit = 50;
-  const offset = (Math.max(1, parseInt(page, 10)) - 1) * limit;
+  const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
+  const offset = (pageNum - 1) * limit;
   const where = [];
   const params = [];
   if (ctx.user.role === 'customer') where.push('t.customer_id = ?'), params.push(ctx.user.customer_id);
@@ -52,7 +53,7 @@ async function listTicketsHandler(ctx) {
      ORDER BY CASE t.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END, t.created_at DESC
      LIMIT ? OFFSET ?`
   ).all(...params, limit, offset);
-  sendJSON(ctx.res, 200, { tickets: rows.map(ticketSummary).map((t, i) => ({ ...t, customer_name: rows[i].customer_name, equipment_name: rows[i].equipment_name, technician_name: rows[i].technician_name })), total, page: Number(page), pages: Math.ceil(total / limit) });
+  sendJSON(ctx.res, 200, { tickets: rows.map(ticketSummary).map((t, i) => ({ ...t, customer_name: rows[i].customer_name, equipment_name: rows[i].equipment_name, technician_name: rows[i].technician_name })), total, page: pageNum, pages: Math.ceil(total / limit) });
 }
 
 async function createTicketHandler(ctx) {
@@ -70,7 +71,11 @@ async function createTicketHandler(ctx) {
   }
   if (!customer_id) return sendJSON(ctx.res, 400, { error: 'Pilih equipment customer' });
   if (ctx.user.role === 'admin' && !equipment_id && !ctx.body.customer_id) return sendJSON(ctx.res, 400, { error: 'Pilih equipment atau customer' });
-  if (ctx.user.role === 'admin' && !equipment_id && ctx.body.customer_id) customer_id = ctx.body.customer_id;
+  if (ctx.user.role === 'admin' && !equipment_id && ctx.body.customer_id) {
+    customer_id = ctx.body.customer_id;
+    const cust = await db.prepare('SELECT id FROM customers WHERE id = ?').get(customer_id);
+    if (!cust) return sendJSON(ctx.res, 400, { error: 'Customer tidak ditemukan' });
+  }
   if (ctx.user.role === 'customer' && !equipment_id && !equipment_type) return sendJSON(ctx.res, 400, { error: 'Pilih jenis equipment' });
 
   const id = uid();

@@ -104,7 +104,7 @@
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
           <div class="card p-5"><p class="text-sm text-slate-500">Total Ticket</p><p class="text-2xl font-bold text-slate-800 mt-1">${s.total_tickets ?? 0}</p></div>
           <div class="card p-5"><p class="text-sm text-slate-500">Selesai</p><p class="text-2xl font-bold text-emerald-600 mt-1">${s.completed_tickets ?? 0}</p></div>
-          <div class="card p-5"><p class="text-sm text-slate-500">Berjalan / Open</p><p class="text-2xl font-bold text-blue-600 mt-1">${s.open_tickets ?? 0}</p></div>
+          <div class="card p-5"><p class="text-sm text-slate-500">Berjalan / Open</p><p class="text-2xl font-bold text-blue-600 mt-1">${(s.open_tickets ?? 0) + (s.in_process_tickets ?? 0)}</p></div>
           <div class="card p-5"><p class="text-sm text-slate-500">Pendapatan</p><p class="text-xl font-bold text-emerald-600 mt-1">${fmtIDR(s.total_revenue ?? 0)}</p></div>
           <div class="card p-5"><p class="text-sm text-slate-500">Belum Dibayar</p><p class="text-xl font-bold text-amber-600 mt-1">${fmtIDR(s.outstanding ?? 0)}</p></div>
         </div>

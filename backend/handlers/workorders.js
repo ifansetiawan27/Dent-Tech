@@ -105,7 +105,8 @@ async function startWorkOrderHandler(ctx) {
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'ASSIGNED') return sendJSON(ctx.res, 400, { error: 'Inspeksi hanya bisa dimulai dari status ASSIGNED' });
-  await db.prepare("UPDATE work_orders SET status = 'STARTED', started_at = ?, updated_at = ? WHERE id = ?").run(now(), now(), wo.id);
+  const started = await db.prepare("UPDATE work_orders SET status = 'STARTED', started_at = ?, updated_at = ? WHERE id = ? AND status = 'ASSIGNED'").run(now(), now(), wo.id);
+  if (!started.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
   const t = await getTicket(wo.ticket_id);
   if (t && t.status === 'ASSIGNED') {
     await setTicketStatus(t, 'IN_PROGRESS', ctx.user, 'Teknisi memulai inspeksi dan diagnosis');
@@ -200,7 +201,8 @@ async function startRepairHandler(ctx) {
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'REPAIR_AUTHORIZED') return sendJSON(ctx.res, 400, { error: 'Perbaikan belum disetujui customer' });
   const ts = now();
-  await db.prepare("UPDATE work_orders SET status = 'REPAIR_STARTED', updated_at = ? WHERE id = ? AND status = 'REPAIR_AUTHORIZED'").run(ts, wo.id);
+  const started = await db.prepare("UPDATE work_orders SET status = 'REPAIR_STARTED', updated_at = ? WHERE id = ? AND status = 'REPAIR_AUTHORIZED'").run(ts, wo.id);
+  if (!started.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
   const t = await getTicket(wo.ticket_id);
   if (t) {
     await setTicketStatus(t, 'REPAIR_IN_PROGRESS', ctx.user, 'Teknisi memulai perbaikan yang disetujui');

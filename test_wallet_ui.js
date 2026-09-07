@@ -84,11 +84,10 @@ async function installMocks(page, mockUser = user, options = {}) {
   await check((await page.locator('#rq-submit').innerText()).includes('Kirim Request Service'), 'request submit button uses neutral label');
 
   await page.goto(BASE + '/customer/wallet.html', { waitUntil: 'networkidle' });
-  await page.click('#create-topup');
-  await page.waitForSelector('#topup-order img');
-  const walletText = await page.locator('#topup-order').innerText();
-  await check(walletText.includes('WT-topup-1') && walletText.includes('Rp 100.000') && !walletText.includes('Biaya QRIS'), 'wallet displays exact zero-fee total without QRIS fee breakdown');
-  await check(walletText.includes('diverifikasi otomatis'), 'wallet warns QRIS verification is automatic');
+  await check(await page.locator('#topup').count() === 0, 'wallet page no longer shows top up section');
+  await check(await page.locator('#create-topup').count() === 0, 'wallet page has no top up button');
+  await check(await page.locator('#wallet-balance').count() === 1, 'wallet page shows balance card');
+  await check(await page.locator('#history').count() === 1, 'wallet page keeps transaction history');
 
   const restoredPage = await context.newPage();
   const restoredTopup = { ...order, id: 'topup-1', order_id: 'WT-topup-1', amount: 100000, total_payment: 100000 };
@@ -98,7 +97,6 @@ async function installMocks(page, mockUser = user, options = {}) {
   await restoredPage.goto(BASE + '/customer/wallet.html', { waitUntil: 'networkidle' });
   await restoredPage.waitForSelector('#topup-order img');
   await check((await restoredPage.locator('#topup-order').innerText()).includes('WT-topup-1'), 'wallet restores the active QRIS order after reload');
-  await check(await restoredPage.locator('#create-topup').isDisabled(), 'wallet blocks duplicate topup while restored QRIS is pending');
   await restoredPage.waitForTimeout(4500);
   await check(restoredPolls > 0, 'wallet resumes status polling for the restored QRIS order');
   await restoredPage.close();

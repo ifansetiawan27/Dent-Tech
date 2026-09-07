@@ -33,7 +33,6 @@
     initMobileLayout('home', 'customer');
     lucide.createIcons();
 
-    const TOPUP_AMOUNT = 100000;
     const content = document.getElementById('content');
     let state = { wallet: { balance: 0 }, transactions: [], order: null };
     let pollTimer = null;
@@ -69,16 +68,8 @@
         <section class="card p-5 mb-5 bg-gradient-to-br from-slate-900 to-blue-900 text-white">
           <p class="text-xs font-bold uppercase tracking-widest text-blue-200">Saldo tersedia</p>
           <p id="wallet-balance" class="text-3xl font-extrabold mt-1">${fmtIDR(balance)}</p>
-          <div class="mt-4 pt-4 border-t border-white/15 flex items-center justify-between gap-3 text-sm">
-            <span class="text-slate-300">Nominal top up</span><b>${fmtIDR(TOPUP_AMOUNT)}</b>
-          </div>
         </section>
         ${orderPanel(state.order)}
-        <section id="topup" class="card p-5 mb-5 scroll-mt-20">
-          <h2 class="font-bold">Top Up Wallet</h2>
-          <p class="text-sm text-slate-500 mt-1">Nominal top up tetap <b class="text-slate-700">${fmtIDR(TOPUP_AMOUNT)}</b>. Total pembayaran ditampilkan setelah QRIS dibuat.</p>
-          <button id="create-topup" class="btn-primary w-full !py-3 mt-4" ${state.order?.status === 'PENDING' ? 'disabled' : ''}><i data-lucide="qr-code" class="w-4 h-4"></i> Buat QRIS ${fmtIDR(TOPUP_AMOUNT)}</button>
-        </section>
         <section id="history" class="scroll-mt-20">
           <h2 class="text-sm font-bold uppercase tracking-wide text-slate-400 mb-3">Riwayat Transaksi</h2>
           ${state.transactions.length ? `<div class="space-y-2.5">${state.transactions.map((tx) => {
@@ -88,10 +79,9 @@
               <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-slate-700">${esc(tx.description || tx.type)}</p><p class="text-xs text-slate-400 mt-0.5">${fmtDateTime(tx.created_at)} · Saldo ${fmtIDR(tx.balance_after)}</p></div>
               <p class="text-sm font-bold ${credit ? 'text-emerald-600' : 'text-amber-700'}">${credit ? '+' : '-'}${fmtIDR(tx.amount)}</p>
             </article>`;
-          }).join('')}</div>` : `<div class="card">${emptyState('history', 'Belum ada transaksi', 'Top up dan pembayaran invoice akan tampil di sini.')}</div>`}
+          }).join('')}</div>` : `<div class="card">${emptyState('history', 'Belum ada transaksi', 'Pembayaran invoice dan penyesuaian saldo akan tampil di sini.')}</div>`}
         </section>`;
       refreshIcons();
-      document.getElementById('create-topup')?.addEventListener('click', createTopup);
     }
 
     async function loadHistory() {
@@ -101,21 +91,6 @@
       state.order = result.active_order || null;
       render();
       if (state.order?.status === 'PENDING') schedulePoll(state.order.id);
-    }
-
-    async function createTopup() {
-      const btn = document.getElementById('create-topup');
-      btn.disabled = true;
-      try {
-        const result = await api.post('/api/wallet/topups');
-        state.order = result.order;
-        render();
-        document.getElementById('topup-order')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        if (state.order?.status === 'PENDING') schedulePoll(state.order.id, 1000);
-      } catch (e) {
-        toast(e.message, 'error');
-        btn.disabled = false;
-      }
     }
 
     function schedulePoll(id, delay = 4000) {

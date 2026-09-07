@@ -44,7 +44,7 @@ ${DOC_BASE_CSS}
   <div class="kpis">
     ${card('Total Ticket', s.total_tickets ?? 0)}
     ${card('Selesai', s.completed_tickets ?? 0)}
-    ${card('Berjalan / Open', s.open_tickets ?? 0)}
+    ${card('Berjalan / Open', (s.open_tickets ?? 0) + (s.in_process_tickets ?? 0))}
     ${card('Pendapatan', fmtIDR(s.total_revenue ?? 0))}
     ${card('Belum Dibayar', fmtIDR(s.outstanding ?? 0))}
   </div>

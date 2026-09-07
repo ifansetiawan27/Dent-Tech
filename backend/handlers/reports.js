@@ -188,6 +188,7 @@ async function analyticsHandler(ctx) {
   const completedTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status IN ('COMPLETED','CLOSED') ${tf.sql}`).get(...tf.params)).c;
   const cancelledTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'CANCELLED' ${tf.sql}`).get(...tf.params)).c;
   const openTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status IN ('OPEN','REVIEWING','ASSIGNED','IN_PROGRESS') ${tf.sql}`).get(...tf.params)).c;
+  const inProcessTickets = (await db.prepare(`SELECT COUNT(*) AS c FROM tickets WHERE status IN ('WAITING_QUOTATION','WAITING_CUSTOMER_APPROVAL','REPAIR_AUTHORIZED','REPAIR_IN_PROGRESS') ${tf.sql}`).get(...tf.params)).c;
   const outstanding = (await db.prepare(`
     SELECT COALESCE(SUM(GREATEST(0, COALESCE(ii.items_total,0) - i.discount) * (1 + i.tax_rate/100.0)),0)::float8 AS s
     FROM invoices i
@@ -200,6 +201,7 @@ async function analyticsHandler(ctx) {
     total_tickets: totalTickets,
     completed_tickets: completedTickets,
     open_tickets: openTickets,
+    in_process_tickets: inProcessTickets,
     cancelled_tickets: cancelledTickets,
     total_revenue: Math.round(totalRevenue),
     paid_invoices: paidInvoices.length,
