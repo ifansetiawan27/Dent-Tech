@@ -219,8 +219,9 @@ async function saveChecklistHandler(ctx) {
   const items = Array.isArray(ctx.body.items) ? ctx.body.items : [];
   if (!items.length) return sendJSON(ctx.res, 400, { error: 'Tidak ada item checklist dikirim' });
   // Set-based: 1 lookup + 1 batched upsert (bukan loop query per item)
-  const byItem = new Map(items.map((it) => [it.item_id, it]));
-  const templateItems = await db.prepare('SELECT * FROM checklist_template_items WHERE id = ANY($1::uuid[])')
+  // Kolom checklist_template_items.id bertipe TEXT (bukan uuid), jadi bandingkan apa adanya.
+  const byItem = new Map(items.map((it) => [String(it.item_id), it]));
+  const templateItems = await db.prepare('SELECT * FROM checklist_template_items WHERE id = ANY($1::text[])')
     .all([...byItem.keys()]);
   const valid = [];
   for (const tplItem of templateItems) {
