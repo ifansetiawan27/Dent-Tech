@@ -28,7 +28,7 @@
     import { api } from '/services/api.js';
     import { initMobileLayout } from '/components/layout.js';
     import { spinner, errorState, emptyState, statusBadge, refreshIcons, TICKET_STATUS, WO_STATUS } from '/components/ui.js';
-    import { esc, fmtDate, fmtIDR, timeAgo } from '/utils/format.js';
+    import { esc, fmtDate, timeAgo } from '/utils/format.js';
 
     requireAuth(['customer']);
     initMobileLayout('home', 'customer');
@@ -43,22 +43,7 @@
     try {
       const d = await api.get('/api/dashboard');
       const at = d.active_ticket;
-      const walletBalance = Number(d.wallet?.balance || 0);
       content.innerHTML = `
-        <section class="card p-5 mb-5 overflow-hidden bg-gradient-to-br from-slate-900 to-blue-900 text-white" data-wallet-card>
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-bold uppercase tracking-widest text-blue-200">Wallet Dent Tech.id</p>
-              <p class="text-2xl font-extrabold mt-1" data-wallet-balance>${fmtIDR(walletBalance)}</p>
-              <p class="text-xs text-slate-300 mt-1">Saldo wallet untuk pembayaran invoice via QRIS.</p>
-            </div>
-            <div class="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center shrink-0"><i data-lucide="wallet-cards" class="w-6 h-6 text-blue-100"></i></div>
-          </div>
-          <div class="grid grid-cols-1 gap-2 mt-4">
-            <a href="/customer/wallet.html#history" class="inline-flex items-center justify-center gap-2 rounded-xl border border-white/30 px-3 py-2.5 text-sm font-semibold text-white hover:bg-white/10"><i data-lucide="history" class="w-4 h-4"></i> Riwayat</a>
-          </div>
-        </section>
-
         ${at ? `
         <div class="card p-5 mb-5 border-2 border-blue-200 bg-gradient-to-br from-blue-50/60 to-white">
           <div class="flex items-center justify-between gap-2">

@@ -73,9 +73,7 @@ async function installMocks(page, mockUser = user, options = {}) {
   await installMocks(page);
 
   await page.goto(BASE + '/customer/', { waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-wallet-card]');
-  await check(await page.locator('#content > :first-child').getAttribute('data-wallet-card') !== null, 'wallet is the first customer home content card');
-  await check(!(await page.locator('[data-wallet-card]').innerText()).includes('onsite'), 'home wallet no longer requires onsite fee top up');
+  await check(await page.locator('[data-wallet-card]').count() === 0, 'customer home no longer shows the wallet card');
   await check((await page.locator('body').innerText()).includes('Dent Tech.id'), 'customer portal uses current company branding');
 
   await page.goto(BASE + '/customer/request.html', { waitUntil: 'networkidle' });
