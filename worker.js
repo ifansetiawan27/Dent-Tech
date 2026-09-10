@@ -16,6 +16,37 @@ const { WorkerResponseAdapter, requestAdapter, readWorkerBody } = httpAdapter;
 const JSON_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REQUIRED_SECRETS = ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY'];
 
+// Google Analytics 4 — disisipkan di setiap halaman HTML yang dilayani Worker
+// (tanpa mengubah file konten apa pun).
+const GA_TRACKING_ID = 'G-YD7Y9VZQLQ';
+const GA_SNIPPET = `<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=${GA_TRACKING_ID}"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_TRACKING_ID}');
+</script>`;
+
+function isHtmlResponse(res) {
+  return (res.headers.get('content-type') || '').includes('text/html');
+}
+
+async function serveAsset(request, env) {
+  const res = await env.ASSETS.fetch(request);
+  if (!res || !res.ok || request.method !== 'GET' || !isHtmlResponse(res)) return res;
+  const text = await res.text();
+  const injected = /<\/head>/i.test(text)
+    ? text.replace(/<\/head>/i, GA_SNIPPET + '</head>')
+    : (/<\/body>/i.test(text) ? text.replace(/<\/body>/i, GA_SNIPPET + '</body>') : text + GA_SNIPPET);
+  const headers = new Headers(res.headers);
+  // Body di-decode oleh text(); header encoding/length lama tidak lagi valid.
+  headers.delete('Content-Encoding');
+  headers.delete('Content-Length');
+  headers.set('Content-Length', String(new TextEncoder().encode(injected).length));
+  return new Response(injected, { status: res.status, statusText: res.statusText, headers });
+}
+
 function json(status, payload) {
   return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store' } });
 }
@@ -95,6 +126,6 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) return withSecurityHeaders(await handleApi(request, env, ctx), true);
     if (!['GET', 'HEAD'].includes(request.method)) return withSecurityHeaders(new Response(null, { status: 405 }));
-    return withSecurityHeaders(await env.ASSETS.fetch(request));
+    return withSecurityHeaders(await serveAsset(request, env));
   }
 };
