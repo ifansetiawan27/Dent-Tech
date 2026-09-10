@@ -19,7 +19,8 @@
 		]
 	},
 	"vars": {
-		"PAKASIR_PROJECT": "dent-tech"
+		"PAKASIR_PROJECT": "dent-tech",
+		"APP_URL": "https://denttech.id"
 	},
 	"observability": {
 		"enabled": true,

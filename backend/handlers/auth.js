@@ -30,19 +30,15 @@ function publicBaseUrl(ctx) {
   return '';
 }
 
-function providersConfigured() {
-  return {
-    google: !!(getEnv('SUPABASE_URL') && getEnv('SUPABASE_PUBLISHABLE_KEY'))
-  };
-}
-
 // Deteksi provider aktif dari endpoint publik Supabase (/auth/v1/settings),
 // agar tombol Google hanya muncul bila provider benar-benar diaktifkan.
+// Saat pemeriksaan gagal, anggap nonaktif (fail-closed) agar tombol tidak
+// tampil padahal provider mati.
 let providerCache = { at: 0, value: null };
 async function detectProviders() {
   const supabaseUrl = getEnv('SUPABASE_URL') || '';
   const anonKey = getEnv('SUPABASE_PUBLISHABLE_KEY') || '';
-  if (!supabaseUrl || !anonKey) return providersConfigured();
+  if (!supabaseUrl || !anonKey) return { google: false };
   if (providerCache.value && Date.now() - providerCache.at < 60 * 1000) return providerCache.value;
   try {
     const res = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/settings`, {
@@ -57,7 +53,30 @@ async function detectProviders() {
   } catch (error) {
     console.error('[auth-providers]', error?.message || error);
   }
-  return providersConfigured();
+  return { google: false };
+}
+
+// Pastikan sesi Supabase berasal dari identitas Google, bukan email/password
+// (anon key publik + signup Supabase aktif, jadi token apa pun bisa diperoleh).
+function isGoogleIdentity(authUser) {
+  const providers = authUser.app_metadata?.providers;
+  if (Array.isArray(providers) && providers.includes('google')) return true;
+  if (authUser.app_metadata?.provider === 'google') return true;
+  if (Array.isArray(authUser.identities) && authUser.identities.some((i) => i && i.provider === 'google')) return true;
+  return false;
+}
+
+// Rate limit sederhana per isolate untuk endpoint auth publik.
+const authRateHits = new Map();
+function authRateAllowed(key, limit, windowMs) {
+  const nowMs = Date.now();
+  if (authRateHits.size > 5000) {
+    for (const [k, hit] of authRateHits) if (nowMs - hit.startedAt >= windowMs) authRateHits.delete(k);
+  }
+  const entry = authRateHits.get(key);
+  if (!entry || nowMs - entry.startedAt >= windowMs) { authRateHits.set(key, { startedAt: nowMs, count: 1 }); return true; }
+  entry.count++;
+  return entry.count <= limit;
 }
 
 // Tukar access token Supabase (hasil OAuth Google) menjadi sesi aplikasi.
@@ -65,12 +84,24 @@ async function detectProviders() {
 async function googleSessionHandler(ctx) {
   const { access_token } = ctx.body || {};
   if (!access_token) return sendJSON(ctx.res, 400, { error: 'Token Google tidak ditemukan' });
+
+  if (!authRateAllowed(`google:${ctx.ip || 'unknown'}`, 30, 60000)) {
+    return sendJSON(ctx.res, 429, { error: 'Terlalu banyak percobaan. Coba lagi nanti.' });
+  }
+
   const authUser = await auth.getUserFromToken(access_token);
   if (!authUser || !authUser.email) return sendJSON(ctx.res, 401, { error: 'Sesi Google tidak valid' });
+  if (!isGoogleIdentity(authUser)) return sendJSON(ctx.res, 403, { error: 'Sesi bukan dari login Google' });
 
   const emailNorm = String(authUser.email).trim().toLowerCase();
-  let user = await db.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').get(emailNorm);
+  // Cek tanpa filter active agar akun yang dinonaktifkan tidak salah dianggap
+  // belum terdaftar (yang dulu memicu percobaan insert duplikat).
+  const existing = await db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(emailNorm);
+  if (existing && !existing.active) {
+    return sendJSON(ctx.res, 403, { error: 'Akun Anda dinonaktifkan. Hubungi admin.' });
+  }
 
+  let user = existing;
   // Belum terdaftar: hanya boleh masuk jika pendaftaran mandiri customer diaktifkan
   // dan email memakai domain Gmail (konsisten dengan signup manual).
   if (!user) {
@@ -84,7 +115,7 @@ async function googleSessionHandler(ctx) {
     user = created.user;
   }
 
-  if (user.role !== 'customer') {
+  if (!user || user.role !== 'customer') {
     return sendJSON(ctx.res, 403, { error: 'Login Google hanya tersedia untuk akun customer' });
   }
 
@@ -93,6 +124,7 @@ async function googleSessionHandler(ctx) {
 }
 
 // Buat customer + user + wallet untuk akun Google yang belum terdaftar.
+// Idempoten: request paralel/ulang tidak membuat data ganda.
 async function provisionGoogleCustomer(authUser, emailNorm) {
   const name = String(authUser.user_metadata?.full_name || authUser.user_metadata?.name || emailNorm.split('@')[0]).trim();
   const customerId = uid();
@@ -100,19 +132,23 @@ async function provisionGoogleCustomer(authUser, emailNorm) {
   try {
     const code = await nextNumber('CUS');
     await db.transaction(async (tx) => {
+      const already = await tx.prepare('SELECT id FROM users WHERE id = ?').get(authUser.id);
+      if (already) return;
       await tx.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(customerId, code, name, 'Klinik', '', emailNorm, '', '', 'ACTIVE', ts);
       await tx.prepare('INSERT INTO customer_contacts (id, customer_id, name, role, phone, email, is_primary) VALUES (?, ?, ?, ?, ?, ?, 1)')
         .run(uid(), customerId, name, 'Penanggung Jawab', '', emailNorm);
-      await tx.prepare('INSERT INTO users (id, email, password_hash, name, role, phone, customer_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      await tx.prepare('INSERT INTO users (id, email, password_hash, name, role, phone, customer_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?) ON CONFLICT (id) DO NOTHING')
         .run(authUser.id, emailNorm, 'supabase-oauth', name, 'customer', '', customerId, ts);
-      await tx.prepare('INSERT INTO wallet_accounts (id, customer_id, balance, created_at, updated_at) VALUES (?, ?, 0, ?, ?)')
+      await tx.prepare('INSERT INTO wallet_accounts (id, customer_id, balance, created_at, updated_at) VALUES (?, ?, 0, ?, ?) ON CONFLICT (customer_id) DO NOTHING')
         .run(uid(), customerId, ts, ts);
     });
   } catch (error) {
-    return { error: 'Gagal membuat akun customer: ' + (error.message || 'kesalahan tidak diketahui') };
+    console.error('[google-provision]', error?.message || error);
+    return { error: 'Gagal membuat akun customer. Silakan coba lagi.' };
   }
   const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(authUser.id);
+  if (!user) return { error: 'Gagal membuat akun customer. Silakan coba lagi.' };
   return { user };
 }
 
@@ -132,6 +168,10 @@ async function forgotPasswordHandler(ctx) {
   const emailNorm = String(ctx.body?.email || '').trim().toLowerCase();
   if (!emailNorm) return sendJSON(ctx.res, 400, { error: 'Email wajib diisi' });
 
+  if (!authRateAllowed(`forgot:${ctx.ip || 'unknown'}`, 5, 60000)) {
+    return sendJSON(ctx.res, 429, { error: 'Terlalu banyak permintaan. Coba lagi nanti.' });
+  }
+
   const user = await db.prepare('SELECT id, active FROM users WHERE lower(email) = ?').get(emailNorm);
   // Selalu balas sukses agar tidak membocorkan keberadaan akun.
   if (user && user.active) {
@@ -143,13 +183,50 @@ async function forgotPasswordHandler(ctx) {
   sendJSON(ctx.res, 200, { ok: true, message: 'Jika email terdaftar, tautan reset password telah dikirim.' });
 }
 
+// Decode klaim JWT (sudah divalidasi via getUser()). Digunakan hanya untuk
+// membaca klaim "amr" guna memastikan token berasal dari konteks recovery,
+// bukan dari login Google/SSO biasa.
+function readJwtClaims(token) {
+  try {
+    const payload = token.split('.')[1];
+    return JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// Token yang bisa reset password harus berasal dari mechanism email/password
+// (recovery email atau login password). Token hasil Google/SSO ditolak.
+// Berbasis whitelist yang longgar agar tidak menolak token recovery sah:
+// hanya SSO/OAuth yang dianggap tidak layak.
+function isRecoveryUsableToken(claims) {
+  if (!claims) return true;
+  const amr = claims.amr;
+  if (Array.isArray(amr) && amr.length) {
+    const methods = amr.map((factor) => factor && factor.method).filter(Boolean);
+    // Token yang terautentikasi via OAuth/SSO (mis. Google) tidak boleh
+    // dipakai mereset password. Factor lain (password/otp/email) diizinkan.
+    if (methods.includes('oauth') || methods.includes('sso')) return false;
+    return true;
+  }
+  // Tanpa amr: tolak hanya bila klaim menunjukkan identitas Google.
+  return !(claims.provider === 'google' || (Array.isArray(claims.providers) && claims.providers.includes('google')));
+}
+
 async function resetPasswordHandler(ctx) {
   const { access_token, new_password } = ctx.body || {};
   if (!access_token) return sendJSON(ctx.res, 400, { error: 'Tautan reset tidak valid' });
   if (!new_password || String(new_password).length < 6) return sendJSON(ctx.res, 400, { error: 'Password baru minimal 6 karakter' });
 
+  if (!authRateAllowed(`reset:${ctx.ip || 'unknown'}`, 10, 60000)) {
+    return sendJSON(ctx.res, 429, { error: 'Terlalu banyak percobaan. Coba lagi nanti.' });
+  }
+
   const authUser = await auth.getUserFromToken(access_token);
   if (!authUser) return sendJSON(ctx.res, 401, { error: 'Tautan reset sudah kedaluwarsa. Silakan minta ulang.' });
+  if (!isRecoveryUsableToken(readJwtClaims(access_token))) {
+    return sendJSON(ctx.res, 403, { error: 'Tautan reset tidak valid untuk mereset password.' });
+  }
 
   const user = await db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(authUser.id);
   if (!user) return sendJSON(ctx.res, 403, { error: 'Akun tidak terdaftar di sistem ini' });
