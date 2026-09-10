@@ -72,7 +72,8 @@ const server = http.createServer(async (req, res) => {
   try {
     await loadSecret();
   } catch (e) {
-    console.error('[STARTUP ERROR]', e);
+    console.error('[STARTUP ERROR] Gagal memuat app secret. Server tidak dijalankan.', e);
+    process.exit(1);
   }
   server.listen(PORT, () => {
     console.log('====================================================');

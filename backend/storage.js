@@ -14,7 +14,7 @@ async function ensureBucket() {
       const { error } = await supabaseAdmin.storage.createBucket(BUCKET, {
         public: false,
         fileSizeLimit: 10 * 1024 * 1024,
-        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'application/pdf']
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
       });
       if (error && !/already exists|sudah ada|409/i.test(error.message || '')) {
         throw new Error('Gagal menyiapkan bucket storage: ' + error.message);

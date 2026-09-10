@@ -165,19 +165,22 @@ async function createExpenseHandler(ctx) {
 }
 
 async function deleteExpenseHandler(ctx) {
-  const e = await db.prepare('SELECT * FROM expenses WHERE id = ?').get(ctx.params.id);
-  if (!e) return sendJSON(ctx.res, 404, { error: 'Pengeluaran tidak ditemukan' });
-  if (e.restocked && e.part_id && e.qty > 0) {
-    const part = await db.prepare('SELECT stock FROM parts WHERE id = ?').get(e.part_id);
-    if (!part) return sendJSON(ctx.res, 409, { error: 'Spare part terkait tidak ditemukan' });
-    if (part.stock < e.qty) return sendJSON(ctx.res, 409, { error: 'Pengeluaran tidak dapat dihapus karena stok part sudah terpakai' });
+  let e;
+  try {
+    e = await db.transaction(async (tx) => {
+      const row = await tx.prepare('SELECT * FROM expenses WHERE id = ? FOR UPDATE').get(ctx.params.id);
+      if (!row) { const err = new Error('Pengeluaran tidak ditemukan'); err.status = 404; throw err; }
+      if (row.restocked && row.part_id && row.qty > 0) {
+        const updated = await tx.prepare('UPDATE parts SET stock = stock - ? WHERE id = ? AND stock >= ?').run(row.qty, row.part_id, row.qty);
+        if (!updated.changes) { const err = new Error('Pengeluaran tidak dapat dihapus karena stok part sudah terpakai'); err.status = 409; throw err; }
+      }
+      await tx.prepare('DELETE FROM expenses WHERE id = ?').run(row.id);
+      return row;
+    });
+  } catch (error) {
+    if (error.status) return sendJSON(ctx.res, error.status, { error: error.message });
+    throw error;
   }
-  await db.transaction(async (tx) => {
-    if (e.restocked && e.part_id && e.qty > 0) {
-      await tx.prepare('UPDATE parts SET stock = stock - ? WHERE id = ?').run(e.qty, e.part_id);
-    }
-    await tx.prepare('DELETE FROM expenses WHERE id = ?').run(e.id);
-  });
   audit(ctx.user, 'DELETE', 'expense', e.id, `Hapus pengeluaran Rp ${Number(e.amount).toLocaleString('id-ID')}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true });
 }

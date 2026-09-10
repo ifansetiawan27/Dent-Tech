@@ -86,7 +86,7 @@ import { setupInvoiceItemsEditor } from '/components/invoice-form.js';
                     ${sec.items.map((it) => `
                       <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-slate-50">
                         <p class="text-sm text-slate-600 flex-1">${esc(it.label)}${it.required ? ' <span class="text-red-400">*</span>' : ''}</p>
-                        ${it.result ? `<span class="text-xs font-bold px-2 py-0.5 rounded ${RESULT_STYLE[it.result]}">${it.result}</span>` : '<span class="text-xs text-slate-300">Belum diisi</span>'}
+                        ${it.result ? `<span class="text-xs font-bold px-2 py-0.5 rounded ${esc(RESULT_STYLE[it.result] || 'bg-slate-100 text-slate-600')}">${esc(it.result)}</span>` : '<span class="text-xs text-slate-300">Belum diisi</span>'}
                       </div>
                       ${it.note ? `<p class="text-xs text-slate-500 ml-3 -mt-0.5 mb-1">${esc(it.note)}</p>` : ''}`).join('')}
                   </div>

@@ -18,7 +18,7 @@ function photosHtml(evidence) {
     const k = kindLabel[p.kind] ? p.kind : 'other';
     return `<figure>
       <span class="photo-label ${k}">${kindLabel[k] || 'FOTO'}</span>
-      <img src="${p.url}" alt="${esc(p.caption || p.kind)}">
+      <img src="${esc(p.url)}" alt="${esc(p.caption || p.kind)}">
       <figcaption>${esc(p.caption || '')}</figcaption>
     </figure>`;
   }).join('');
@@ -31,7 +31,7 @@ function checklistHtml(evidence) {
   const rows = checklist.sections.map((sec) => {
     const items = sec.items.map((it) => {
       const badge = it.result
-        ? `<span class="badge ${it.result}">${RESULT_LABEL[it.result] || esc(it.result)}</span>`
+        ? `<span class="badge ${esc(it.result)}">${RESULT_LABEL[it.result] || esc(it.result)}</span>`
         : `<span class="badge EMPTY">—</span>`;
       return `<tr><td style="width:55%">${esc(it.label)}</td><td class="center" style="width:15%">${badge}</td><td class="muted">${esc(it.note || '')}</td></tr>`;
     }).join('');

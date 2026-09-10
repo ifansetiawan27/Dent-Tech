@@ -107,6 +107,25 @@ async function snapshotWorkOrderInvoiceItems(executor, invoiceId, workOrderId, l
   }
 }
 
+// Sinkronkan ulang baris PART invoice dengan part_usages work order.
+// Dipakai saat pekerjaan selesai: part baru dicatat setelah proforma disetujui,
+// sehingga snapshot awal (saat proforma dibuat) selalu kosong.
+async function resyncWorkOrderParts(executor, invoiceId, workOrderId) {
+  const ts = now();
+  await executor.prepare("DELETE FROM invoice_items WHERE invoice_id = ? AND item_type = 'PART'").run(invoiceId);
+  if (!workOrderId) return 0;
+  const parts = await executor.prepare(`SELECT pu.id, pu.qty::float8 AS qty, pu.unit_price::float8 AS unit_price, p.name, p.code, p.unit
+    FROM part_usages pu JOIN parts p ON p.id = pu.part_id
+    WHERE pu.work_order_id = ? ORDER BY pu.created_at, pu.id`).all(workOrderId);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    await executor.prepare(`INSERT INTO invoice_items (id, invoice_id, item_type, description, qty, unit, unit_price, sort_order, source_id, created_at, updated_at)
+      VALUES (?, ?, 'PART', ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(uid(), invoiceId, `Spare Part: ${p.name}${p.code ? ` (${p.code})` : ''}`, p.qty, p.unit || 'pcs', p.unit_price, 100 + i, p.id, ts, ts);
+  }
+  return parts.length;
+}
+
 function invoiceTotals(inv, itemsOrPartTotal) {
   const items = Array.isArray(itemsOrPartTotal) ? itemsOrPartTotal : null;
   const labor = items ? invoiceItemsTotal(items.filter((x) => x.item_type === 'LABOR')) : Number(inv.labor_cost || 0);
@@ -183,6 +202,6 @@ module.exports = {
   TICKET_STATUSES, WO_STATUSES, TICKET_TRANSITIONS,
   notify, audit, timeline, setTicketStatus,
   getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder,
-  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, invoiceTotals, customerVisible,
+  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, resyncWorkOrderParts, invoiceTotals, customerVisible,
   REQUIRED_PHOTO_KINDS, workOrderPhotoRequirements, buildChecklistState
 };

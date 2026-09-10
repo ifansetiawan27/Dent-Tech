@@ -10,7 +10,6 @@ const ALLOWED_MIME = {
   'image/png': '.png',
   'image/webp': '.webp',
   'image/gif': '.gif',
-  'image/svg+xml': '.svg',
   'application/pdf': '.pdf'
 };
 const ATTACHMENT_KINDS = new Set(['request', 'before', 'after', 'equipment_brand', 'equipment_serial', 'part_replacement', 'other']);
@@ -123,6 +122,7 @@ async function getFileHandler(ctx) {
   ctx.res.writeHead(200, {
     'Content-Type': a.mime || 'application/octet-stream',
     'Content-Length': data.length,
+    'Content-Disposition': 'attachment',
     'Cache-Control': 'private, max-age=3600'
   });
   ctx.res.end(data);

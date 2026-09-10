@@ -251,32 +251,39 @@ async function updatePartHandler(ctx) {
 }
 
 async function adjustStockHandler(ctx) {
-  const p = await db.prepare('SELECT * FROM parts WHERE id = ?').get(ctx.params.id);
-  if (!p) return sendJSON(ctx.res, 404, { error: 'Spare part tidak ditemukan' });
   const delta = Number(ctx.body.delta) || 0;
   if (!delta) return sendJSON(ctx.res, 400, { error: 'Jumlah penyesuaian tidak valid' });
-  const newStock = p.stock + delta;
-  if (newStock < 0) return sendJSON(ctx.res, 400, { error: 'Stok tidak boleh negatif' });
 
   const recordExpense = delta > 0 && ctx.body.record_expense === true;
-  const unitCost = Number(ctx.body.unit_cost) || Number(p.cost) || 0;
   const expenseDate = ctx.body.expense_date || localDate();
   const reason = String(ctx.body.reason || '').trim();
-  if (recordExpense && unitCost <= 0) return sendJSON(ctx.res, 400, { error: 'Harga beli wajib diisi untuk mencatat pengeluaran' });
   if (recordExpense && !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)) return sendJSON(ctx.res, 400, { error: 'Tanggal pembelian tidak valid' });
 
   let expenseId = null;
-  await db.transaction(async (tx) => {
-    await tx.prepare('UPDATE parts SET stock = ?, cost = CASE WHEN ? THEN ? ELSE cost END WHERE id = ?')
-      .run(newStock, recordExpense, unitCost, p.id);
-    if (recordExpense) {
-      expenseId = uid();
-      const amount = Math.round(delta * unitCost * 100) / 100;
-      await tx.prepare('INSERT INTO expenses (id, category, description, part_id, qty, unit_cost, amount, restocked, expense_date, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-        .run(expenseId, 'SPARE_PART', reason || `Pembelian ${p.name}`, p.id, delta, unitCost, amount, 1, expenseDate, ctx.user.id, now());
-    }
-  });
-  audit(ctx.user, 'UPDATE', 'part', p.id, `Penyesuaian stok ${p.name}: ${delta > 0 ? '+' : ''}${delta} → ${newStock}${expenseId ? ' · tercatat di Finance' : ''}`, ctx.ip);
+  let newStock = null;
+  let part = null;
+  try {
+    await db.transaction(async (tx) => {
+      part = await tx.prepare('SELECT * FROM parts WHERE id = ? FOR UPDATE').get(ctx.params.id);
+      if (!part) { const e = new Error('Spare part tidak ditemukan'); e.status = 404; throw e; }
+      newStock = Number(part.stock) + delta;
+      if (newStock < 0) { const e = new Error('Stok tidak boleh negatif'); e.status = 400; throw e; }
+      const unitCost = Number(ctx.body.unit_cost) || Number(part.cost) || 0;
+      if (recordExpense && unitCost <= 0) { const e = new Error('Harga beli wajib diisi untuk mencatat pengeluaran'); e.status = 400; throw e; }
+      await tx.prepare('UPDATE parts SET stock = stock + ?, cost = CASE WHEN ? THEN ? ELSE cost END WHERE id = ?')
+        .run(delta, recordExpense, unitCost, part.id);
+      if (recordExpense) {
+        expenseId = uid();
+        const amount = Math.round(delta * unitCost * 100) / 100;
+        await tx.prepare('INSERT INTO expenses (id, category, description, part_id, qty, unit_cost, amount, restocked, expense_date, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+          .run(expenseId, 'SPARE_PART', reason || `Pembelian ${part.name}`, part.id, delta, unitCost, amount, 1, expenseDate, ctx.user.id, now());
+      }
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
+  }
+  audit(ctx.user, 'UPDATE', 'part', part.id, `Penyesuaian stok ${part.name}: ${delta > 0 ? '+' : ''}${delta} → ${newStock}${expenseId ? ' · tercatat di Finance' : ''}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true, stock: newStock, expense_id: expenseId });
 }
 

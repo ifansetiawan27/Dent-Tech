@@ -3,7 +3,7 @@ const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig } = require('../util');
 const {
   audit, timeline, setTicketStatus, getTicket, getWorkOrder, canAccessWorkOrder,
-  notify, partTotalForWorkOrder, workOrderPhotoRequirements, buildChecklistState
+  notify, partTotalForWorkOrder, workOrderPhotoRequirements, buildChecklistState, resyncWorkOrderParts
 } = require('./_common');
 
 function attachmentWithUrl(a) {
@@ -308,11 +308,21 @@ async function removePartUsageHandler(ctx) {
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'REPAIR_STARTED') return sendJSON(ctx.res, 400, { error: 'Spare part hanya dapat diubah saat perbaikan berlangsung' });
-  const usage = await db.prepare('SELECT * FROM part_usages WHERE id = ? AND work_order_id = ?').get(ctx.params.usageId, wo.id);
-  if (!usage) return sendJSON(ctx.res, 404, { error: 'Penggunaan part tidak ditemukan' });
-  await db.prepare('UPDATE parts SET stock = stock + ? WHERE id = ?').run(usage.qty, usage.part_id);
-  await db.prepare('DELETE FROM part_usages WHERE id = ?').run(usage.id);
-  await db.prepare('UPDATE work_orders SET updated_at = ? WHERE id = ?').run(now(), wo.id);
+  let usage;
+  try {
+    usage = await db.transaction(async (tx) => {
+      const row = await tx.prepare('SELECT * FROM part_usages WHERE id = ? AND work_order_id = ? FOR UPDATE').get(ctx.params.usageId, wo.id);
+      if (!row) { const e = new Error('Penggunaan part tidak ditemukan'); e.status = 404; throw e; }
+      const deleted = await tx.prepare('DELETE FROM part_usages WHERE id = ?').run(row.id);
+      if (!deleted.changes) { const e = new Error('Penggunaan part sudah dibatalkan'); e.status = 409; throw e; }
+      await tx.prepare('UPDATE parts SET stock = stock + ? WHERE id = ?').run(row.qty, row.part_id);
+      await tx.prepare('UPDATE work_orders SET updated_at = ? WHERE id = ?').run(now(), wo.id);
+      return row;
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
+  }
   audit(ctx.user, 'DELETE', 'part_usage', usage.id, `Batal pakai part di ${wo.number}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true, parts_total: await partTotalForWorkOrder(wo.id) });
 }
@@ -368,6 +378,10 @@ async function completeWorkOrderHandler(ctx) {
       t = await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(lockedWo.ticket_id);
       proforma = await tx.prepare("SELECT * FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(lockedWo.id);
       if (!t || !proforma || proforma.approval_status !== 'APPROVED') { const e = new Error('Proforma yang disetujui customer tidak ditemukan'); e.status = 409; throw e; }
+      // Spare part hanya bisa dicatat saat REPAIR_STARTED, yaitu setelah proforma
+      // disetujui. Sinkronkan ulang baris PART agar biaya part ikut tertagih.
+      const partsSynced = await resyncWorkOrderParts(tx, proforma.id, lockedWo.id);
+      if (partsSynced) await tx.prepare('UPDATE invoices SET version = version + 1, updated_at = ? WHERE id = ?').run(completedAt, proforma.id);
       await tx.prepare("UPDATE work_orders SET status = 'APPROVED', completed_at = ?, updated_at = ? WHERE id = ?").run(completedAt, completedAt, lockedWo.id);
       await tx.prepare(`INSERT INTO service_reports (id, number, version, work_order_id, summary, technician_note, status, approved_at, approved_by, created_at, updated_at)
         VALUES (?, ?, 1, ?, ?, ?, 'APPROVED', ?, ?, ?, ?)`)

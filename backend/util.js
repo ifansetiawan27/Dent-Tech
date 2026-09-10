@@ -54,15 +54,23 @@ let _secret = null;
 async function loadSecret() {
   if (_secret) return _secret;
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'app_secret'").get();
-  if (row) { _secret = row.value; return _secret; }
+  if (row && row.value) { _secret = row.value; return _secret; }
   const secret = crypto.randomBytes(32).toString('hex');
   await db.prepare("INSERT INTO settings (key, value) VALUES ('app_secret', ?) ON CONFLICT (key) DO NOTHING").run(secret);
-  _secret = secret;
+  // Baca ulang: isolate lain bisa memenangkan INSERT, jadi nilai yang dipakai
+  // harus yang benar-benar tersimpan agar signature konsisten antar isolate.
+  const persisted = await db.prepare("SELECT value FROM settings WHERE key = 'app_secret'").get();
+  _secret = (persisted && persisted.value) || secret;
+  return _secret;
+}
+
+function requireSecret() {
+  if (!_secret) throw new Error('App secret belum dimuat');
   return _secret;
 }
 
 function fileSig(fileId, ttlMinutes = 24 * 60) {
-  const secret = _secret || 'dent-tech-fallback-secret';
+  const secret = requireSecret();
   const exp = Date.now() + ttlMinutes * 60 * 1000;
   const sig = crypto.createHmac('sha256', secret).update(`${fileId}.${exp}`).digest('hex');
   return { exp, sig };
@@ -70,8 +78,9 @@ function fileSig(fileId, ttlMinutes = 24 * 60) {
 
 function verifyFileSig(fileId, exp, sig) {
   if (!exp || !sig) return false;
+  if (!Number.isFinite(Number(exp))) return false;
   if (Date.now() > Number(exp)) return false;
-  const secret = _secret || 'dent-tech-fallback-secret';
+  const secret = requireSecret();
   const expected = crypto.createHmac('sha256', secret).update(`${fileId}.${exp}`).digest('hex');
   try {
     return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(String(sig), 'hex'));

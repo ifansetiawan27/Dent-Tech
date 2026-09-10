@@ -8,7 +8,7 @@ export function buildChecklistHtml(data) {
   const rows = (checklist?.sections || []).map((sec) => {
     const items = sec.items.map((it) => {
       const badge = it.result
-        ? `<span class="badge ${it.result}">${RESULT_LABEL[it.result] || esc(it.result)}</span>`
+        ? `<span class="badge ${esc(it.result)}">${RESULT_LABEL[it.result] || esc(it.result)}</span>`
         : `<span class="badge EMPTY">—</span>`;
       return `<tr>
         <td style="width:55%">${esc(it.label)}${it.required ? ' <span class="muted">*</span>' : ''}</td>
