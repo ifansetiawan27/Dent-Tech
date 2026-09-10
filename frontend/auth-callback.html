@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memproses Login — Dent Tech.id</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
+  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
+</head>
+<body class="min-h-screen bg-slate-50 font-sans antialiased flex items-center justify-center p-6">
+  <div class="w-full max-w-md card p-8 text-center">
+    <img src="/assets/logo.png?v=2" alt="Logo" class="w-12 h-12 object-contain mx-auto mb-4">
+    <div id="cb-spinner" class="flex flex-col items-center gap-3">
+      <div class="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-sm text-slate-500">Menyelesaikan login dengan Google...</p>
+    </div>
+    <div id="cb-error" class="hidden">
+      <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 text-left">
+        <span id="cb-error-msg"></span>
+      </div>
+      <a href="/login.html" class="btn-primary w-full mt-4 inline-block">Kembali ke Login</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import { setToken, setUser, portalHome } from '/utils/auth.js';
+    import { api } from '/services/api.js';
+
+    const spinner = document.getElementById('cb-spinner');
+    const errorBox = document.getElementById('cb-error');
+    const errorMsg = document.getElementById('cb-error-msg');
+
+    function fail(message) {
+      spinner.classList.add('hidden');
+      errorBox.classList.remove('hidden');
+      errorMsg.textContent = message || 'Login Google gagal. Silakan coba lagi.';
+    }
+
+    (async () => {
+      const query = new URLSearchParams(window.location.search);
+      const fragment = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+
+      if (query.get('error') || fragment.get('error')) {
+        return fail(query.get('error_description') || fragment.get('error_description') || 'Akses Google ditolak.');
+      }
+
+      try {
+        const cfg = await api.get('/api/auth/providers');
+        if (!cfg || !cfg.supabase_url) return fail('Login Google belum dikonfigurasi.');
+
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+        const supabase = createClient(cfg.supabase_url, cfg.supabase_anon_key, {
+          auth: { flowType: 'pkce', detectSessionInUrl: true }
+        });
+
+        // SDK menukar code (PKCE) atau membaca token dari hash (implicit).
+        const { data, error } = await supabase.auth.getSession();
+        if (error) return fail(error.message);
+        const accessToken = data?.session?.access_token;
+        if (!accessToken) return fail('Sesi Google tidak ditemukan. Silakan coba login lagi.');
+
+        const res = await api.post('/api/auth/google/session', { access_token: accessToken });
+        setToken(res.token);
+        setUser(res.user);
+        window.location.href = portalHome(res.user.role);
+      } catch (e) {
+        fail(e.message);
+      }
+    })();
+  </script>
+</body>
+</html>

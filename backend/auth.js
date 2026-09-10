@@ -18,6 +18,22 @@ function logout() {
   // JWT bersifat stateless; cukup client membuang token.
 }
 
+// Validasi access token Supabase (dipakai alur OAuth Google & reset password).
+async function getUserFromToken(token) {
+  if (!token) return null;
+  const supabase = createAuthClient();
+  const { data, error } = await supabase.auth.getUser(String(token));
+  if (error || !data || !data.user) return null;
+  return data.user;
+}
+
+// Kirim email reset password lewat layanan email Supabase.
+async function sendPasswordReset(email, redirectTo) {
+  const supabase = createAuthClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  return { error };
+}
+
 function bearerToken(req) {
   const h = req.headers['authorization'] || '';
   if (h.startsWith('Bearer ')) return h.slice(7).trim();
@@ -71,4 +87,4 @@ function requireRoles(...roles) {
   return (user) => !!user && (roles.length === 0 || roles.includes(user.role));
 }
 
-module.exports = { login, logout, currentUser, bearerToken, requireRoles };
+module.exports = { login, logout, currentUser, bearerToken, requireRoles, getUserFromToken, sendPasswordReset };

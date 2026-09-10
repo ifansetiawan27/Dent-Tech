@@ -2,6 +2,15 @@ import { getToken, clearSession } from '../utils/auth.js';
 
 const AUTH_PREFIX = 'Bear' + 'er ';
 
+// Endpoint publik yang boleh mengembalikan 401 tanpa memicu redirect paksa ke login.
+const PUBLIC_AUTH_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/signup',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/google/session'
+]);
+
 async function request(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
@@ -21,7 +30,7 @@ async function request(method, path, body) {
   let data = null;
   const text = await res.text();
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
-  if (res.status === 401 && path !== '/api/auth/login') {
+  if (res.status === 401 && !PUBLIC_AUTH_PATHS.has(path) && !path.startsWith('/api/auth/google')) {
     clearSession();
     window.location.href = '/login.html';
     throw new Error('Sesi berakhir, silakan login kembali');

@@ -79,11 +79,27 @@
                 <input class="input pr-11" type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
                 <button type="button" id="toggle-pw" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i data-lucide="eye" class="w-4 h-4"></i></button>
               </div>
+              <div class="text-right mt-1.5">
+                <a href="/forgot-password.html" class="text-xs font-medium text-blue-600 hover:underline">Lupa password?</a>
+              </div>
             </div>
             <button type="submit" id="login-btn" class="btn-primary w-full !py-3">
               <span id="login-btn-label">Masuk</span>
             </button>
           </form>
+
+          <div id="google-section" class="hidden">
+            <div class="flex items-center gap-3 my-5">
+              <div class="flex-1 h-px bg-slate-200"></div>
+              <span class="text-xs text-slate-400">atau</span>
+              <div class="flex-1 h-px bg-slate-200"></div>
+            </div>
+            <button type="button" id="google-btn" class="w-full flex items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+              <svg class="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.5l6.3 5.3C41.4 35.3 44 30.1 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+              Masuk dengan Google
+            </button>
+            <p class="text-xs text-slate-400 text-center mt-3">Khusus akun customer yang sudah terdaftar.</p>
+          </div>
 
           <p class="text-sm text-slate-500 text-center mt-6">Belum punya akun? <a href="/signup.html" class="font-semibold text-blue-600 hover:underline">Daftarkan klinik Anda</a></p>
         </div>
@@ -103,13 +119,30 @@
 
     if (getToken() && getUser()) window.location.href = portalHome(getUser().role);
 
-    (async () => {
+(async () => {
       try {
         const { settings } = await api.get('/api/public/settings');
         if (settings.company_name) {
           document.getElementById('brand-name').textContent = settings.company_name;
           document.getElementById('brand-name-m').textContent = settings.company_name;
           document.title = `Login — ${settings.company_name} Service Management`;
+        }
+      } catch {}
+    })();
+
+    // Tampilkan tombol Google hanya jika provider aktif di Supabase.
+    // Gunakan SDK browser supabase-js agar flow implicit/PKCE ditangani otomatis.
+    (async () => {
+      try {
+        const cfg = await api.get('/api/auth/providers');
+        if (cfg && cfg.providers && cfg.providers.google) {
+          const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+          // persistSession default (localStorage) diperlukan agar code verifier PKCE
+          // bertahan melewati redirect Google.
+          window.__supabase = createClient(cfg.supabase_url, cfg.supabase_anon_key, {
+            auth: { flowType: 'pkce', detectSessionInUrl: true }
+          });
+          document.getElementById('google-section').classList.remove('hidden');
         }
       } catch {}
     })();
@@ -151,6 +184,24 @@
         return;
       }
       doLogin(email, password);
+    });
+
+    document.getElementById('google-btn').addEventListener('click', async () => {
+      errBox.classList.add('hidden');
+      const gbtn = document.getElementById('google-btn');
+      gbtn.disabled = true;
+      try {
+        if (!window.__supabase) throw new Error('Login Google belum siap. Muat ulang halaman.');
+        const { error } = await window.__supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: `${window.location.origin}/auth-callback.html` }
+        });
+        if (error) throw new Error(error.message);
+      } catch (e) {
+        errMsg.textContent = e.message;
+        errBox.classList.remove('hidden');
+        gbtn.disabled = false;
+      }
     });
 
   </script>

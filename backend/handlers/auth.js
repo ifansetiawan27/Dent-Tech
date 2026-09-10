@@ -2,8 +2,9 @@
 const path = require('path');
 const { db, supabaseAdmin, createAuthClient } = require('../db');
 const { saveFile, readFile } = require('../storage');
-const { uid, now, sendJSON, publicUser, fileSig, verifyFileSig, nextNumber } = require('../util');
+const { uid, now, sendJSON, publicUser, fileSig, verifyFileSig, nextNumber, getSetting } = require('../util');
 const auth = require('../auth');
+const { getEnv } = require('../runtime');
 const { audit } = require('./_common');
 
 const AVATAR_MIME = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
@@ -15,6 +16,149 @@ async function loginHandler(ctx) {
   if (result.error) return sendJSON(ctx.res, 401, { error: result.error });
   audit(result.user, 'LOGIN', 'auth', result.user.id, 'User login', ctx.ip);
   sendJSON(ctx.res, 200, result);
+}
+
+// Base URL publik untuk redirect OAuth/reset password.
+// Prioritas: env APP_URL (produksi) → header origin/host request → localhost.
+function publicBaseUrl(ctx) {
+  const configured = String(getEnv('APP_URL') || getEnv('PUBLIC_APP_URL') || '').trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  const headers = ctx.req?.headers || {};
+  const proto = headers['x-forwarded-proto'] || 'https';
+  const host = headers['x-forwarded-host'] || headers.host || '';
+  if (host) return `${proto}://${host}`;
+  return '';
+}
+
+function providersConfigured() {
+  return {
+    google: !!(getEnv('SUPABASE_URL') && getEnv('SUPABASE_PUBLISHABLE_KEY'))
+  };
+}
+
+// Deteksi provider aktif dari endpoint publik Supabase (/auth/v1/settings),
+// agar tombol Google hanya muncul bila provider benar-benar diaktifkan.
+let providerCache = { at: 0, value: null };
+async function detectProviders() {
+  const supabaseUrl = getEnv('SUPABASE_URL') || '';
+  const anonKey = getEnv('SUPABASE_PUBLISHABLE_KEY') || '';
+  if (!supabaseUrl || !anonKey) return providersConfigured();
+  if (providerCache.value && Date.now() - providerCache.at < 60 * 1000) return providerCache.value;
+  try {
+    const res = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/settings`, {
+      headers: { apikey: anonKey }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const value = { google: !!(data && data.external && data.external.google) };
+      providerCache = { at: Date.now(), value };
+      return value;
+    }
+  } catch (error) {
+    console.error('[auth-providers]', error?.message || error);
+  }
+  return providersConfigured();
+}
+
+// Tukar access token Supabase (hasil OAuth Google) menjadi sesi aplikasi.
+// Customer harus sudah terdaftar di tabel users agar bisa masuk ke portal.
+async function googleSessionHandler(ctx) {
+  const { access_token } = ctx.body || {};
+  if (!access_token) return sendJSON(ctx.res, 400, { error: 'Token Google tidak ditemukan' });
+  const authUser = await auth.getUserFromToken(access_token);
+  if (!authUser || !authUser.email) return sendJSON(ctx.res, 401, { error: 'Sesi Google tidak valid' });
+
+  const emailNorm = String(authUser.email).trim().toLowerCase();
+  let user = await db.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').get(emailNorm);
+
+  // Belum terdaftar: hanya boleh masuk jika pendaftaran mandiri customer diaktifkan
+  // dan email memakai domain Gmail (konsisten dengan signup manual).
+  if (!user) {
+    const signupEnabled = (await getSetting('customer_google_signup', 'OFF')) === 'ON';
+    if (!signupEnabled) return sendJSON(ctx.res, 403, { error: 'Akun belum terdaftar. Silakan daftar terlebih dahulu.' });
+    if (!/^[a-z0-9._%+-]+@gmail\.com$/.test(emailNorm)) {
+      return sendJSON(ctx.res, 403, { error: 'Pendaftaran Google hanya menerima email @gmail.com' });
+    }
+    const created = await provisionGoogleCustomer(authUser, emailNorm);
+    if (created.error) return sendJSON(ctx.res, created.status || 500, { error: created.error });
+    user = created.user;
+  }
+
+  if (user.role !== 'customer') {
+    return sendJSON(ctx.res, 403, { error: 'Login Google hanya tersedia untuk akun customer' });
+  }
+
+  audit(user, 'LOGIN', 'auth', user.id, 'Customer login via Google', ctx.ip);
+  sendJSON(ctx.res, 200, { token: access_token, user: publicUser(user) });
+}
+
+// Buat customer + user + wallet untuk akun Google yang belum terdaftar.
+async function provisionGoogleCustomer(authUser, emailNorm) {
+  const name = String(authUser.user_metadata?.full_name || authUser.user_metadata?.name || emailNorm.split('@')[0]).trim();
+  const customerId = uid();
+  const ts = now();
+  try {
+    const code = await nextNumber('CUS');
+    await db.transaction(async (tx) => {
+      await tx.prepare('INSERT INTO customers (id, code, name, industry, phone, email, address, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(customerId, code, name, 'Klinik', '', emailNorm, '', '', 'ACTIVE', ts);
+      await tx.prepare('INSERT INTO customer_contacts (id, customer_id, name, role, phone, email, is_primary) VALUES (?, ?, ?, ?, ?, ?, 1)')
+        .run(uid(), customerId, name, 'Penanggung Jawab', '', emailNorm);
+      await tx.prepare('INSERT INTO users (id, email, password_hash, name, role, phone, customer_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
+        .run(authUser.id, emailNorm, 'supabase-oauth', name, 'customer', '', customerId, ts);
+      await tx.prepare('INSERT INTO wallet_accounts (id, customer_id, balance, created_at, updated_at) VALUES (?, ?, 0, ?, ?)')
+        .run(uid(), customerId, ts, ts);
+    });
+  } catch (error) {
+    return { error: 'Gagal membuat akun customer: ' + (error.message || 'kesalahan tidak diketahui') };
+  }
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(authUser.id);
+  return { user };
+}
+
+// Konfigurasi publik untuk klien browser (anon key memang untuk publik).
+// Dipakai login Google (SDK) dan halaman reset password (SDK).
+async function providersHandler(ctx) {
+  const providers = await detectProviders();
+  const cfg = {
+    providers,
+    supabase_url: (getEnv('SUPABASE_URL') || '').replace(/\/+$/, ''),
+    supabase_anon_key: getEnv('SUPABASE_PUBLISHABLE_KEY') || ''
+  };
+  sendJSON(ctx.res, 200, cfg);
+}
+
+async function forgotPasswordHandler(ctx) {
+  const emailNorm = String(ctx.body?.email || '').trim().toLowerCase();
+  if (!emailNorm) return sendJSON(ctx.res, 400, { error: 'Email wajib diisi' });
+
+  const user = await db.prepare('SELECT id, active FROM users WHERE lower(email) = ?').get(emailNorm);
+  // Selalu balas sukses agar tidak membocorkan keberadaan akun.
+  if (user && user.active) {
+    const base = publicBaseUrl(ctx);
+    const redirectTo = `${base}/reset-password.html`;
+    const { error } = await auth.sendPasswordReset(emailNorm, redirectTo);
+    if (error) console.error('[forgot-password]', error.message || error);
+  }
+  sendJSON(ctx.res, 200, { ok: true, message: 'Jika email terdaftar, tautan reset password telah dikirim.' });
+}
+
+async function resetPasswordHandler(ctx) {
+  const { access_token, new_password } = ctx.body || {};
+  if (!access_token) return sendJSON(ctx.res, 400, { error: 'Tautan reset tidak valid' });
+  if (!new_password || String(new_password).length < 6) return sendJSON(ctx.res, 400, { error: 'Password baru minimal 6 karakter' });
+
+  const authUser = await auth.getUserFromToken(access_token);
+  if (!authUser) return sendJSON(ctx.res, 401, { error: 'Tautan reset sudah kedaluwarsa. Silakan minta ulang.' });
+
+  const user = await db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(authUser.id);
+  if (!user) return sendJSON(ctx.res, 403, { error: 'Akun tidak terdaftar di sistem ini' });
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password: String(new_password) });
+  if (error) return sendJSON(ctx.res, 500, { error: 'Gagal mengubah password: ' + error.message });
+
+  audit(user, 'UPDATE', 'user', user.id, 'Reset password via lupa password', ctx.ip);
+  sendJSON(ctx.res, 200, { ok: true });
 }
 
 function normalizePhone(p) {
@@ -254,5 +398,6 @@ async function getPhotoHandler(ctx) {
 module.exports = {
   loginHandler, signupHandler, logoutHandler, meHandler, changePasswordHandler,
   listUsersHandler, createUserHandler, updateUserHandler, deleteTechnicianHandler, publicSettingsHandler,
-  uploadPhotoHandler, getPhotoHandler
+  uploadPhotoHandler, getPhotoHandler,
+  providersHandler, googleSessionHandler, forgotPasswordHandler, resetPasswordHandler
 };

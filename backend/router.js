@@ -36,6 +36,10 @@ function matchRoute(method, pathname) {
 // roles: null = public, [] = any authenticated, otherwise specific roles
 route('POST', '/api/auth/login', null, authH.loginHandler);
 route('POST', '/api/auth/signup', null, authH.signupHandler);
+route('GET', '/api/auth/providers', null, authH.providersHandler);
+route('POST', '/api/auth/google/session', null, authH.googleSessionHandler);
+route('POST', '/api/auth/forgot-password', null, authH.forgotPasswordHandler);
+route('POST', '/api/auth/reset-password', null, authH.resetPasswordHandler);
 route('GET', '/api/public/settings', null, authH.publicSettingsHandler);
 route('POST', '/api/auth/logout', [], authH.logoutHandler);
 route('GET', '/api/auth/me', [], authH.meHandler);
