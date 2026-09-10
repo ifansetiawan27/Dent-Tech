@@ -3,7 +3,25 @@
 Aplikasi web manajemen operasional service end-to-end dengan **tiga portal** (Admin, Technician, Customer) yang berbagi satu sumber data yang sama. Dibangun berdasarkan `PRD.md` dan `UI_UX_SPECIFICATION.md`.
 
 > **Prinsip utama:** setiap aktivitas service dapat dilacak — dari request customer hingga riwayat service.
-> `Customer Request → Ticket → Review → Assignment → Schedule → Technician Visit → Checklist → Photos → Parts → Service Report → Approval → Invoice → Payment → Service History`
+> 
+> **Alur:** Customer Request → Ticket → Review → Assignment → Schedule → Technician Visit → Checklist → Diagnosis → Photos → Parts → Service Report → Approval → Invoice → Payment → Service History
+
+🔗 **[Production](https://denttech.id)** · 📖 [PRD](./PRD.md) · 📋 [UI/UX Spec](./UI_UX_SPECIFICATION.md)
+
+---
+
+## Table of Contents
+
+- [Teknologi](#teknologi)
+- [Prasyarat & Setup](#prasyarat--setup)
+- [Menjalankan](#menjalankan)
+- [Akun Demo](#akun-demo)
+- [Struktur Proyek](#struktur-proyek)
+- [Fitur per Portal](#fitur-per-portal)
+- [Aturan Bisnis & Keamanan](#aturan-bisnis--keamanan)
+- [Testing](#testing)
+- [Reset Data Demo](#reset-data-demo)
+- [Batasan MVP](#batasan-mvp)
 
 ---
 
@@ -16,9 +34,21 @@ Aplikasi web manajemen operasional service end-to-end dengan **tiga portal** (Ad
 | Database | SQLite relasional via `node:sqlite` (built-in Node ≥ 22.5) | File: `data/sms.db` |
 | Auth | Token-based + RBAC 3 role | Password di-hash dengan scrypt |
 
-> Catatan: PRD menyebut "Node.js", dokumen UI/UX menyebut "Python REST API". Implementasi ini memilih **Node.js** sesuai PRD (dokumen utama) dan diagram arsitektur PRD, serta agar seluruh stack satu bahasa dan bebas instalasi dependensi.
+> **Catatan:** PRD menyebut "Node.js", dokumen UI/UX menyebut "Python REST API". Implementasi ini memilih **Node.js** sesuai PRD (dokumen utama) dan diagram arsitektur PRD, agar seluruh stack sama-bahasa, serta deployment & maintenance lebih sederhana.
 
-**Prasyarat:** hanya Node.js v22.5+ (disarankan v24). Tidak perlu `npm install` untuk menjalankan aplikasi.
+---
+
+## Prasyarat & Setup
+
+**Persyaratan:**
+- Node.js v22.5+ (disarankan v24)
+- Tidak perlu `npm install` — semua built-in modules
+
+**Clone & install:**
+```bash
+git clone https://github.com/ifansetiawan27/Dent-Tech.git
+cd Dent-Tech
+```
 
 ---
 
@@ -29,11 +59,13 @@ node backend/server.js
 # atau: npm start
 ```
 
-Buka **http://localhost:3000**
+Buka **http://localhost:3000** di browser.
 
-Database production (Supabase) **tidak pernah** di-seed otomatis oleh server. Untuk pengembangan lokal dengan data demo, jalankan reset eksplisit (lihat bagian [Testing](#testing)).
+> **Database production (Supabase):** tidak pernah di-seed otomatis. Untuk pengembangan lokal dengan data demo, jalankan reset eksplisit (lihat [Reset Data Demo](#reset-data-demo)).
 
-### Akun demo
+---
+
+## Akun Demo
 
 | Role | Email | Password |
 |---|---|---|
@@ -43,7 +75,7 @@ Database production (Supabase) **tidak pernah** di-seed otomatis oleh server. Un
 | Customer (Klinik Senyum Sehat) | `ratna@denttech.id` | `customer123` |
 | Customer (RS Medika Farma) | `hendra@denttech.id` | `customer123` |
 
-> **Penting:** akun admin ini sama dengan **akun production** (https://denttech.id). Jangan pernah menghapus atau menonaktifkannya.
+⚠️ **PERHATIAN:** Akun admin (`support@denttech.id`) sama dengan **akun production** (https://denttech.id). **Jangan pernah** menghapus atau menonaktifkannya.
 
 ---
 
@@ -53,6 +85,7 @@ Database production (Supabase) **tidak pernah** di-seed otomatis oleh server. Un
 Dent Tech/
 ├── PRD.md                      # Product Requirements Document
 ├── UI_UX_SPECIFICATION.md      # Spesifikasi UI/UX
+├── README.md                   # File ini
 ├── backend/
 │   ├── server.js               # HTTP server + router + static serving
 │   ├── db.js                   # Schema SQLite (relasional)
@@ -81,86 +114,107 @@ Dent Tech/
 ├── data/                       # SQLite + upload files (dibuat otomatis)
 ├── test_api.ps1                # 27 test API end-to-end
 ├── test_browser.js             # 31 test halaman (headless Chrome)
-└── test_flow.js                # 11 test alur bisnis penuh via UI
+├── test_flow.js                # 11 test alur bisnis penuh via UI
+├── test_newfeatures.js         # 10 test fitur portal
+├── test_features2.js           # 28 test fitur baru
+├── visual_audit.js             # 11 audit visual/DOM
+├── test_wallet_ui.js           # UI wallet (fully mocked, AMAN untuk production)
+├── audit.js                    # Runner semua test suite
+├── reset_db.js                 # Reset database & seed demo
+└── package.json
 ```
 
 ---
 
 ## Fitur per Portal
 
-### Admin Portal (desktop, sidebar)
+### 📊 Admin Portal (Desktop, Sidebar)
+
 - **Dashboard** — KPI, grafik status & pendapatan, jadwal hari ini, aktivitas terbaru
-- **Tickets** — buat/review/assign/batalkan + **edit/revisi ticket**; detail dengan timeline, komentar customer & catatan internal
-- **Work Orders** — monitor pekerjaan, bukti (checklist, diagnosis, part, foto), approve/revisi laporan, **download checklist terisi (PDF)**, **buat Proforma Invoice**
+- **Tickets** — buat/review/assign/batalkan + edit/revisi ticket; detail dengan timeline, komentar customer & catatan internal
+- **Work Orders** — monitor pekerjaan, bukti (checklist, diagnosis, part, foto), approve/revisi laporan, download checklist terisi (PDF), buat Proforma Invoice
 - **Schedule** — jadwal kunjungan per tanggal
 - **Customers** — CRUD + multi-kontak
 - **Equipment** — CRUD + status unit
 - **Technicians & Users** — manajemen akun 3 role
-- **Checklist Library** — **21 template checklist sesuai jenis equipment dental** (Dental Unit, Compressor, Autoclave, X-Ray, 3D Printer, dll) dengan item detail & versioning; auto-match template saat assign berdasarkan jenis equipment ticket
+- **Checklist Library** — 21 template checklist sesuai jenis equipment dental (Dental Unit, Compressor, Autoclave, X-Ray, 3D Printer, dll) dengan item detail & versioning; auto-match template ke equipment
 - **Spare Parts** — stok, harga, penyesuaian stok, indikator stok menipis
-- **Invoices** — dibuat otomatis saat laporan disetujui; edit biaya, tandai dibayar, **download (PDF)**; **Pengaturan Invoice** (mode PPN/Non-PPN + biaya jasa default); **Proforma Invoice (PI)** untuk penagihan dengan lampiran foto & checklist, watermark merah transparan "BELUM LUNAS" → hijau "LUNAS" setelah dibayar
-- **Reports** — rekapan keseluruhan (ticket, pendapatan, jenis service/equipment, performa teknisi, part, customer), **filter tanggal/bulan/tahun**, **download laporan (PDF)**
+- **Invoices** — dibuat otomatis saat laporan disetujui; edit biaya, tandai dibayar, download (PDF); Pengaturan Invoice (mode PPN/Non-PPN + biaya jasa default); Proforma Invoice (PI)
+- **Reports** — rekapan keseluruhan (ticket, pendapatan, jenis service/equipment, performa teknisi, part, customer), filter tanggal/bulan/tahun, download laporan (PDF)
 - **Audit Log** — jejak seluruh aktivitas penting
 - **Settings** — profil & ubah password
 
-### Technician Portal (mobile-first, bottom nav)
+### 📱 Technician Portal (Mobile-First, Bottom Nav)
+
 - Job hari ini & mendatang
 - Eksekusi job: **Mulai → Checklist (PASS/FAIL/NA) → Diagnosis → Pekerjaan → Spare Part → Foto Before/After → Selesai**
-- Checklist yang diisi **tersinkron ke portal admin & customer** (customer melihat setelah laporan disetujui)
+- Checklist yang diisi tersinkron ke portal admin & customer (customer melihat setelah laporan disetujui)
 - Validasi penyelesaian: checklist wajib lengkap, diagnosis, pekerjaan, foto AFTER
 - Kirim laporan ke admin; revisi bila diminta
 
-### Customer Portal (mobile-first, bottom nav)
-- Request service — pilih **jenis equipment** dari 21 kategori dental (Dental Unit, Compressor, Autoclave, X-Ray, 3D Printer, dll), isi **Merk/Tipe** bebas, serta **Alamat Service** (otomatis terisi dari alamat customer)
-- Pantau progress dengan **status stepper** & timeline
+### 👥 Customer Portal (Mobile-First, Bottom Nav)
+
+- Request service — pilih jenis equipment dari 21 kategori dental (Dental Unit, Compressor, Autoclave, X-Ray, 3D Printer, dll), isi Merk/Tipe bebas, serta Alamat Service (otomatis tersimpan)
+- Pantau progress dengan status stepper & timeline
 - Lihat teknisi & jadwal
-- Lihat **checklist pengecekan teknisi** & service report (setelah disetujui admin)
-- Invoice, konfirmasi pembayaran, & **download invoice (PDF)** — invoice sudah berlampiran **foto before/after + checklist pengerjaan teknisi**
-- **Ubah foto profil** (tampil sebagai avatar)
+- Lihat checklist pengecekan teknisi & service report (setelah disetujui admin)
+- Invoice, konfirmasi pembayaran, download invoice (PDF) — invoice berlampiran foto before/after + checklist pengerjaan teknisi
+- Ubah foto profil (tampil sebagai avatar)
 - Daftar equipment + riwayat service per unit
 
 ---
 
-## Aturan Bisnis & Keamanan (sesuai dokumen)
+## Aturan Bisnis & Keamanan
 
-- **RBAC ketat di server** — customer hanya dapat mengakses data miliknya; endpoint memfilter per role.
-- **Visibilitas evidence** — catatan `INTERNAL` tidak pernah bocor ke API customer (diverifikasi test).
-- **Service report gate** — customer baru bisa melihat laporan setelah status `APPROVED`.
-- **Checklist versioning** — work order menyimpan snapshot item template saat assignment.
-- **Nomor urut otomatis** — `TKT-2026-000001`, `WO-…`, `SR-…`, `INV-…`, `PI-…` (Proforma).
-- **Stok part** — pemakaian part memotong stok; pembatalan mengembalikan stok; validasi stok kurang.
-- **Foto bertanda tangan (signed URL)** — akses file diverifikasi per user/visibility.
-- **Audit log** — login, CRUD, perubahan status, pembayaran tercatat.
+✅ Sesuai dokumen PRD & UI_UX_SPECIFICATION
+
+- **RBAC ketat di server** — customer hanya dapat mengakses data miliknya; endpoint memfilter per role
+- **Visibilitas evidence** — catatan `INTERNAL` tidak pernah bocor ke API customer (diverifikasi test)
+- **Service report gate** — customer baru bisa melihat laporan setelah status `APPROVED`
+- **Checklist versioning** — work order menyimpan snapshot item template saat assignment
+- **Nomor urut otomatis** — `TKT-2026-000001`, `WO-…`, `SR-…`, `INV-…`, `PI-…` (Proforma)
+- **Stok part** — pemakaian part memotong stok; pembatalan mengembalikan stok; validasi stok kurang
+- **Foto bertanda tangan (signed URL)** — akses file diverifikasi per user/visibility
+- **Audit log** — login, CRUD, perubahan status, pembayaran tercatat
 
 ---
 
 ## Testing
 
-> **PERINGATAN:** `.env` menunjuk ke **database production**. Suite yang melakukan reset DB (`node audit.js`, `node reset_db.js --demo`) akan MENGHAPUS semua data production. Hanya jalankan jika `.env` sudah diarahkan ke database testing terpisah.
+### ⚠️ PERINGATAN PENTING
+
+`.env` menunjuk ke **database production**. Suite yang melakukan reset DB (`node audit.js`, `node reset_db.js --demo`) akan **MENGHAPUS SEMUA DATA PRODUCTION**. Hanya jalankan di environment testing atau local development dengan database terpisah.
+
+### Jalankan Test
 
 ```bash
 # Jalankan SEMUA suite audit (reset DB per suite — HANYA di database testing!)
 node audit.js
 
-# Atau per-suite:
-powershell -ExecutionPolicy Bypass -File test_api.ps1   # API end-to-end (27)
-node test_browser.js      # Render semua halaman 3 portal (31)
-node test_flow.js         # Alur bisnis penuh via UI (11)
-node test_newfeatures.js  # Fitur portal: request/merk/alamat, foto profil, download (10)
-node test_features2.js    # Fitur baru: checklist 21, sync, edit ticket, proforma, filter report (28)
-node visual_audit.js      # Audit visual/DOM (11)
-node test_wallet_ui.js    # UI wallet (fully mocked, AMAN untuk production)
+# Atau per-suite individual:
+powershell -ExecutionPolicy Bypass -File test_api.ps1   # 27 API end-to-end
+node test_browser.js       # 31 render halaman 3 portal
+node test_flow.js          # 11 alur bisnis penuh via UI
+node test_newfeatures.js   # 10 fitur portal
+node test_features2.js     # 28 fitur baru
+node visual_audit.js       # 11 audit visual/DOM
+node test_wallet_ui.js     # UI wallet (fully mocked, AMAN untuk production)
 ```
 
-Status terakhir (audit menyeluruh): **97/97 test PASS** — 27 API · 31 halaman · 11 alur · 28 fitur baru (+ 11 audit visual).
+**Status terakhir (audit menyeluruh):** ✅ **97/97 test PASS**
+- 27 API end-to-end
+- 31 render halaman
+- 11 alur bisnis
+- 28 fitur baru
+- 11 audit visual
 
-> Test browser membutuhkan Google Chrome terpasang (path di-set di tiap file test `CHROME`).
+> Test browser membutuhkan Google Chrome terpasang (path di-set di tiap file test).
 
 ---
 
 ## Reset Data Demo
 
-Reset database dan isi ulang data demo — **hanya untuk database testing**, tidak pernah untuk production:
+Reset database dan isi ulang data demo — **HANYA untuk database testing**, tidak pernah untuk production:
 
 ```bash
 node reset_db.js --demo
@@ -170,10 +224,15 @@ Tanpa flag `--demo`, script menolak dijalankan sebagai pengaman terhadap databas
 
 ---
 
-## Batasan MVP (sesuai PRD §10)
+## Batasan MVP
 
-- AI out of scope (fase berikutnya).
-- Notifikasi masih in-app (email/WhatsApp untuk fase berikutnya).
-- Informasi perusahaan pada Settings bersifat read-only dari seed.
-#   D e n t T e c h  
- 
+Sesuai PRD §10:
+
+- ❌ AI out of scope (fase berikutnya)
+- ❌ Notifikasi masih in-app (email/WhatsApp untuk fase berikutnya)
+- ℹ️ Informasi perusahaan pada Settings bersifat read-only dari seed
+
+---
+
+**Last Updated:** 2026-09-10  
+**Status:** MVP Production-Ready
