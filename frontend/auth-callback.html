@@ -61,7 +61,7 @@
         const cfg = await api.get('/api/auth/providers');
         if (!cfg || !cfg.supabase_url) return fail('Login Google belum dikonfigurasi.');
 
-        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
         const supabase = createClient(cfg.supabase_url, cfg.supabase_anon_key, {
           auth: { flowType: 'pkce', detectSessionInUrl: true }
         });
