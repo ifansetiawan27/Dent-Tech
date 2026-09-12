@@ -103,6 +103,9 @@ textarea.input { min-height: 5.5rem; resize: vertical; }
   transition: background .15s, transform .15s;
 }
 .pwa-install-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+.pwa-install-btn-outline { background: #fff; color: #1d4ed8; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37, 99, 235, .45); }
+.pwa-install-btn-outline:hover { background: #eff6ff; color: #1d4ed8; }
+html.dark .pwa-install-btn-outline { background: #0f172a; color: #93c5fd; border-color: #334155; }
 .pwa-install-btn svg { width: 1.05rem; height: 1.05rem; }
 div[data-pwa-install="floating"] {
   position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom));
@@ -118,6 +121,33 @@ div[data-pwa-install="inline"].pwa-install-inline { display: flex; align-items: 
 div[data-pwa-install].pwa-install-raised { bottom: calc(5.75rem + env(safe-area-inset-bottom)); }
 .hidden[data-pwa-install] { display: none !important; }
 html.dark div[data-pwa-install="floating"] .pwa-install-close { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+
+/* iOS install tip */
+[data-pwa-ios-tip] { position: fixed; inset: 0; z-index: 90; }
+[data-pwa-ios-tip] .pwa-ios-tip-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, .55); backdrop-filter: blur(2px); }
+[data-pwa-ios-tip] .pwa-ios-tip-card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(22rem, calc(100vw - 2rem)); background: #fff; border-radius: 1rem; padding: 1.5rem 1.25rem;
+  box-shadow: 0 24px 60px -20px rgba(15, 23, 42, .5); animation: fadeUp .25s ease-out;
+}
+[data-pwa-ios-tip] .pwa-ios-tip-close {
+  position: absolute; top: .5rem; right: .5rem; width: 2rem; height: 2rem; border-radius: 999px;
+  border: 0; background: #f1f5f9; color: #475569; font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+[data-pwa-ios-tip] .pwa-ios-tip-title { font-weight: 700; color: #0f172a; font-size: .95rem; margin-bottom: .875rem; }
+[data-pwa-ios-tip] .pwa-ios-tip-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .625rem; }
+[data-pwa-ios-tip] .pwa-ios-tip-steps li { display: flex; align-items: flex-start; gap: .625rem; font-size: .8125rem; color: #334155; line-height: 1.45; }
+[data-pwa-ios-tip] .pwa-ios-tip-num {
+  flex-shrink: 0; width: 1.375rem; height: 1.375rem; border-radius: 999px; background: #eff6ff; color: #1d4ed8;
+  font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: .0625rem;
+}
+[data-pwa-ios-tip] .pwa-ios-tip-share { display: inline-flex; align-items: center; gap: .125rem; color: #2563eb; vertical-align: -2px; margin: 0 1px; }
+[data-pwa-ios-tip] .pwa-ios-tip-share svg { width: .9rem; height: .9rem; }
+[data-pwa-ios-tip] .pwa-ios-tip-note { margin: .875rem 0 0; font-size: .7rem; color: #94a3b8; line-height: 1.4; }
+html.dark [data-pwa-ios-tip] .pwa-ios-tip-card { background: #1e293b; }
+html.dark [data-pwa-ios-tip] .pwa-ios-tip-title { color: #f1f5f9; }
+html.dark [data-pwa-ios-tip] .pwa-ios-tip-steps li { color: #cbd5e1; }
+html.dark [data-pwa-ios-tip] .pwa-ios-tip-close { background: #334155; color: #e2e8f0; }
 
 /* Print (service report / invoice) */
 @media print {
