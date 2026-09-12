@@ -28,6 +28,7 @@
 .pwa-install-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
 .pwa-install-btn-outline { background: #fff; color: #1d4ed8; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37, 99, 235, .45); }
 .pwa-install-btn-outline:hover { background: #eff6ff; color: #1d4ed8; }
+[data-install-slot="hero"] .pwa-install-btn { padding: .875rem 1.75rem; font-size: 1rem; }
 .pwa-install-btn svg { width: 1.05rem; height: 1.05rem; }
 div[data-pwa-install="floating"] {
   position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom));
