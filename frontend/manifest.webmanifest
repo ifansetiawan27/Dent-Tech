@@ -1,0 +1,47 @@
+{
+  "id": "/",
+  "name": "Dent Tech.id — Service Management System",
+  "short_name": "Dent Tech.id",
+  "description": "Kelola ticket, work order, teknisi, checklist, laporan service, hingga invoice dalam satu platform terintegrasi.",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "/login.html",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "categories": ["business", "productivity", "medical"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Service Request",
+      "short_name": "Request",
+      "description": "Buat permintaan service baru",
+      "url": "/customer/request.html",
+      "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Job Saya",
+      "short_name": "Jobs",
+      "description": "Lihat daftar pekerjaan teknisi",
+      "url": "/technician/jobs.html",
+      "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Dashboard Admin",
+      "short_name": "Dashboard",
+      "description": "Buka dashboard admin",
+      "url": "/admin/",
+      "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

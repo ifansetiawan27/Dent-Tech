@@ -94,6 +94,31 @@ textarea.input { min-height: 5.5rem; resize: vertical; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* PWA install button */
+.pwa-install-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  background: #2563eb; color: #fff; font-weight: 600; font-size: .875rem;
+  padding: .625rem 1.125rem; border-radius: .75rem; border: 0; cursor: pointer;
+  box-shadow: 0 10px 20px -10px rgba(37, 99, 235, .7);
+  transition: background .15s, transform .15s;
+}
+.pwa-install-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+.pwa-install-btn svg { width: 1.05rem; height: 1.05rem; }
+div[data-pwa-install="floating"] {
+  position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 70; display: flex; align-items: center; gap: .25rem;
+  animation: fadeUp .3s ease-out;
+}
+div[data-pwa-install="floating"] .pwa-install-close {
+  width: 1.9rem; height: 1.9rem; border-radius: 999px; border: 1px solid #e2e8f0;
+  background: #fff; color: #64748b; font-size: 1.05rem; line-height: 1; cursor: pointer;
+  box-shadow: 0 4px 10px -6px rgba(15, 23, 42, .5);
+}
+div[data-pwa-install="inline"].pwa-install-inline { display: flex; align-items: center; gap: .25rem; }
+div[data-pwa-install].pwa-install-raised { bottom: calc(5.75rem + env(safe-area-inset-bottom)); }
+.hidden[data-pwa-install] { display: none !important; }
+html.dark div[data-pwa-install="floating"] .pwa-install-close { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+
 /* Print (service report / invoice) */
 @media print {
   header, aside, nav, .no-print { display: none !important; }
