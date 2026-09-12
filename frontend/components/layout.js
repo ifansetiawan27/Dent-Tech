@@ -5,7 +5,6 @@ import { refreshIcons } from './ui.js';
 import { avatarHtml } from './avatar.js';
 import { bindThemeToggle } from '../utils/theme.js';
 import { initPwa } from '../utils/pwa.js';
-import { initInstallButton } from './pwa-install.js';
 
 function initials(name = '') {
   return name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
@@ -224,10 +223,6 @@ export function initAdminLayout(activeKey) {
   userMenu(document.getElementById('user-menu-btn'), user);
   refreshIcons();
   initPwa();
-  const installSlot = document.createElement('span');
-  installSlot.className = 'hidden lg:inline-flex items-center';
-  topbar.insertBefore(installSlot, document.getElementById('theme-toggle'));
-  initInstallButton({ position: 'inline', target: installSlot });
 }
 
 // ---------------- Mobile-first layout (technician & customer) ----------------
@@ -289,5 +284,4 @@ export function initMobileLayout(activeKey, role) {
   userMenu(document.getElementById('user-menu-btn'), user);
   refreshIcons();
   initPwa();
-  initInstallButton({ raised: true });
 }
