@@ -203,8 +203,9 @@ async function sendToSubscription(subscription, payload) {
     'Urgency': 'high',
     'Content-Encoding': 'aes128gcm',
     'Content-Type': 'application/octet-stream',
-    'Authorization': `vapid ${token}`,
-    'Crypto-Key': `vapid=${keys.publicKey}`
+    // RFC 8292: key publik disertakan di Authorization (t=...;k=...) —
+    // FCM menolak format lama `vapid <token>` + Crypto-Key terpisah.
+    'Authorization': `vapid t=${token}; k=${keys.publicKey}`
   };
 
   let res;
