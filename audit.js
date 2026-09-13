@@ -1,6 +1,5 @@
 const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
 const net = require('net');
 const http = require('http');
 
@@ -8,7 +7,6 @@ const http = require('http');
 // Only run against a disposable test database — NEVER against production.
 
 const ROOT = __dirname;
-const DATA = path.join(ROOT, 'data');
 const PORT = 3000;
 let server = null;
 

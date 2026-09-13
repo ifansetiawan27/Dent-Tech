@@ -3,7 +3,7 @@ const { db } = require('../db');
 const { uid, now, sendJSON, nextNumber, fileSig, localDate, getSetting } = require('../util');
 const {
   audit, timeline, getTicket, getWorkOrder,
-  notify, getInvoiceItems, snapshotWorkOrderInvoiceItems, invoiceTotals
+  notify, getInvoiceItems, snapshotWorkOrderInvoiceItems, invoiceTotals, setTicketStatus
 } = require('./_common');
 
 async function reportDetail(r) {
@@ -79,9 +79,7 @@ async function approveReportHandler(ctx) {
       await tx.prepare("UPDATE service_reports SET status = 'APPROVED', approved_at = ?, approved_by = ?, updated_at = ? WHERE id = ?")
         .run(approvedAt, ctx.user.id, approvedAt, r.id);
       await tx.prepare("UPDATE work_orders SET status = 'APPROVED', updated_at = ? WHERE id = ?").run(approvedAt, wo.id);
-      await tx.prepare("UPDATE tickets SET status = 'COMPLETED', updated_at = ? WHERE id = ?").run(approvedAt, t.id);
-      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(uid(), t.id, t.status, 'COMPLETED', ctx.user.id, 'Laporan disetujui; pembayaran proforma tersedia', approvedAt);
+      await setTicketStatus(t, 'COMPLETED', ctx.user, 'Laporan disetujui; pembayaran proforma tersedia', { executor: tx, ts: approvedAt });
     });
   } catch (e) {
     if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });

@@ -5,7 +5,7 @@ const { saveFile, readFile } = require('../storage');
 const { uid, now, sendJSON, publicUser, fileSig, verifyFileSig, nextNumber, getSetting } = require('../util');
 const auth = require('../auth');
 const { getEnv } = require('../runtime');
-const { audit } = require('./_common');
+const { audit, rateAllowed } = require('./_common');
 
 const AVATAR_MIME = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
 
@@ -66,18 +66,8 @@ function isGoogleIdentity(authUser) {
   return false;
 }
 
-// Rate limit sederhana per isolate untuk endpoint auth publik.
-const authRateHits = new Map();
-function authRateAllowed(key, limit, windowMs) {
-  const nowMs = Date.now();
-  if (authRateHits.size > 5000) {
-    for (const [k, hit] of authRateHits) if (nowMs - hit.startedAt >= windowMs) authRateHits.delete(k);
-  }
-  const entry = authRateHits.get(key);
-  if (!entry || nowMs - entry.startedAt >= windowMs) { authRateHits.set(key, { startedAt: nowMs, count: 1 }); return true; }
-  entry.count++;
-  return entry.count <= limit;
-}
+// Rate limit sederhana per isolate untuk endpoint auth publik (rateAllowed dari _common).
+const authRateAllowed = (key, limit, windowMs) => rateAllowed(`auth:${key}`, limit, windowMs);
 
 // Tukar access token Supabase (hasil OAuth Google) menjadi sesi aplikasi.
 // Customer harus sudah terdaftar di tabel users agar bisa masuk ke portal.

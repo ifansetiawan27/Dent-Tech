@@ -42,6 +42,7 @@
     import { spinner, errorState, statusBadge, toast, refreshIcons, INVOICE_STATUS } from '/components/ui.js';
     import { fmtIDR, fmtDate, fmtDateTime, esc } from '/utils/format.js';
     import { downloadInvoice } from '/utils/invoice-doc.js';
+    import { safeQrDataUrl as safeQrSrc, orderStatusBadgeClass, orderPanelClass } from '/utils/qris.js';
 
     requireAuth(['customer']);
     initMobileLayout('invoices', 'customer');
@@ -54,19 +55,14 @@
     let polling = false;
     let paymentPollTimer = null;
 
-    function safeQrSrc(value) {
-      const src = String(value || '');
-      return /^data:image\/(?:png|jpeg|webp|svg\+xml);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
-    }
-
     function paymentOrderHtml(order) {
       if (!order) return '';
       const qr = safeQrSrc(order.qr_data_url);
       const status = String(order.status || 'PENDING').toUpperCase();
-      return `<section id="payment-order" class="card p-5 mb-4 border-2 ${status === 'COMPLETED' ? 'border-emerald-300 bg-emerald-50' : 'border-blue-200'}" aria-live="polite">
+      return `<section id="payment-order" class="card p-5 mb-4 border-2 ${orderPanelClass(status)}" aria-live="polite">
         <div class="flex items-start justify-between gap-3">
           <div><p class="font-bold text-slate-800">Pembayaran QRIS Pakasir</p><p class="text-xs text-slate-500 mt-0.5">Order ID: <span class="font-mono">${esc(order.order_id || '-')}</span></p></div>
-          <span class="text-xs font-bold rounded-full px-2.5 py-1 ${status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${esc(status)}</span>
+          <span class="text-xs font-bold rounded-full px-2.5 py-1 ${orderStatusBadgeClass(status)}">${esc(status)}</span>
         </div>
         ${status === 'PENDING' && qr ? `<img src="${esc(qr)}" alt="Kode QRIS pembayaran invoice" class="w-64 max-w-full aspect-square object-contain mx-auto my-4 rounded-xl border border-slate-200 bg-white p-2">` : ''}
         <dl class="text-sm space-y-2 mt-3">

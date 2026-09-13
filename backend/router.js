@@ -137,4 +137,4 @@ route('GET', '/api/finance/expenses', ['admin'], finH.listExpensesHandler);
 route('POST', '/api/finance/expenses', ['admin'], finH.createExpenseHandler);
 route('DELETE', '/api/finance/expenses/:id', ['admin'], finH.deleteExpenseHandler);
 
-module.exports = { routes, matchRoute };
+module.exports = { matchRoute };

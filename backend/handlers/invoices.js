@@ -1,7 +1,7 @@
 'use strict';
 const { db } = require('../db');
-const { uid, now, sendJSON, nextNumber, fileSig, localDate, getSetting, setSetting } = require('../util');
-const { audit, timeline, notify, getInvoiceItems, snapshotWorkOrderInvoiceItems, invoiceTotals, getTicket, buildChecklistState } = require('./_common');
+const { uid, now, sendJSON, nextNumber, localDate, getSetting, setSetting } = require('../util');
+const { audit, timeline, notify, getInvoiceItems, snapshotWorkOrderInvoiceItems, invoiceTotals, getTicket, buildChecklistState, attachmentWithUrl, setTicketStatus } = require('./_common');
 const { scheduleCustomerEmail, invoicePaidEmail } = require('../email');
 
 async function sendInvoicePaidEmail(ctx, { invoiceId, invoiceNumber, customerId, ticketId, method, paidAt, total }) {
@@ -29,11 +29,6 @@ async function sendInvoicePaidEmail(ctx, { invoiceId, invoiceNumber, customerId,
   } catch (e) {
     console.error(`[invoice-paid-email] invoice=${invoiceNumber} prepare failed: ${e?.message || e}`);
   }
-}
-
-function attachmentWithUrl(a) {
-  const sig = fileSig(a.id);
-  return { ...a, url: `/api/files/${a.id}?exp=${sig.exp}&sig=${sig.sig}` };
 }
 
 function validateEditableItems(items) {
@@ -270,9 +265,7 @@ async function payInvoiceHandler(ctx) {
         if (locked.ticket_id) {
           const ticket = await tx.prepare('SELECT status FROM tickets WHERE id = ? FOR UPDATE').get(locked.ticket_id);
           if (ticket && ticket.status !== 'CLOSED') {
-            await tx.prepare("UPDATE tickets SET status = 'CLOSED', closed_at = ?, updated_at = ? WHERE id = ?").run(paidAt, paidAt, locked.ticket_id);
-            await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-              .run(uid(), locked.ticket_id, ticket.status, 'CLOSED', ctx.user.id, `Pembayaran terverifikasi; ${locked.number} menjadi ${paidDocumentNumber}`, paidAt);
+            await setTicketStatus({ id: locked.ticket_id, status: ticket.status }, 'CLOSED', ctx.user, `Pembayaran terverifikasi; ${locked.number} menjadi ${paidDocumentNumber}`, { executor: tx, ts: paidAt });
           }
         }
       } else await tx.prepare("UPDATE invoices SET status = 'PAID', paid_at = ?, updated_at = ?, version = version + 1 WHERE id = ?")
@@ -356,9 +349,7 @@ async function approveProformaHandler(ctx) {
       await tx.prepare("UPDATE invoices SET approval_status = 'APPROVED', approved_at = ?, approved_by = ?, updated_at = ?, version = version + 1 WHERE id = ?")
         .run(approvedAt, ctx.user.id, approvedAt, inv.id);
       await tx.prepare("UPDATE work_orders SET status = 'REPAIR_AUTHORIZED', updated_at = ? WHERE id = ?").run(approvedAt, wo.id);
-      await tx.prepare("UPDATE tickets SET status = 'REPAIR_AUTHORIZED', updated_at = ? WHERE id = ?").run(approvedAt, ticket.id);
-      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(uid(), ticket.id, ticket.status, 'REPAIR_AUTHORIZED', ctx.user.id, `Customer menyetujui proforma ${inv.number}`, approvedAt);
+      await setTicketStatus(ticket, 'REPAIR_AUTHORIZED', ctx.user, `Customer menyetujui proforma ${inv.number}`, { executor: tx, ts: approvedAt });
     });
   } catch (e) {
     if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
@@ -407,11 +398,9 @@ async function createProformaHandler(ctx) {
        await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, approval_status, issued_at, due_at, created_at, updated_at, version)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SENT', 'PROFORMA', 'SENT', ?, ?, ?, ?, 1)`)
          .run(invId, invNumber, t.id, wo.id, t.customer_id, labor, disc, taxRate, issued, due, issued, issued);
-       await snapshotInvoiceItems(tx, invId, wo.id, labor, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa', customItems);
-       await tx.prepare("UPDATE work_orders SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, wo.id);
-       await tx.prepare("UPDATE tickets SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, t.id);
-       await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-         .run(uid(), t.id, t.status, 'WAITING_CUSTOMER_APPROVAL', ctx.user.id, `Proforma ${invNumber} dikirim`, issued);
+        await snapshotInvoiceItems(tx, invId, wo.id, labor, t.problem ? `Biaya Jasa — ${t.problem}` : 'Biaya Jasa', customItems);
+        await tx.prepare("UPDATE work_orders SET status = 'WAITING_CUSTOMER_APPROVAL', updated_at = ? WHERE id = ?").run(issued, wo.id);
+        await setTicketStatus(t, 'WAITING_CUSTOMER_APPROVAL', ctx.user, `Proforma ${invNumber} dikirim`, { executor: tx, ts: issued });
     });
   } catch (e) {
     if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });

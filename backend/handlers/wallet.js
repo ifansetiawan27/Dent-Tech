@@ -4,12 +4,11 @@ const { db } = require('../db');
 const { uid, now, sendJSON } = require('../util');
 const defaultPakasir = require('../pakasir');
 const { getEnv } = require('../runtime');
-const { getInvoiceItems, invoiceTotals, audit, notify, timeline, getTicket } = require('./_common');
+const { getInvoiceItems, invoiceTotals, audit, notify, timeline, getTicket, setTicketStatus, rateAllowed } = require('./_common');
 
 const TOPUP_AMOUNT = 100000;
 const INVOICE_PAYABLE_STATUSES = new Set(['SENT', 'OVERDUE']);
 const ORDER_TERMINAL_STATUSES = new Set(['COMPLETED', 'EXPIRED', 'FAILED']);
-const callbackHits = new Map();
 const CALLBACK_WINDOW_MS = 60000;
 const CALLBACK_LIMIT = 60;
 let pakasir = defaultPakasir;
@@ -27,17 +26,7 @@ function paymentError(ctx, error) {
   sendJSON(ctx.res, safe.status, { error: safe.error, code: safe.code });
 }
 function callbackInvalid(ctx, status = 400) { sendJSON(ctx.res, status, { error: 'Callback tidak valid', code: 'INVALID_CALLBACK' }); }
-function callbackAllowed(ip) {
-  const key = String(ip || 'unknown');
-  const current = Date.now();
-  if (callbackHits.size > 10000) {
-    for (const [candidate, hit] of callbackHits) if (current - hit.startedAt >= CALLBACK_WINDOW_MS) callbackHits.delete(candidate);
-  }
-  const entry = callbackHits.get(key);
-  if (!entry || current - entry.startedAt >= CALLBACK_WINDOW_MS) { callbackHits.set(key, { startedAt: current, count: 1 }); return true; }
-  entry.count++;
-  return entry.count <= CALLBACK_LIMIT;
-}
+const callbackAllowed = (ip) => rateAllowed(`callback:${String(ip || 'unknown')}`, CALLBACK_LIMIT, CALLBACK_WINDOW_MS);
 async function walletFor(customerId, executor = db) {
   return executor.prepare('SELECT id, customer_id, balance, created_at, updated_at FROM wallet_accounts WHERE customer_id = ?').get(customerId);
 }
@@ -91,7 +80,6 @@ async function provisionQris(order, executor = db) {
   }
   return executor.prepare('SELECT * FROM payment_orders WHERE id = ?').get(order.id);
 }
-async function createOrder(args) { return provisionQris(await insertPendingOrder(db, args)); }
 async function waitForProvisionedOrder(id, attempts = 20, delayMs = 100) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const order = await db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
@@ -147,9 +135,7 @@ async function settleVerifiedOrder(orderId, transaction) {
           if (invoice.ticket_id) {
             const ticket = await tx.prepare('SELECT status FROM tickets WHERE id = ? FOR UPDATE').get(invoice.ticket_id);
             if (ticket && ticket.status !== 'CLOSED') {
-              await tx.prepare("UPDATE tickets SET status = 'CLOSED', closed_at = ?, updated_at = ? WHERE id = ?").run(ts, ts, invoice.ticket_id);
-              await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                .run(uid(), invoice.ticket_id, ticket.status, 'CLOSED', null, `Pembayaran terverifikasi; ${invoice.number} menjadi ${invoiceNumber}`, ts);
+              await setTicketStatus({ id: invoice.ticket_id, status: ticket.status }, 'CLOSED', null, `Pembayaran terverifikasi; ${invoice.number} menjadi ${invoiceNumber}`, { executor: tx, ts });
             }
           }
         } else await tx.prepare("UPDATE invoices SET status = 'PAID', paid_at = ?, updated_at = ?, version = version + 1 WHERE id = ?").run(ts, ts, invoice.id);
@@ -327,7 +313,7 @@ async function callbackHandler(ctx) {
 }
 
 module.exports = {
-  TOPUP_AMOUNT, setPakasirClient, ensureWallet, createOrder, settleVerifiedOrder, reconcileOrder,
+  TOPUP_AMOUNT, setPakasirClient, ensureWallet, settleVerifiedOrder, reconcileOrder,
   getWalletHandler, walletHistoryHandler, createTopupHandler, topupStatusHandler,
   createInvoicePaymentHandler, invoicePaymentStatusHandler, callbackHandler, orderWithQr
 };

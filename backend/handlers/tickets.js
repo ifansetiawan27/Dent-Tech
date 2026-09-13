@@ -1,19 +1,14 @@
 'use strict';
 const { db } = require('../db');
-const { uid, now, sendJSON, nextNumber, fileSig } = require('../util');
+const { uid, now, sendJSON, nextNumber } = require('../util');
 const { scheduleAppointmentEmail, scheduleCustomerEmail, customerRequestEmail } = require('../email');
 const {
   audit, timeline, setTicketStatus, getTicket, canAccessTicket,
-  notify, TICKET_TRANSITIONS
+  notify, TICKET_TRANSITIONS, attachmentWithUrl
 } = require('./_common');
 
 const SERVICE_TYPES = ['Repair', 'Preventive Maintenance', 'Installation', 'Inspection', 'Emergency'];
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-
-function attachmentWithUrl(a) {
-  const sig = fileSig(a.id);
-  return { ...a, url: `/api/files/${a.id}?exp=${sig.exp}&sig=${sig.sig}` };
-}
 
 function ticketSummary(t) {
   return {

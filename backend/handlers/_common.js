@@ -1,10 +1,7 @@
 'use strict';
 const { db } = require('../db');
 const { trackTask } = require('../runtime');
-const { uid, now } = require('../util');
-
-const TICKET_STATUSES = ['OPEN', 'REVIEWING', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'];
-const WO_STATUSES = ['ASSIGNED', 'STARTED', 'WAITING_QUOTATION', 'WAITING_CUSTOMER_APPROVAL', 'REPAIR_AUTHORIZED', 'REPAIR_STARTED', 'COMPLETED', 'APPROVED', 'CANCELLED'];
+const { uid, now, fileSig } = require('../util');
 
 const TICKET_TRANSITIONS = {
   OPEN: ['REVIEWING', 'CANCELLED'],
@@ -37,15 +34,34 @@ function timeline(ticketId, type, title, description, visibility, createdBy) {
     .run(uid(), ticketId, type, title, description || '', visibility || 'CUSTOMER_VISIBLE', createdBy || null, now()), 'timeline');
 }
 
-async function setTicketStatus(ticket, toStatus, user, note = '') {
-  await db.prepare('UPDATE tickets SET status = ?, updated_at = ?, closed_at = CASE WHEN ? IN (\'CLOSED\',\'CANCELLED\') THEN ? ELSE closed_at END WHERE id = ?')
-    .run(toStatus, now(), toStatus, now(), ticket.id);
-  await db.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(uid(), ticket.id, ticket.status, toStatus, user ? user.id : null, note, now());
+async function setTicketStatus(ticket, toStatus, user, note = '', { executor = db, ts = null } = {}) {
+  const at = ts || now();
+  await executor.prepare('UPDATE tickets SET status = ?, updated_at = ?, closed_at = CASE WHEN ? IN (\'CLOSED\',\'CANCELLED\') THEN ? ELSE closed_at END WHERE id = ?')
+    .run(toStatus, at, toStatus, at, ticket.id);
+  await executor.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(uid(), ticket.id, ticket.status, toStatus, user ? user.id : null, note, at);
 }
 
 async function getTicket(id) {
   return (await db.prepare('SELECT * FROM tickets WHERE id = ?').get(id)) || null;
+}
+
+function attachmentWithUrl(a) {
+  const sig = fileSig(a.id);
+  return { ...a, url: `/api/files/${a.id}?exp=${sig.exp}&sig=${sig.sig}` };
+}
+
+// Rate limiter sliding-window sederhana per isolate.
+const rateHits = new Map();
+function rateAllowed(key, limit, windowMs) {
+  const nowMs = Date.now();
+  if (rateHits.size > 10000) {
+    for (const [candidate, hit] of rateHits) if (nowMs - hit.startedAt >= windowMs) rateHits.delete(candidate);
+  }
+  const entry = rateHits.get(key);
+  if (!entry || nowMs - entry.startedAt >= windowMs) { rateHits.set(key, { startedAt: nowMs, count: 1 }); return true; }
+  entry.count++;
+  return entry.count <= limit;
 }
 
 async function getWorkOrder(id) {
@@ -140,12 +156,6 @@ function invoiceTotals(inv, itemsOrPartTotal) {
   return { labor_cost: labor, parts_total: parts, custom_total: custom, items_total: itemsTotal, discount, subtotal: Math.round(subtotal * 100) / 100, tax_rate: taxRate, tax, total };
 }
 
-function customerVisible(obj, allowedKeys) {
-  const out = {};
-  for (const k of allowedKeys) if (k in obj) out[k] = obj[k];
-  return out;
-}
-
 const REQUIRED_PHOTO_KINDS = ['before', 'after', 'equipment_brand', 'equipment_serial'];
 
 async function workOrderPhotoRequirements(workOrderId, executor = db) {
@@ -199,9 +209,9 @@ async function buildChecklistState(wo, executor = db) {
 }
 
 module.exports = {
-  TICKET_STATUSES, WO_STATUSES, TICKET_TRANSITIONS,
+  TICKET_TRANSITIONS,
   notify, audit, timeline, setTicketStatus,
-  getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder,
-  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, resyncWorkOrderParts, invoiceTotals, customerVisible,
+  getTicket, getWorkOrder, canAccessTicket, canAccessWorkOrder, attachmentWithUrl, rateAllowed,
+  partTotalForWorkOrder, getInvoiceItems, invoiceItemsTotal, snapshotWorkOrderInvoiceItems, resyncWorkOrderParts, invoiceTotals,
   REQUIRED_PHOTO_KINDS, workOrderPhotoRequirements, buildChecklistState
 };

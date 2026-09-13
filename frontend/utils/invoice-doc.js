@@ -1,5 +1,6 @@
 import { printHtml, DOC_BASE_CSS } from './print-doc.js';
 import { fmtIDR, fmtDate, fmtDateTime, esc } from './format.js';
+import { safeQrDataUrl } from './qris.js';
 
 const RESULT_LABEL = { PASS: 'PASS', FAIL: 'FAIL', NA: 'N/A' };
 
@@ -66,11 +67,6 @@ function bankInfoHtml(bank) {
       ${bank.bank_account_name ? `<tr><td>Atas Nama</td><td><b>${esc(bank.bank_account_name)}</b></td></tr>` : ''}
     </table>
   </div>`;
-}
-
-function safeQrDataUrl(value) {
-  const src = String(value || '');
-  return /^data:image\/(?:png|jpeg|webp|svg\+xml);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
 }
 
 function qrisInfoHtml(order) {

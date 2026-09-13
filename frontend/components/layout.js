@@ -6,10 +6,6 @@ import { avatarHtml } from './avatar.js';
 import { bindThemeToggle } from '../utils/theme.js';
 import { initPwa } from '../utils/pwa.js';
 
-function initials(name = '') {
-  return name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
-}
-
 async function notifDropdownHtml() {
   try {
     const data = await api.get('/api/notifications');

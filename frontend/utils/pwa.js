@@ -38,10 +38,6 @@ export async function promptInstall() {
   return outcome === 'accepted';
 }
 
-export function wasInstallDismissed() {
-  try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) { return false; }
-}
-
 export function markInstallDismissed() {
   try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) { /* ignore */ }
 }

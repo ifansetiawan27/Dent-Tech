@@ -2,12 +2,6 @@ import { refreshIcons } from '../components/ui.js';
 
 const THEME_KEY = 'sms_theme';
 
-export function initTheme() {
-  const stored = localStorage.getItem(THEME_KEY);
-  const dark = stored ? stored === 'dark' : false;
-  document.documentElement.classList.toggle('dark', dark);
-}
-
 export function isDarkTheme() {
   return document.documentElement.classList.contains('dark');
 }

@@ -1,15 +1,10 @@
 'use strict';
 const { db } = require('../db');
-const { uid, now, sendJSON, nextNumber, fileSig } = require('../util');
+const { uid, now, sendJSON, nextNumber } = require('../util');
 const {
   audit, timeline, setTicketStatus, getTicket, getWorkOrder, canAccessWorkOrder,
-  notify, partTotalForWorkOrder, workOrderPhotoRequirements, buildChecklistState, resyncWorkOrderParts
+  notify, partTotalForWorkOrder, workOrderPhotoRequirements, buildChecklistState, resyncWorkOrderParts, attachmentWithUrl
 } = require('./_common');
-
-function attachmentWithUrl(a) {
-  const sig = fileSig(a.id);
-  return { ...a, url: `/api/files/${a.id}?exp=${sig.exp}&sig=${sig.sig}` };
-}
 
 async function listWorkOrdersHandler(ctx) {
   const { status, technician_id, date } = ctx.query;
@@ -386,9 +381,7 @@ async function completeWorkOrderHandler(ctx) {
       await tx.prepare(`INSERT INTO service_reports (id, number, version, work_order_id, summary, technician_note, status, approved_at, approved_by, created_at, updated_at)
         VALUES (?, ?, 1, ?, ?, ?, 'APPROVED', ?, ?, ?, ?)`)
         .run(reportId, reportNumber, lockedWo.id, String(summary).trim(), ctx.body.technician_note || '', completedAt, ctx.user.id, completedAt, completedAt);
-      await tx.prepare("UPDATE tickets SET status = 'COMPLETED', updated_at = ? WHERE id = ?").run(completedAt, t.id);
-      await tx.prepare('INSERT INTO ticket_status_history (id, ticket_id, from_status, to_status, by_user, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(uid(), t.id, t.status, 'COMPLETED', ctx.user.id, 'Pekerjaan selesai; pembayaran tersedia', completedAt);
+      await setTicketStatus(t, 'COMPLETED', ctx.user, 'Pekerjaan selesai; pembayaran tersedia', { executor: tx, ts: completedAt });
     });
   } catch (e) {
     if (e.status) return sendJSON(ctx.res, e.status, { error: e.message, ...(e.code ? { code: e.code } : {}), ...(e.missingPhotoKinds ? { missing_photo_kinds: e.missingPhotoKinds } : {}) });

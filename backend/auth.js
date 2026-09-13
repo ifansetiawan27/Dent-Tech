@@ -83,8 +83,4 @@ async function currentUser(req) {
   return row || null;
 }
 
-function requireRoles(...roles) {
-  return (user) => !!user && (roles.length === 0 || roles.includes(user.role));
-}
-
-module.exports = { login, logout, currentUser, bearerToken, requireRoles, getUserFromToken, sendPasswordReset };
+module.exports = { login, logout, currentUser, bearerToken, getUserFromToken, sendPasswordReset };

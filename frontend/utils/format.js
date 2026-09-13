@@ -53,13 +53,6 @@ export function fmtDateTime(iso) {
     d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function fmtTime(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-}
-
 export function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
