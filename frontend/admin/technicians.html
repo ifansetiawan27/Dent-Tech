@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Technicians & Users â€” Admin</title>
+  <title>Technicians & Users — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -133,7 +133,7 @@
       } catch (e) {
         const jobs = e.data?.work_orders;
         const detail = Array.isArray(jobs) && jobs.length
-          ? ` (${jobs.map((wo) => `${wo.number} â€” ${wo.status}`).join(', ')})`
+          ? ` (${jobs.map((wo) => `${wo.number} — ${wo.status}`).join(', ')})`
           : '';
         toast(e.message + detail, 'error');
       }
@@ -141,13 +141,13 @@
 
     function editModal(u) {
       const m = openModal({
-        title: `Edit User â€” ${esc(u.name)}`,
+        title: `Edit User — ${esc(u.name)}`,
         size: 'md',
         body: `
           <div class="space-y-4">
             <div><label class="label">Nama</label><input id="u-name" class="input" value="${esc(u.name)}"></div>
             <div><label class="label">Telepon</label><input id="u-phone" class="input" value="${esc(u.phone || '')}"></div>
-            <div><label class="label">Password Baru (kosongkan jika tidak diubah)</label><input id="u-password" type="password" class="input" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"></div>
+            <div><label class="label">Password Baru (kosongkan jika tidak diubah)</label><input id="u-password" type="password" class="input" placeholder="••••••••"></div>
             <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50">
               <div>
                 <p class="text-sm font-medium text-slate-700">Akun aktif</p>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Service Saya â€” Customer</title>
+  <title>Service Saya — Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -82,7 +82,7 @@
               ${statusBadge(t.status)}
             </div>
             <p class="font-semibold text-slate-800 mt-2">${esc(t.problem)}</p>
-            <p class="text-xs text-slate-400 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' Â· ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' â€” ')) : ''} Â· ${timeAgo(t.created_at)}</p>
+            <p class="text-xs text-slate-400 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' · ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ')) : ''} · ${timeAgo(t.created_at)}</p>
           </a>`).join('')}
       </div>`;
       refreshIcons();

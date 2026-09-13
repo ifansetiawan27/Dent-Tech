@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beranda â€” Customer</title>
+  <title>Beranda — Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -66,7 +66,7 @@
             ${statusBadge(at.status)}
           </div>
           <p class="font-bold text-slate-800 mt-2">${esc(at.problem)}</p>
-          <p class="text-sm text-slate-500 mt-1">${at.number} Â· ${esc(at.service_type || '')}</p>
+          <p class="text-sm text-slate-500 mt-1">${at.number} · ${esc(at.service_type || '')}</p>
           ${at.technician_name ? `
             <div class="mt-3 flex items-center gap-2 text-sm text-slate-600 bg-white rounded-xl px-3 py-2.5 border border-slate-100">
               <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">${esc(at.technician_name.split(' ').map(x => x[0]).slice(0,2).join(''))}</div>
@@ -100,7 +100,7 @@
               <a href="/customer/ticket-detail.html?id=${t.id}" class="card p-4 flex items-center gap-3 hover:border-blue-300 transition-colors">
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-semibold text-slate-700 truncate">${esc(t.problem)}</p>
-                  <p class="text-xs text-slate-400 mt-0.5">${t.number}${t.equipment_name ? ' Â· ' + esc(t.equipment_name) : ''} Â· ${timeAgo(t.created_at)}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">${t.number}${t.equipment_name ? ' · ' + esc(t.equipment_name) : ''} · ${timeAgo(t.created_at)}</p>
                 </div>
                 ${statusBadge(t.status)}
               </a>`).join('')}

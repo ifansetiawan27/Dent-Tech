@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wallet â€” Customer</title>
+  <title>Wallet — Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -87,7 +87,7 @@
             const credit = String(tx.type).startsWith('CREDIT');
             return `<article class="card p-4 flex items-center gap-3">
               <div class="w-10 h-10 rounded-full ${credit ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'} flex items-center justify-center shrink-0"><i data-lucide="${credit ? 'arrow-down-left' : 'arrow-up-right'}" class="w-5 h-5"></i></div>
-              <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-slate-700">${esc(tx.description || tx.type)}</p><p class="text-xs text-slate-400 mt-0.5">${fmtDateTime(tx.created_at)} Â· Saldo ${fmtIDR(tx.balance_after)}</p></div>
+              <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-slate-700">${esc(tx.description || tx.type)}</p><p class="text-xs text-slate-400 mt-0.5">${fmtDateTime(tx.created_at)} · Saldo ${fmtIDR(tx.balance_after)}</p></div>
               <p class="text-sm font-bold ${credit ? 'text-emerald-600' : 'text-amber-700'}">${credit ? '+' : '-'}${fmtIDR(tx.amount)}</p>
             </article>`;
           }).join('')}</div>` : `<div class="card">${emptyState('history', 'Belum ada transaksi', 'Pembayaran invoice dan penyesuaian saldo akan tampil di sini.')}</div>`}

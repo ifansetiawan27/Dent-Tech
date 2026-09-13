@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spare Parts â€” Admin</title>
+  <title>Spare Parts — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -77,7 +77,7 @@
 
     function stockBadge(p) {
       if (p.stock <= 0) return `<span class="text-xs font-bold px-2 py-1 rounded-full bg-red-50 text-red-700">Habis</span>`;
-      if (p.stock <= p.min_stock) return `<span class="text-xs font-bold px-2 py-1 rounded-full bg-amber-50 text-amber-700">Menipis Â· ${p.stock}</span>`;
+      if (p.stock <= p.min_stock) return `<span class="text-xs font-bold px-2 py-1 rounded-full bg-amber-50 text-amber-700">Menipis · ${p.stock}</span>`;
       return `<span class="text-sm font-semibold text-slate-700">${p.stock} <span class="text-xs font-normal text-slate-400">${esc(p.unit)}</span></span>`;
     }
 
@@ -91,7 +91,7 @@
         <tr class="hover:bg-slate-50">
           <td class="px-4 py-3">
             <p class="font-semibold text-slate-700">${esc(p.name)}</p>
-            <p class="text-xs text-slate-400">${p.code} Â· ${esc(p.category || '-')}</p>
+            <p class="text-xs text-slate-400">${p.code} · ${esc(p.category || '-')}</p>
           </td>
           <td class="px-4 py-3 text-slate-600 text-sm">${fmtIDR(p.price)}</td>
           <td class="px-4 py-3 text-slate-500 text-sm">${fmtIDR(p.cost || 0)}</td>
@@ -116,7 +116,7 @@
         title: 'Penyesuaian Stok',
         size: 'sm',
         body: `
-          <p class="text-sm text-slate-600 mb-4">${esc(d.name)} â€” stok saat ini: <b>${d.stock}</b></p>
+          <p class="text-sm text-slate-600 mb-4">${esc(d.name)} — stok saat ini: <b>${d.stock}</b></p>
           <label class="label">Perubahan (+masuk / -keluar)</label>
           <input id="adj-delta" type="number" class="input" placeholder="cth: 5 atau -2">
           <label class="label mt-3">Alasan</label>
@@ -175,7 +175,7 @@
     function editModal(p) {
       const isEdit = !!p;
       const m = openModal({
-        title: isEdit ? `Edit Part â€” ${p.code}` : 'Tambah Spare Part',
+        title: isEdit ? `Edit Part — ${p.code}` : 'Tambah Spare Part',
         size: 'md',
         body: `
           <div class="space-y-4">

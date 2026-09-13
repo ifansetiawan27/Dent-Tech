@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Finance â€” Admin</title>
+  <title>Finance — Admin</title>
   <link rel="icon" type="image/png" href="/assets/logo.png?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 class="text-2xl font-bold text-slate-800">Finance</h1>
-          <p class="text-sm text-slate-500 mt-0.5">Uang masuk &amp; uang keluar secara rinci â€” terhubung dengan spare part</p>
+          <p class="text-sm text-slate-500 mt-0.5">Uang masuk &amp; uang keluar secara rinci — terhubung dengan spare part</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button id="btn-finance-csv" class="btn-secondary" disabled><i data-lucide="sheet" class="w-4 h-4"></i> Download CSV</button>
@@ -174,7 +174,7 @@
         <div class="card p-5 border-l-4 border-l-blue-500">
           <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold">Laba / Rugi Bersih</p>
           <p class="text-2xl font-extrabold ${netCls} mt-1 flex items-center gap-2"><i data-lucide="${netIcon}" class="w-5 h-5"></i>${fmtIDR(s.net)}</p>
-          <p class="text-xs text-slate-400 mt-1">Pendapatan diakui âˆ’ pengeluaran</p>
+          <p class="text-xs text-slate-400 mt-1">Pendapatan diakui − pengeluaran</p>
         </div>`;
       refreshIcons();
     }
@@ -251,7 +251,7 @@
       }
       const rows = data.expenses.map((e) => {
         const cat = CAT[e.category] || CAT.OTHER;
-        const partInfo = e.part_name ? `${esc(e.part_name)}${e.qty ? ` Ã—${e.qty}` : ''}` : '-';
+        const partInfo = e.part_name ? `${esc(e.part_name)}${e.qty ? ` ×${e.qty}` : ''}` : '-';
         return `
         <tr class="hover:bg-slate-50">
           <td class="px-4 py-3 whitespace-nowrap text-slate-600">${fmtDate(e.expense_date)}</td>
@@ -324,7 +324,7 @@
     }
 
     function openExpenseModal() {
-      const partOpts = parts.map((p) => `<option value="${p.id}" data-cost="${p.cost || 0}">${esc(p.code)} â€” ${esc(p.name)} (stok ${p.stock})</option>`).join('');
+      const partOpts = parts.map((p) => `<option value="${p.id}" data-cost="${p.cost || 0}">${esc(p.code)} — ${esc(p.name)} (stok ${p.stock})</option>`).join('');
       const m = openModal({
         title: 'Catat Pengeluaran',
         size: 'lg',
@@ -341,7 +341,7 @@
             <div id="part-fields" class="space-y-3">
               <div>
                 <label class="label">Spare Part</label>
-                <select id="e-part" class="input"><option value="">â€” Pilih part â€”</option>${partOpts}</select>
+                <select id="e-part" class="input"><option value="">— Pilih part —</option>${partOpts}</select>
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div><label class="label">Qty</label><input id="e-qty" type="number" min="0" step="any" class="input" value="1"></div>

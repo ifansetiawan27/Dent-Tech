@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reports â€” Admin</title>
+  <title>Reports — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -32,7 +32,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 class="text-2xl font-bold text-slate-800">Reports & Analytics</h1>
-          <p class="text-sm text-slate-500 mt-0.5">Rekapan operasional service â€” filter per tanggal/bulan/tahun</p>
+          <p class="text-sm text-slate-500 mt-0.5">Rekapan operasional service — filter per tanggal/bulan/tahun</p>
         </div>
         <button id="btn-download-report" class="btn-primary"><i data-lucide="file-down" class="w-4 h-4"></i> Download Laporan (PDF)</button>
       </div>
@@ -45,7 +45,7 @@
             <option value="today">Hari ini</option>
             <option value="month">Bulan ini</option>
             <option value="year">Tahun ini</option>
-            <option value="custom">Rentang tanggalâ€¦</option>
+            <option value="custom">Rentang tanggal…</option>
           </select>
         </div>
         <div><label class="label">Dari Tanggal</label><input id="f-from" type="date" class="input"></div>
@@ -99,7 +99,7 @@
       const q = new URLSearchParams();
       if (from) q.set('from', from);
       if (to) q.set('to', to);
-      lastPeriodLabel = (from || to) ? `${from || 'â€¦'} s/d ${to || 'â€¦'}` : 'Semua periode';
+      lastPeriodLabel = (from || to) ? `${from || '…'} s/d ${to || '…'}` : 'Semua periode';
       try {
         const an = await api.get('/api/reports/analytics' + (q.toString() ? '?' + q.toString() : ''));
         lastAnalytics = an;

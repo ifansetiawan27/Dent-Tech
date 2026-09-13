@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beranda â€” Technician</title>
+  <title>Beranda — Technician</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -64,7 +64,7 @@
             <div class="flex gap-1.5">${statusBadge(j.priority, PRIORITY)}${statusBadge(j.status, WO_STATUS)}</div>
           </div>
           <p class="font-semibold text-slate-800 mt-2">${esc(j.problem)}</p>
-          <p class="text-sm text-slate-500 mt-1">${esc(j.service_type || '')} Â· ${esc(j.equipment_name || '')}</p>
+          <p class="text-sm text-slate-500 mt-1">${esc(j.service_type || '')} · ${esc(j.equipment_name || '')}</p>
           <div class="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500">
             <span class="flex items-center gap-1"><i data-lucide="building-2" class="w-3.5 h-3.5"></i> ${esc(j.customer_name)}</span>
             <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${esc(j.time_window || '-')}</span>
@@ -95,7 +95,7 @@
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-slate-700 truncate">${esc(j.problem)}</p>
-              <p class="text-xs text-slate-400 mt-0.5">${esc(j.customer_name)} Â· ${esc(j.time_window || '-')}</p>
+              <p class="text-xs text-slate-400 mt-0.5">${esc(j.customer_name)} · ${esc(j.time_window || '-')}</p>
             </div>
             ${statusBadge(j.status, WO_STATUS)}
           </a>`).join('')}</div>` : `<div class="card">${emptyState('calendar', 'Belum ada jadwal', 'Job mendatang akan tampil di sini.')}</div>`}`;
