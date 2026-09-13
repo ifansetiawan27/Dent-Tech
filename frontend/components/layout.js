@@ -5,7 +5,33 @@ import { refreshIcons, toast } from './ui.js';
 import { avatarHtml } from './avatar.js';
 import { bindThemeToggle } from '../utils/theme.js';
 import { initPwa } from '../utils/pwa.js';
-import { pushSupported, isPushEnabled, enablePush, syncPushSubscription, syncAppBadge, sendTestPush } from '../utils/push.js';
+import { pushSupported, isPushEnabled, enablePush, syncPushSubscription, syncAppBadge, sendTestPush, pushDiagnostics } from '../utils/push.js';
+
+// Status notifikasi perangkat ini — ditampilkan di panel lonceng agar penyebab
+// notifikasi tidak muncul (izin HP, langganan, mode aplikasi) bisa dilihat langsung.
+async function pushStatusHtml() {
+  const d = await pushDiagnostics();
+  const permLabel = { granted: 'Diizinkan', denied: 'DIMATIKAN', default: 'Belum diminta', unsupported: 'Tidak didukung' }[d.permission] || d.permission;
+  const rows = [
+    ['Izin notifikasi', permLabel, d.permission === 'granted'],
+    ['Langganan perangkat ini', d.hasSubscription ? 'Aktif' : 'Tidak aktif', d.hasSubscription],
+    ['Perangkat terdaftar di server', String(d.devicesOnServer), d.devicesOnServer > 0],
+    ['Dijalankan sebagai', d.standalone ? 'Aplikasi (PWA)' : 'Browser', d.standalone]
+  ];
+  const bad = rows.some((r) => !r[2]);
+  return `
+    <div class="px-4 py-3 border-t border-slate-100 bg-slate-50/60">
+      <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Status notifikasi perangkat ini</p>
+      <div class="space-y-1">
+        ${rows.map(([k, v, ok]) => `
+          <div class="flex items-center justify-between gap-2 text-[11px]">
+            <span class="text-slate-500">${k}</span>
+            <span class="font-semibold ${ok ? 'text-emerald-600' : 'text-amber-600'}">${v}</span>
+          </div>`).join('')}
+      </div>
+      ${bad ? `<p class="mt-2 text-[11px] text-amber-700 leading-snug">Buka <strong>Setelan HP → Aplikasi → Dent Tech.id → Notifikasi</strong> lalu aktifkan (jangan "Senyap"), dan buka aplikasi dari ikonnya (bukan dari browser). Di iOS, tambahkan ke Home Screen lewat Safari.</p>` : ''}
+    </div>`;
+}
 
 // Banner ajakan mengaktifkan notifikasi OS (bunyi + banner lock screen).
 // Non-interaktif tidak bisa meminta izin di iOS — sediakan tombol gesture.
@@ -59,7 +85,8 @@ async function notifDropdownHtml() {
     <div class="px-4 py-2.5 border-t border-slate-100 flex items-center justify-center gap-4">
       <button id="notif-read-all" class="text-xs font-medium text-blue-600 hover:underline">Tandai semua dibaca</button>
       <button id="notif-test-push" class="text-xs font-medium text-slate-500 hover:underline">Tes notifikasi</button>
-    </div>`;
+    </div>
+    <div data-notif-status></div>`;
   } catch {
     return `<div class="p-6 text-center text-sm text-slate-400">Gagal memuat notifikasi</div>`;
   }
@@ -103,7 +130,7 @@ export function setupNotifBell(bellEl, role) {
       // Notifikasi baru terdeteksi saat aplikasi terbuka → beri tahu tanpa refresh.
       if (announce && lastUnread !== null && unread > lastUnread) {
         toast('Notifikasi baru masuk');
-        if (!panel.classList.contains('hidden')) { panel.innerHTML = await notifDropdownHtml(); bindInner(); }
+        if (!panel.classList.contains('hidden')) await renderPanel();
       }
       lastUnread = unread;
     } catch {}
@@ -118,26 +145,32 @@ export function setupNotifBell(bellEl, role) {
   window.addEventListener('focus', () => refreshBadge(true));
   window.addEventListener('beforeunload', () => clearInterval(poll));
 
+  async function renderPanel() {
+    panel.innerHTML = await notifDropdownHtml();
+    const statusSlot = panel.querySelector('[data-notif-status]');
+    if (statusSlot) statusSlot.innerHTML = await pushStatusHtml();
+    panel.querySelectorAll('[data-notif-id]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-notif-id');
+        const type = el.getAttribute('data-ref-type');
+        const refId = el.getAttribute('data-ref-id');
+        try { await api.post(`/api/notifications/${id}/read`); } catch {}
+        syncAppBadge();
+        const dest = refPath(type, refId, role);
+        if (dest) window.location.href = dest;
+        else { await renderPanel(); refreshBadge(); }
+      });
+    });
+    bindInner();
+  }
+
   bellEl.addEventListener('click', async (e) => {
     e.stopPropagation();
     const willOpen = panel.classList.contains('hidden');
     panel.classList.toggle('hidden');
     if (willOpen) {
       panel.innerHTML = `<div class="p-6 text-center text-sm text-slate-400">Memuat...</div>`;
-      panel.innerHTML = await notifDropdownHtml();
-      panel.querySelectorAll('[data-notif-id]').forEach((el) => {
-        el.addEventListener('click', async () => {
-          const id = el.getAttribute('data-notif-id');
-          const type = el.getAttribute('data-ref-type');
-          const refId = el.getAttribute('data-ref-id');
-          try { await api.post(`/api/notifications/${id}/read`); } catch {}
-          syncAppBadge();
-          const dest = refPath(type, refId, role);
-          if (dest) window.location.href = dest;
-          else { panel.classList.add('hidden'); refreshBadge(); panel.innerHTML = await notifDropdownHtml(); bindInner(); }
-        });
-      });
-      bindInner();
+      await renderPanel();
     }
   });
 
@@ -146,8 +179,7 @@ export function setupNotifBell(bellEl, role) {
     if (readAll) readAll.addEventListener('click', async () => {
       try { await api.post('/api/notifications/read-all'); } catch {}
       syncAppBadge();
-      panel.innerHTML = await notifDropdownHtml();
-      bindInner();
+      await renderPanel();
       refreshBadge();
     });
     const testPush = panel.querySelector('#notif-test-push');
@@ -158,6 +190,10 @@ export function setupNotifBell(bellEl, role) {
       if (res.ok && res.sent > 0) toast('Notifikasi uji terkirim — cek layar HP Anda');
       else if (res.ok && !res.total) toast('Belum ada perangkat terdaftar. Aktifkan notifikasi dulu.', 'error');
       else toast('Notifikasi uji gagal terkirim', 'error');
+      // Perbarui status perangkat agar sebab kegagalan langsung terlihat.
+      const slot = panel.querySelector('[data-notif-status]');
+      if (slot) slot.innerHTML = await pushStatusHtml();
+      refreshBadge();
     });
   }
 

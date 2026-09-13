@@ -171,4 +171,11 @@ async function pushTestHandler(ctx) {
   sendJSON(ctx.res, 200, { ok: true, ...result });
 }
 
-module.exports = { dashboardHandler, listNotificationsHandler, readNotificationHandler, readAllNotificationsHandler, auditLogsHandler, pushSubscribeHandler, pushUnsubscribeHandler, pushVapidHandler, pushTestHandler };
+// Jumlah perangkat (subscription) yang terdaftar untuk user ini — dipakai
+// panel notifikasi untuk memastikan perangkat benar-benar terhubung.
+async function pushStatusHandler(ctx) {
+  const row = await db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(ctx.user.id);
+  sendJSON(ctx.res, 200, { devices: Number(row.c) || 0, vapid: !!publicVapidKey() });
+}
+
+module.exports = { dashboardHandler, listNotificationsHandler, readNotificationHandler, readAllNotificationsHandler, auditLogsHandler, pushSubscribeHandler, pushUnsubscribeHandler, pushVapidHandler, pushTestHandler, pushStatusHandler };

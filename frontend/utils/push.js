@@ -91,7 +91,47 @@ export function isPushEnabled() {
 }
 
 export function pushSupported() {
-  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && 'PushSubscription' in window;
+}
+
+// Diagnostik status notifikasi di perangkat ini (dipakai panel lonceng).
+export async function pushDiagnostics() {
+  const d = {
+    supported: pushSupported(),
+    permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+    standalone: false,
+    permissionApi: typeof navigator.permissions?.query === 'function',
+    deviceNotifications: 'unknown',
+    hasSubscription: false,
+    devicesOnServer: 0,
+    vapidOk: false
+  };
+  try {
+    d.standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  } catch { /* ignore */ }
+  try {
+    if (navigator.serviceWorker) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        const sub = await reg.pushManager.getSubscription();
+        d.hasSubscription = !!sub;
+      }
+    }
+  } catch { /* ignore */ }
+  try {
+    // Android hanya melaporkan 'granted' bila izin notifikasi aplikasi/browser
+    // juga aktif; 'denied' di sini = notifikasi dimatikan di pengaturan HP.
+    if (typeof navigator.permissions?.query === 'function') {
+      const st = await navigator.permissions.query({ name: 'notifications' });
+      d.deviceNotifications = st.state;
+    }
+  } catch { /* ignore */ }
+  try {
+    const s = await api.get('/api/push/status');
+    d.devicesOnServer = Number(s.devices) || 0;
+    d.vapidOk = !!s.vapid;
+  } catch { /* ignore */ }
+  return d;
 }
 
 // Sinkronkan lencana ikon aplikasi (Android) dengan jumlah notifikasi belum-dibaca
