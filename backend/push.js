@@ -173,7 +173,13 @@ async function encryptPayload(payload, subscription) {
   const cek = await hkdf(ikm, salt, new TextEncoder().encode('Content-Encoding: aes128gcm\x00'), 16);
   const nonce = await hkdf(ikm, salt, new TextEncoder().encode('Content-Encoding: nonce\x00'), 12);
 
-  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+  // RFC 8188: setiap record diakhiri oktet delimiter padding — 0x02 untuk
+  // record terakhir (0x01 untuk record non-final). Tanpa oktet ini browser
+  // membuang payload tanpa error, sehingga notifikasi tidak pernah tampil.
+  const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
+  const plaintext = new Uint8Array(payloadBytes.length + 1);
+  plaintext.set(payloadBytes, 0);
+  plaintext[payloadBytes.length] = 0x02;
   const { ciphertext } = await aesGcmEncrypt(cek, nonce, plaintext);
 
   // aes128gcm body: salt(16) | rs(4) | idlen(1) | keyid(65) | ciphertext
@@ -243,27 +249,18 @@ async function pushToUsers(userIds, payload) {
   const placeholders = unique.map(() => '?').join(',');
   const subs = await db.prepare(`SELECT ps.*, ps.user_id FROM push_subscriptions ps WHERE ps.user_id IN (${placeholders})`).all(...unique);
   if (!subs.length) return { sent: 0 };
-  // Unread per user (notifikasi ditujukan langsung / per-role / per-customer).
-  const unreadRows = await db.prepare(`SELECT user_id, COUNT(*) AS c FROM (
-      SELECT n.user_id FROM notifications n JOIN users u ON u.id = n.user_id
-       WHERE n.read_at IS NULL AND (n.user_id = u.id OR (n.user_id IS NULL AND n.role = u.role) OR (n.user_id IS NULL AND n.role IS NULL AND n.customer_id = u.customer_id))
-         AND u.id IN (${placeholders}) GROUP BY n.user_id, u.id, u.role, u.customer_id
-    ) t GROUP BY user_id`).all(...unique)
-    .catch(() => []);
+  // Jumlah belum-dibaca per penerima — predikat sama dengan listNotificationsHandler
+  // (user langsung / per-role / per-customer). Dipakai untuk lencana ikon aplikasi.
   const unreadByUser = new Map();
-  // Fallback sederhana: hitung unread langsung per user jika query di atas gagal.
-  if (!unreadRows.length) {
-    for (const uid2 of unique) {
-      try {
-        const u = await db.prepare('SELECT id, role, customer_id FROM users WHERE id = ?').get(uid2);
-        if (!u) continue;
-        const r = await db.prepare('SELECT COUNT(*) AS c FROM notifications WHERE read_at IS NULL AND (user_id = ? OR (user_id IS NULL AND role = ?) OR (user_id IS NULL AND role IS NULL AND customer_id = ?))')
-          .get(u.id, u.role, u.customer_id || '');
-        unreadByUser.set(uid2, r.c);
-      } catch { /* skip */ }
-    }
-  } else {
-    for (const row of unreadRows) unreadByUser.set(row.user_id, row.c);
+  for (const uid2 of unique) {
+    try {
+      const u = await db.prepare('SELECT id, role, customer_id FROM users WHERE id = ?').get(uid2);
+      if (!u) continue;
+      const r = await db.prepare(`SELECT COUNT(*) AS c FROM notifications WHERE read_at IS NULL
+        AND (user_id = ? OR (user_id IS NULL AND role = ?) OR (user_id IS NULL AND role IS NULL AND customer_id = ?))`)
+        .get(u.id, u.role, u.customer_id || '');
+      unreadByUser.set(uid2, Number(r.c) || 0);
+    } catch { /* abaikan user yang gagal dihitung */ }
   }
   let sent = 0;
   for (const sub of subs) {

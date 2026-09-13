@@ -203,6 +203,7 @@ async function startRepairHandler(ctx) {
     await setTicketStatus(t, 'REPAIR_IN_PROGRESS', ctx.user, 'Teknisi memulai perbaikan yang disetujui');
     timeline(t.id, 'STATUS', 'Perbaikan dimulai', 'Teknisi mulai mengerjakan perbaikan sesuai proforma yang disetujui.', 'CUSTOMER_VISIBLE', ctx.user.id);
     notify({ customer_id: t.customer_id, title: `Perbaikan ${t.number} dimulai`, body: 'Teknisi mulai mengerjakan perbaikan yang Anda setujui', type: 'WORK_ORDER', ref_type: 'ticket', ref_id: t.id });
+    notify({ role: 'admin', title: `Perbaikan ${wo.number} dimulai`, body: `${t.number} sedang dikerjakan teknisi`, type: 'WORK_ORDER', ref_type: 'work_order', ref_id: wo.id });
   }
   audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Memulai perbaikan ${wo.number}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true, status: 'REPAIR_STARTED' });

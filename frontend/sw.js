@@ -6,7 +6,7 @@
  *  - Cross-origin (font/CDN): dibiarkan lewat tanpa intervensi.
  */
 
-const VERSION = 'denttech-v3';
+const VERSION = 'denttech-v4';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_URLS = [
@@ -97,20 +97,24 @@ self.addEventListener('push', (event) => {
     icon: '/assets/icons/icon-192.png',
     badge: '/assets/icons/icon-192.png',
     tag: data.ref_type && data.ref_id ? `${data.ref_type}-${data.ref_id}` : 'denttech-notification',
-    renotify: true,
     data: { ref_type: data.ref_type || '', ref_id: data.ref_id || '' },
     vibrate: [200, 100, 200],
+    // silent:false → Android/iOS membunyikan notifikasi (default nada sistem).
+    silent: false,
     requireInteraction: false
   };
-  // Lencana ikon aplikasi (Android): angka belum-dibaca dari backend, atau titik.
-  const badgeCount = Number(data.badge) || 0;
-  const badgeTask = typeof self.navigator.setAppBadge === 'function'
-    ? (badgeCount > 0 ? self.navigator.setAppBadge(badgeCount) : self.navigator.setAppBadge()).catch(() => {})
-    : Promise.resolve();
-  event.waitUntil(Promise.all([
-    self.registration.showNotification(title, options),
-    badgeTask
-  ]));
+  // showNotification WAJIB berhasil agar push tidak dibuang browser.
+  // Badge dijalankan terpisah & tidak pernah menggagalkan notifikasi
+  // (Android tidak mendukung Badging API — badge-nya otomatis dari notifikasi).
+  const shown = self.registration.showNotification(title, options);
+  let badge = Promise.resolve();
+  try {
+    const count = Number(data.badge) || 0;
+    if (typeof self.navigator.setAppBadge === 'function') {
+      badge = (count > 0 ? self.navigator.setAppBadge(count) : self.navigator.clearAppBadge?.()).catch(() => {});
+    }
+  } catch { /* badge opsional */ }
+  event.waitUntil(Promise.all([shown, badge]));
 });
 
 function pushTargetUrl(data) {
