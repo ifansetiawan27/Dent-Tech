@@ -127,6 +127,10 @@ route('POST', '/api/notifications/:id/read', [], dashH.readNotificationHandler);
 route('POST', '/api/notifications/read-all', [], dashH.readAllNotificationsHandler);
 route('GET', '/api/audit', ['admin'], dashH.auditLogsHandler);
 
+route('GET', '/api/push/vapid', [], dashH.pushVapidHandler);
+route('POST', '/api/push/subscribe', [], dashH.pushSubscribeHandler);
+route('POST', '/api/push/unsubscribe', [], dashH.pushUnsubscribeHandler);
+
 route('POST', '/api/files', [], filesH.uploadFileHandler);
 route('GET', '/api/files/:id', null, filesH.getFileHandler);
 route('DELETE', '/api/files/:id', ['admin', 'technician'], filesH.deleteFileHandler);

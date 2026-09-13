@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detail Work Order — Admin</title>
+  <title>Detail Work Order â€” Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -81,7 +81,7 @@ import { setupInvoiceItemsEditor } from '/components/invoice-form.js';
               ${statusBadge(wo.priority, PRIORITY)}
             </div>
             <p class="text-slate-600 mt-1">${esc(wo.problem)}</p>
-            <p class="text-xs text-slate-400 mt-1"><a class="text-blue-600 hover:underline" href="/admin/ticket-detail.html?id=${wo.ticket_id}">${wo.ticket_number}</a> · ${esc(wo.service_type || '')}</p>
+            <p class="text-xs text-slate-400 mt-1"><a class="text-blue-600 hover:underline" href="/admin/ticket-detail.html?id=${wo.ticket_id}">${wo.ticket_number}</a> Â· ${esc(wo.service_type || '')}</p>
           </div>
           <div class="flex gap-2 flex-wrap justify-end">
             ${checklist ? `<button id="btn-dl-checklist" class="btn-secondary"><i data-lucide="file-down" class="w-4 h-4"></i> Download Checklist (PDF)</button>` : ''}
@@ -93,7 +93,7 @@ import { setupInvoiceItemsEditor } from '/components/invoice-form.js';
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="lg:col-span-2 space-y-4">
             <div class="card p-5">
-              <h3 class="font-semibold text-slate-800 mb-4">Checklist Service ${checklist ? `<span class="text-xs font-normal text-slate-400">— ${esc(checklist.template.name)} v${esc(checklist.template.version)} · ${checklist.answered_items}/${checklist.total_items} terisi</span>` : ''}</h3>
+              <h3 class="font-semibold text-slate-800 mb-4">Checklist Service ${checklist ? `<span class="text-xs font-normal text-slate-400">â€” ${esc(checklist.template.name)} v${esc(checklist.template.version)} Â· ${checklist.answered_items}/${checklist.total_items} terisi</span>` : ''}</h3>
               ${checklist ? checklist.sections.map((sec) => `
                 <div class="mb-4 last:mb-0">
                   <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">${esc(sec.section)}</p>
@@ -152,7 +152,7 @@ import { setupInvoiceItemsEditor } from '/components/invoice-form.js';
                 <div class="flex justify-between gap-2"><span class="text-slate-400">Customer</span><span class="font-medium text-slate-700 text-right">${esc(wo.customer_name)}</span></div>
                 <div class="flex justify-between gap-2"><span class="text-slate-400">Lokasi</span><span class="font-medium text-slate-700 text-right">${esc([wo.customer_address, wo.customer_city].filter(Boolean).join(', ') || '-')}</span></div>
                 <div class="flex justify-between gap-2"><span class="text-slate-400">Equipment Master</span><span class="font-medium text-slate-700 text-right">${esc(wo.equipment_name || '-')}</span></div>
-                ${wo.equipment_identity_confirmed_at ? `<div class="pt-3 border-t border-slate-100"><p class="text-xs font-semibold text-emerald-700 mb-2">Alat Diservice — Dikonfirmasi Teknisi</p><div class="space-y-1.5"><div class="flex justify-between gap-2"><span class="text-slate-400">Nama</span><span class="font-medium text-slate-700 text-right">${esc(wo.serviced_equipment_name)}</span></div><div class="flex justify-between gap-2"><span class="text-slate-400">Tipe / Model</span><span class="font-medium text-slate-700 text-right">${esc(wo.serviced_equipment_type_model)}</span></div><div class="flex justify-between gap-2"><span class="text-slate-400">Serial Number</span><span class="font-medium text-slate-700 text-right">${esc(wo.serviced_equipment_serial_number)}</span></div></div></div>` : ''}
+                ${wo.equipment_identity_confirmed_at ? `<div class="pt-3 border-t border-slate-100"><p class="text-xs font-semibold text-emerald-700 mb-2">Alat Diservice â€” Dikonfirmasi Teknisi</p><div class="space-y-1.5"><div class="flex justify-between gap-2"><span class="text-slate-400">Nama</span><span class="font-medium text-slate-700 text-right">${esc(wo.serviced_equipment_name)}</span></div><div class="flex justify-between gap-2"><span class="text-slate-400">Tipe / Model</span><span class="font-medium text-slate-700 text-right">${esc(wo.serviced_equipment_type_model)}</span></div><div class="flex justify-between gap-2"><span class="text-slate-400">Serial Number</span><span class="font-medium text-slate-700 text-right">${esc(wo.serviced_equipment_serial_number)}</span></div></div></div>` : ''}
                 <div class="flex justify-between gap-2"><span class="text-slate-400">Teknisi</span><span class="font-medium text-slate-700 text-right">${esc(wo.technician_name || '-')}</span></div>
                 <div class="flex justify-between gap-2"><span class="text-slate-400">Jadwal</span><span class="font-medium text-slate-700 text-right">${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</span></div>
                 ${wo.started_at ? `<div class="flex justify-between gap-2"><span class="text-slate-400">Dimulai</span><span class="font-medium text-slate-700">${fmtDateTime(wo.started_at)}</span></div>` : ''}
@@ -166,7 +166,7 @@ import { setupInvoiceItemsEditor } from '/components/invoice-form.js';
                 <h3 class="font-semibold text-slate-800">Service Report</h3>
                 ${statusBadge(service_report.status, REPORT_STATUS)}
               </div>
-              <p class="text-xs text-slate-400">${service_report.number} · v${service_report.version} · ${fmtDateTime(service_report.created_at)}</p>
+              <p class="text-xs text-slate-400">${service_report.number} Â· v${service_report.version} Â· ${fmtDateTime(service_report.created_at)}</p>
               <div class="mt-3 space-y-2 text-sm">
                 <div><p class="text-xs text-slate-400 mb-0.5">Ringkasan</p><p class="text-slate-700 whitespace-pre-wrap">${esc(service_report.summary || '-')}</p></div>
                 ${service_report.technician_note ? `<div><p class="text-xs text-slate-400 mb-0.5">Catatan Teknisi</p><p class="text-slate-600 whitespace-pre-wrap">${esc(service_report.technician_note)}</p></div>` : ''}

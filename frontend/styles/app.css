@@ -149,6 +149,30 @@ html.dark [data-pwa-ios-tip] .pwa-ios-tip-title { color: #f1f5f9; }
 html.dark [data-pwa-ios-tip] .pwa-ios-tip-steps li { color: #cbd5e1; }
 html.dark [data-pwa-ios-tip] .pwa-ios-tip-close { background: #334155; color: #e2e8f0; }
 
+/* Push notification prompt banner */
+.push-prompt {
+  display: flex; align-items: center; gap: .75rem;
+  margin-bottom: 1.25rem; padding: .75rem 1rem;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: .9rem;
+  color: #1e40af; font-size: .8125rem; line-height: 1.35;
+}
+.push-prompt svg { width: 1.15rem; height: 1.15rem; color: #2563eb; flex-shrink: 0; }
+.push-prompt p { flex: 1; margin: 0; }
+.push-prompt-btn {
+  flex-shrink: 0; border: 0; border-radius: .6rem; cursor: pointer;
+  background: #2563eb; color: #fff; font-weight: 600; font-size: .78rem;
+  padding: .45rem .9rem;
+}
+.push-prompt-btn:hover { background: #1d4ed8; }
+.push-prompt-btn:disabled { opacity: .6; cursor: wait; }
+.push-prompt-close {
+  flex-shrink: 0; width: 1.7rem; height: 1.7rem; border-radius: 999px;
+  border: 0; background: #dbeafe; color: #1e40af; font-size: 1rem; line-height: 1; cursor: pointer;
+}
+html.dark .push-prompt { background: #0f172a; border-color: #334155; color: #bfdbfe; }
+html.dark .push-prompt svg { color: #93c5fd; }
+html.dark .push-prompt-close { background: #1e293b; color: #93c5fd; }
+
 /* Print (service report / invoice) */
 @media print {
   header, aside, nav, .no-print { display: none !important; }

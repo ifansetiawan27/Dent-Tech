@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detail Service — Customer</title>
+  <title>Detail Service â€” Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -92,7 +92,7 @@
             <div class="flex gap-1.5">${statusBadge(t.priority, PRIORITY)}${statusBadge(t.status)}</div>
           </div>
           <h1 class="text-lg font-bold text-slate-800 mt-2">${esc(t.problem)}</h1>
-          <p class="text-sm text-slate-500 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' · ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ')) : ''}</p>
+          <p class="text-sm text-slate-500 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' Â· ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' â€” ')) : ''}</p>
           ${t.service_address ? `<p class="text-xs text-slate-400 mt-1 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> ${esc(t.service_address)}</p>` : ''}
 
           ${t.status === 'CANCELLED' ? `
@@ -122,7 +122,7 @@
           <div class="w-11 h-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">${esc(wo.technician_name.split(' ').map(x => x[0]).slice(0,2).join(''))}</div>
           <div class="flex-1 min-w-0">
             <p class="font-semibold text-slate-700">${esc(wo.technician_name)}</p>
-            <p class="text-xs text-slate-400">Teknisi Anda · ${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</p>
+            <p class="text-xs text-slate-400">Teknisi Anda Â· ${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</p>
           </div>
           <i data-lucide="hard-hat" class="w-5 h-5 text-slate-300"></i>
         </div>` : ''}
@@ -219,7 +219,7 @@
               ${sec.items.map((it) => `
                 <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-slate-50">
                   <p class="text-sm text-slate-600 flex-1">${esc(it.label)}</p>
-                  ${it.result ? `<span class="text-xs font-bold px-2 py-0.5 rounded ${esc(RESULT_CLS[it.result] || 'bg-slate-100 text-slate-600')}">${esc(it.result)}</span>` : '<span class="text-xs text-slate-300">—</span>'}
+                  ${it.result ? `<span class="text-xs font-bold px-2 py-0.5 rounded ${esc(RESULT_CLS[it.result] || 'bg-slate-100 text-slate-600')}">${esc(it.result)}</span>` : '<span class="text-xs text-slate-300">â€”</span>'}
                 </div>
                 ${it.note ? `<p class="text-xs text-slate-500 ml-3 -mt-0.5 mb-1">${esc(it.note)}</p>` : ''}`).join('')}
             </div>
@@ -235,7 +235,7 @@
             <div class="flex items-center gap-2 mb-3">
               <i data-lucide="list-checks" class="w-5 h-5 text-blue-600"></i>
               <h3 class="font-semibold text-slate-800">Checklist Pengecekan Teknisi</h3>
-              <span class="text-xs text-slate-400 ml-auto">${esc(c.template?.name || '')} · ${c.answered_items}/${c.total_items}</span>
+              <span class="text-xs text-slate-400 ml-auto">${esc(c.template?.name || '')} Â· ${c.answered_items}/${c.total_items}</span>
             </div>
             ${sections}
             ${diag}

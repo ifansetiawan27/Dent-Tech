@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detail Job — Technician</title>
+  <title>Detail Job â€” Technician</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -70,7 +70,7 @@
       return `
         <div class="card p-5 mb-4">
           <div class="flex items-center justify-between gap-2 flex-wrap">
-            <span class="text-xs font-bold text-slate-400">${wo.number} · ${wo.ticket_number}</span>
+            <span class="text-xs font-bold text-slate-400">${wo.number} Â· ${wo.ticket_number}</span>
             <div class="flex gap-1.5">${statusBadge(wo.priority, PRIORITY)}${statusBadge(wo.status, WO_STATUS)}</div>
           </div>
           <h1 class="text-lg font-bold text-slate-800 mt-2">${esc(wo.problem)}</h1>
@@ -82,7 +82,7 @@
               <p class="text-xs text-slate-400">${esc(wo.ticket_service_address || [wo.customer_address, wo.customer_city].filter(Boolean).join(', '))}</p></div>
             </div>
             ${wo.customer_phone ? `<a href="tel:${esc(wo.customer_phone)}" class="flex items-center gap-2.5 text-blue-600"><i data-lucide="phone" class="w-4 h-4 shrink-0"></i> ${esc(wo.customer_phone)}</a>` : ''}
-            ${(wo.equipment_name || wo.ticket_equipment_type) ? `<div class="flex items-center gap-2.5"><i data-lucide="cog" class="w-4 h-4 text-slate-400 shrink-0"></i><span class="text-slate-600">${esc(wo.equipment_name || [wo.ticket_equipment_type, wo.ticket_equipment_brand].filter(Boolean).join(' — '))}${wo.equipment_serial ? ' · SN ' + esc(wo.equipment_serial) : ''}${wo.equipment_location ? ' · ' + esc(wo.equipment_location) : ''}</span></div>` : ''}
+            ${(wo.equipment_name || wo.ticket_equipment_type) ? `<div class="flex items-center gap-2.5"><i data-lucide="cog" class="w-4 h-4 text-slate-400 shrink-0"></i><span class="text-slate-600">${esc(wo.equipment_name || [wo.ticket_equipment_type, wo.ticket_equipment_brand].filter(Boolean).join(' â€” '))}${wo.equipment_serial ? ' Â· SN ' + esc(wo.equipment_serial) : ''}${wo.equipment_location ? ' Â· ' + esc(wo.equipment_location) : ''}</span></div>` : ''}
             <div class="flex items-center gap-2.5"><i data-lucide="calendar" class="w-4 h-4 text-slate-400 shrink-0"></i><span class="text-slate-600">${fmtDate(wo.scheduled_date)} ${esc(wo.time_window || '')}</span></div>
           </div>
         </div>`;
@@ -137,7 +137,7 @@
         <div class="card p-4 mb-3">
           <div class="flex items-center justify-between text-sm mb-2">
             <p class="font-semibold text-slate-700">${esc(c.template.name)} <span class="text-xs font-normal text-slate-400">v${esc(c.template.version)}</span></p>
-            <span class="text-xs text-slate-400">${c.answered_items}/${c.total_items} · ${pct}%</span>
+            <span class="text-xs text-slate-400">${c.answered_items}/${c.total_items} Â· ${pct}%</span>
           </div>
           <div class="h-2 rounded bg-slate-100"><div class="h-2 rounded bg-blue-500 transition-all" style="width:${pct}%"></div></div>
         </div>
@@ -196,7 +196,7 @@
                 <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-slate-700 truncate">${esc(p.part_name)}</p>
-                    <p class="text-xs text-slate-400">${p.qty} ${esc(p.unit)} × ${fmtIDR(p.unit_price)}</p>
+                    <p class="text-xs text-slate-400">${p.qty} ${esc(p.unit)} Ã— ${fmtIDR(p.unit_price)}</p>
                   </div>
                   <span class="text-sm font-semibold text-slate-700">${fmtIDR(p.qty * p.unit_price)}</span>
                   <button data-pt-del="${p.id}" class="btn-ghost !p-1.5 text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
@@ -283,7 +283,7 @@
         <div class="card p-5 border-2 border-emerald-200 text-center">
           <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500 mx-auto"></i>
            <p class="font-semibold text-slate-800 mt-2">Pekerjaan ${r.number} selesai</p>
-           <p class="text-sm text-slate-500 mt-1">Laporan otomatis disetujui dan pembayaran customer telah dibuka${r.approved_at ? ' · ' + fmtDateTime(r.approved_at) : ''}</p>
+           <p class="text-sm text-slate-500 mt-1">Laporan otomatis disetujui dan pembayaran customer telah dibuka${r.approved_at ? ' Â· ' + fmtDateTime(r.approved_at) : ''}</p>
         </div>`;
       return `
         <div class="card p-5 border-2 border-red-200">
@@ -337,7 +337,7 @@
           title: 'Catat Alat yang Diservice', size: 'sm',
           body: `<div class="space-y-3">
             <div><label class="label">Nama Alat *</label><input id="eq-name" class="input" maxlength="200" value="${esc(current.serviced_equipment_name || current.equipment_name || '')}" placeholder="Contoh: Autoclave Unit 2"></div>
-            <div><label class="label">Tipe / Model Alat *</label><input id="eq-type-model" class="input" maxlength="200" value="${esc(current.serviced_equipment_type_model || current.equipment_model || [current.ticket_equipment_type, current.ticket_equipment_brand].filter(Boolean).join(' — '))}" placeholder="Contoh: Tuttnauer 2540M"></div>
+            <div><label class="label">Tipe / Model Alat *</label><input id="eq-type-model" class="input" maxlength="200" value="${esc(current.serviced_equipment_type_model || current.equipment_model || [current.ticket_equipment_type, current.ticket_equipment_brand].filter(Boolean).join(' â€” '))}" placeholder="Contoh: Tuttnauer 2540M"></div>
             <div><label class="label">Serial Number *</label><input id="eq-serial" class="input" maxlength="150" value="${esc(current.serviced_equipment_serial_number || current.equipment_serial || '')}" placeholder="Contoh: SN-2540-009821"></div>
             <p class="text-xs text-slate-400">Data ini dicatat pada histori pekerjaan dan tidak mengubah master equipment customer.</p>
           </div>`,
@@ -538,7 +538,7 @@
                 <label class="label">Part</label>
                 <select id="mp-part" class="input">
                   <option value="">Pilih part...</option>
-                  ${available.map((p) => `<option value="${p.id}">${esc(p.name)} — stok ${p.stock} ${esc(p.unit)} — ${fmtIDR(p.price)}</option>`).join('')}
+                  ${available.map((p) => `<option value="${p.id}">${esc(p.name)} â€” stok ${p.stock} ${esc(p.unit)} â€” ${fmtIDR(p.price)}</option>`).join('')}
                 </select>
               </div>
               <div><label class="label">Jumlah</label><input id="mp-qty" type="number" min="1" value="1" class="input"></div>

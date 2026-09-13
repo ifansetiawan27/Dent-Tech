@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoices — Admin</title>
+  <title>Invoices â€” Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -106,7 +106,7 @@
         <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/admin/invoice-detail.html?id=${i.id}'">
           <td class="px-4 py-3">
             <p class="font-semibold text-slate-700">${i.number}</p>
-            <p class="text-xs text-slate-400">${i.ticket_number || ''} · ${i.wo_number || ''}</p>
+            <p class="text-xs text-slate-400">${i.ticket_number || ''} Â· ${i.wo_number || ''}</p>
           </td>
           <td class="px-4 py-3 text-slate-600">${esc(i.customer_name || '-')}</td>
           <td class="px-4 py-3">${typeBadge(i.type)}</td>

@@ -2,6 +2,7 @@
 const { db } = require('../db');
 const { trackTask } = require('../runtime');
 const { uid, now, fileSig } = require('../util');
+const { pushNotify } = require('../push');
 
 const TICKET_TRANSITIONS = {
   OPEN: ['REVIEWING', 'CANCELLED'],
@@ -19,9 +20,34 @@ const TICKET_TRANSITIONS = {
   CANCELLED: []
 };
 
+// Notifikasi in-app (tabel notifications) + Web Push (bunyi/banner OS saat
+// aplikasi tertutup) ke user yang masih memiliki push subscription (login).
 function notify({ user_id = null, role = null, customer_id = null, title, body = '', type = 'INFO', ref_type = '', ref_id = '' }) {
+  trackTask(pushRecipients({ user_id, role, customer_id }).then((userIds) => {
+    if (userIds.length) pushNotify(userIds, { title, body, type, ref_type, ref_id });
+  }), 'push');
   return trackTask(db.prepare('INSERT INTO notifications (id, user_id, role, customer_id, title, body, type, ref_type, ref_id, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)')
     .run(uid(), user_id, role, customer_id, title, body, type, ref_type, ref_id, now()), 'notify');
+}
+
+async function pushRecipients({ user_id, role, customer_id }) {
+  try {
+    if (user_id) {
+      const rows = await db.prepare('SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id = ?').all(user_id);
+      return rows.map((r) => r.user_id);
+    }
+    if (customer_id) {
+      const rows = await db.prepare('SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id IN (SELECT id FROM users WHERE customer_id = ? AND active = 1)').all(customer_id);
+      return rows.map((r) => r.user_id);
+    }
+    if (role) {
+      const rows = await db.prepare('SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id IN (SELECT id FROM users WHERE role = ? AND active = 1)').all(role);
+      return rows.map((r) => r.user_id);
+    }
+    return [];
+  } catch {
+    return [];
+  }
 }
 
 function audit(user, action, entity, entityId, details, ip = '') {

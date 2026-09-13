@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Service Saya — Customer</title>
+  <title>Service Saya â€” Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -82,7 +82,7 @@
               ${statusBadge(t.status)}
             </div>
             <p class="font-semibold text-slate-800 mt-2">${esc(t.problem)}</p>
-            <p class="text-xs text-slate-400 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' · ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' — ')) : ''} · ${timeAgo(t.created_at)}</p>
+            <p class="text-xs text-slate-400 mt-1">${esc(t.service_type || '')}${(t.equipment_name || t.equipment_type) ? ' Â· ' + esc(t.equipment_name || [t.equipment_type, t.equipment_brand].filter(Boolean).join(' â€” ')) : ''} Â· ${timeAgo(t.created_at)}</p>
           </a>`).join('')}
       </div>`;
       refreshIcons();

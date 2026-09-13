@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Audit Log — Admin</title>
+  <title>Audit Log â€” Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -90,7 +90,7 @@
               <span class="text-[10px] font-bold px-2 py-1 rounded-full mt-0.5 shrink-0 ${ACTION_CLS[l.action] || 'bg-slate-100 text-slate-600'}">${esc(l.action)}</span>
               <div class="flex-1 min-w-0">
                 <p class="text-sm text-slate-700">${esc(l.details)}</p>
-                <p class="text-xs text-slate-400 mt-0.5">${esc(l.user_name || 'System')} · ${esc(l.role || '-')} · entitas: ${esc(l.entity || '-')}</p>
+                <p class="text-xs text-slate-400 mt-0.5">${esc(l.user_name || 'System')} Â· ${esc(l.role || '-')} Â· entitas: ${esc(l.entity || '-')}</p>
               </div>
               <span class="text-xs text-slate-400 whitespace-nowrap mt-0.5">${fmtDateTime(l.created_at)}</span>
             </div>`).join('')}

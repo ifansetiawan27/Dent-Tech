@@ -1,10 +1,42 @@
 import { api } from '../services/api.js';
 import { getUser, logout } from '../utils/auth.js';
 import { esc, timeAgo } from '../utils/format.js';
-import { refreshIcons } from './ui.js';
+import { refreshIcons, toast } from './ui.js';
 import { avatarHtml } from './avatar.js';
 import { bindThemeToggle } from '../utils/theme.js';
 import { initPwa } from '../utils/pwa.js';
+import { pushSupported, isPushEnabled, enablePush, syncPushSubscription } from '../utils/push.js';
+
+// Banner ajakan mengaktifkan notifikasi OS (bunyi + banner lock screen).
+// Non-interaktif tidak bisa meminta izin di iOS — sediakan tombol gesture.
+function pushPromptBanner() {
+  if (!pushSupported() || isPushEnabled()) return null;
+  if (Notification.permission === 'denied') return null;
+  const bar = document.createElement('div');
+  bar.className = 'push-prompt';
+  bar.innerHTML = `
+    <i data-lucide="bell-ring" class="w-5 h-5 shrink-0"></i>
+    <p>Aktifkan notifikasi agar tetap menerima pesan service walau aplikasi tertutup.</p>
+    <button type="button" class="push-prompt-btn">Aktifkan</button>
+    <button type="button" class="push-prompt-close" aria-label="Tutup">&times;</button>`;
+  bar.querySelector('.push-prompt-btn').addEventListener('click', async () => {
+    const btn = bar.querySelector('.push-prompt-btn');
+    btn.disabled = true;
+    const ok = await enablePush();
+    if (ok) { toast('Notifikasi aktif'); bar.remove(); }
+    else btn.disabled = false;
+  });
+  bar.querySelector('.push-prompt-close').addEventListener('click', () => bar.remove());
+  return bar;
+}
+
+function mountPushPrompt() {
+  if (!pushSupported() || isPushEnabled()) return;
+  const main = document.querySelector('main');
+  if (!main) return;
+  const bar = pushPromptBanner();
+  if (bar) main.prepend(bar);
+}
 
 async function notifDropdownHtml() {
   try {
@@ -219,6 +251,8 @@ export function initAdminLayout(activeKey) {
   userMenu(document.getElementById('user-menu-btn'), user);
   refreshIcons();
   initPwa();
+  mountPushPrompt();
+  syncPushSubscription();
 }
 
 // ---------------- Mobile-first layout (technician & customer) ----------------
@@ -280,4 +314,6 @@ export function initMobileLayout(activeKey, role) {
   userMenu(document.getElementById('user-menu-btn'), user);
   refreshIcons();
   initPwa();
+  mountPushPrompt();
+  syncPushSubscription();
 }

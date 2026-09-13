@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Equipment Saya — Customer</title>
+  <title>Equipment Saya â€” Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -75,7 +75,7 @@
                 <div class="w-11 h-11 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0"><i data-lucide="cog" class="w-5 h-5"></i></div>
                 <div class="min-w-0">
                   <p class="font-semibold text-slate-800 truncate">${esc(e.name)}</p>
-                  <p class="text-xs text-slate-400 truncate">${esc(e.category || '')}${e.model ? ' · ' + esc(e.model) : ''}</p>
+                  <p class="text-xs text-slate-400 truncate">${esc(e.category || '')}${e.model ? ' Â· ' + esc(e.model) : ''}</p>
                 </div>
               </div>
               ${statusBadge(e.status, EQUIPMENT_STATUS)}
@@ -100,7 +100,7 @@
       try {
         const { equipment: e } = await api.get('/api/equipment/' + id);
         openModal({
-          title: `Riwayat Service — ${esc(e.name)}`,
+          title: `Riwayat Service â€” ${esc(e.name)}`,
           size: 'md',
           body: e.service_history.length ? `
             <div class="space-y-2.5">
@@ -111,7 +111,7 @@
                     ${statusBadge(h.status)}
                   </div>
                   <p class="text-sm text-slate-500 mt-1">${esc(h.problem)}</p>
-                  <p class="text-xs text-slate-400 mt-1">${esc(h.service_type || '')} · ${fmtDate(h.created_at)}${h.technician_name ? ' · ' + esc(h.technician_name) : ''}</p>
+                  <p class="text-xs text-slate-400 mt-1">${esc(h.service_type || '')} Â· ${fmtDate(h.created_at)}${h.technician_name ? ' Â· ' + esc(h.technician_name) : ''}</p>
                 </div>`).join('')}
             </div>` : '<p class="text-sm text-slate-400 text-center py-6">Belum ada riwayat service untuk unit ini.</p>'
         });

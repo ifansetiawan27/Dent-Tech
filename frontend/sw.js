@@ -6,7 +6,7 @@
  *  - Cross-origin (font/CDN): dibiarkan lewat tanpa intervensi.
  */
 
-const VERSION = 'denttech-v1';
+const VERSION = 'denttech-v2';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_URLS = [
@@ -85,4 +85,44 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// ---------- Web Push (notifikasi saat aplikasi tertutup) ----------
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
+  const title = data.title || 'Dent Tech.id';
+  const options = {
+    body: data.body || '',
+    icon: '/assets/icons/icon-192.png',
+    badge: '/assets/icons/icon-192.png',
+    tag: data.ref_type && data.ref_id ? `${data.ref_type}-${data.ref_id}` : 'denttech-notification',
+    renotify: true,
+    data: { ref_type: data.ref_type || '', ref_id: data.ref_id || '' },
+    vibrate: [200, 100, 200],
+    requireInteraction: false
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+function pushTargetUrl(data) {
+  const { ref_type: type, ref_id: id } = data || {};
+  if (!type || !id) return '/login.html';
+  return `/login.html?ref=${encodeURIComponent(type)}:${encodeURIComponent(id)}`;
+}
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = pushTargetUrl(event.notification.data);
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.navigate(target).catch(() => {});
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
 });

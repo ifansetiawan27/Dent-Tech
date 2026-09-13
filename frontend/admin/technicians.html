@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Technicians & Users — Admin</title>
+  <title>Technicians & Users â€” Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -133,7 +133,7 @@
       } catch (e) {
         const jobs = e.data?.work_orders;
         const detail = Array.isArray(jobs) && jobs.length
-          ? ` (${jobs.map((wo) => `${wo.number} — ${wo.status}`).join(', ')})`
+          ? ` (${jobs.map((wo) => `${wo.number} â€” ${wo.status}`).join(', ')})`
           : '';
         toast(e.message + detail, 'error');
       }
@@ -141,13 +141,13 @@
 
     function editModal(u) {
       const m = openModal({
-        title: `Edit User — ${esc(u.name)}`,
+        title: `Edit User â€” ${esc(u.name)}`,
         size: 'md',
         body: `
           <div class="space-y-4">
             <div><label class="label">Nama</label><input id="u-name" class="input" value="${esc(u.name)}"></div>
             <div><label class="label">Telepon</label><input id="u-phone" class="input" value="${esc(u.phone || '')}"></div>
-            <div><label class="label">Password Baru (kosongkan jika tidak diubah)</label><input id="u-password" type="password" class="input" placeholder="••••••••"></div>
+            <div><label class="label">Password Baru (kosongkan jika tidak diubah)</label><input id="u-password" type="password" class="input" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"></div>
             <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50">
               <div>
                 <p class="text-sm font-medium text-slate-700">Akun aktif</p>

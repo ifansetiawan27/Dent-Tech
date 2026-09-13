@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detail Invoice — Customer</title>
+  <title>Detail Invoice â€” Customer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } } };</script>
-  <link rel="stylesheet" href="/styles/app.css?v=3">
+  <link rel="stylesheet" href="/styles/app.css?v=4">
   <script>try{if(localStorage.getItem('sms_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YD7Y9VZQLQ"></script>
@@ -184,7 +184,7 @@
           ${payments.length ? `
           <div class="px-6 py-4 bg-emerald-50/60 border-t border-emerald-100">
             <p class="text-xs uppercase tracking-wide text-emerald-700 font-bold mb-1.5">Pembayaran</p>
-            ${payments.map((p) => `<p class="text-sm text-slate-600">${fmtIDR(p.amount)} via ${esc(p.method)}${p.reference ? ' (' + esc(p.reference) + ')' : ''} · ${fmtDateTime(p.paid_at)}</p>`).join('')}
+            ${payments.map((p) => `<p class="text-sm text-slate-600">${fmtIDR(p.amount)} via ${esc(p.method)}${p.reference ? ' (' + esc(p.reference) + ')' : ''} Â· ${fmtDateTime(p.paid_at)}</p>`).join('')}
           </div>` : ''}
         </div>
 
