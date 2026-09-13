@@ -6,7 +6,7 @@
  *  - Cross-origin (font/CDN): dibiarkan lewat tanpa intervensi.
  */
 
-const VERSION = 'denttech-v2';
+const VERSION = 'denttech-v3';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_URLS = [
@@ -102,7 +102,15 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200],
     requireInteraction: false
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Lencana ikon aplikasi (Android): angka belum-dibaca dari backend, atau titik.
+  const badgeCount = Number(data.badge) || 0;
+  const badgeTask = typeof self.navigator.setAppBadge === 'function'
+    ? (badgeCount > 0 ? self.navigator.setAppBadge(badgeCount) : self.navigator.setAppBadge()).catch(() => {})
+    : Promise.resolve();
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    badgeTask
+  ]));
 });
 
 function pushTargetUrl(data) {

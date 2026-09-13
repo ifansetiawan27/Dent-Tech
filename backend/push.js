@@ -232,7 +232,8 @@ function publicVapidKey() {
   return keys ? keys.publicKey : null;
 }
 
-// Kirim push ke SEMUA subscription milik kumpulan user.
+// Kirim push ke SEMUA subscription milik kumpulan user. Payload menyertakan
+// `badge` = jumlah notifikasi belum-dibaca penerima (untuk lencana ikon app).
 async function pushToUsers(userIds, payload) {
   if (!Array.isArray(userIds) || !userIds.length) return { sent: 0 };
   const keys = vapidKeys();
@@ -240,12 +241,34 @@ async function pushToUsers(userIds, payload) {
   const unique = [...new Set(userIds.filter(Boolean))];
   if (!unique.length) return { sent: 0 };
   const placeholders = unique.map(() => '?').join(',');
-  const subs = await db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${placeholders})`).all(...unique);
+  const subs = await db.prepare(`SELECT ps.*, ps.user_id FROM push_subscriptions ps WHERE ps.user_id IN (${placeholders})`).all(...unique);
   if (!subs.length) return { sent: 0 };
+  // Unread per user (notifikasi ditujukan langsung / per-role / per-customer).
+  const unreadRows = await db.prepare(`SELECT user_id, COUNT(*) AS c FROM (
+      SELECT n.user_id FROM notifications n JOIN users u ON u.id = n.user_id
+       WHERE n.read_at IS NULL AND (n.user_id = u.id OR (n.user_id IS NULL AND n.role = u.role) OR (n.user_id IS NULL AND n.role IS NULL AND n.customer_id = u.customer_id))
+         AND u.id IN (${placeholders}) GROUP BY n.user_id, u.id, u.role, u.customer_id
+    ) t GROUP BY user_id`).all(...unique)
+    .catch(() => []);
+  const unreadByUser = new Map();
+  // Fallback sederhana: hitung unread langsung per user jika query di atas gagal.
+  if (!unreadRows.length) {
+    for (const uid2 of unique) {
+      try {
+        const u = await db.prepare('SELECT id, role, customer_id FROM users WHERE id = ?').get(uid2);
+        if (!u) continue;
+        const r = await db.prepare('SELECT COUNT(*) AS c FROM notifications WHERE read_at IS NULL AND (user_id = ? OR (user_id IS NULL AND role = ?) OR (user_id IS NULL AND role IS NULL AND customer_id = ?))')
+          .get(u.id, u.role, u.customer_id || '');
+        unreadByUser.set(uid2, r.c);
+      } catch { /* skip */ }
+    }
+  } else {
+    for (const row of unreadRows) unreadByUser.set(row.user_id, row.c);
+  }
   let sent = 0;
   for (const sub of subs) {
     try {
-      const result = await sendToSubscription(sub, payload);
+      const result = await sendToSubscription(sub, { ...payload, badge: unreadByUser.get(sub.user_id) || 0 });
       if (result.sent) sent++;
     } catch (e) {
       console.error(`[push] endpoint gagal: ${e?.message || e}`);

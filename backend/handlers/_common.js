@@ -22,12 +22,14 @@ const TICKET_TRANSITIONS = {
 
 // Notifikasi in-app (tabel notifications) + Web Push (bunyi/banner OS saat
 // aplikasi tertutup) ke user yang masih memiliki push subscription (login).
+// Insert in-app dulu, lalu push — badge unread di payload sudah mencakup notif baru.
 function notify({ user_id = null, role = null, customer_id = null, title, body = '', type = 'INFO', ref_type = '', ref_id = '' }) {
-  trackTask(pushRecipients({ user_id, role, customer_id }).then((userIds) => {
-    if (userIds.length) pushNotify(userIds, { title, body, type, ref_type, ref_id });
-  }), 'push');
-  return trackTask(db.prepare('INSERT INTO notifications (id, user_id, role, customer_id, title, body, type, ref_type, ref_id, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)')
-    .run(uid(), user_id, role, customer_id, title, body, type, ref_type, ref_id, now()), 'notify');
+  trackTask((async () => {
+    await db.prepare('INSERT INTO notifications (id, user_id, role, customer_id, title, body, type, ref_type, ref_id, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)')
+      .run(uid(), user_id, role, customer_id, title, body, type, ref_type, ref_id, now());
+    const userIds = await pushRecipients({ user_id, role, customer_id });
+    if (userIds.length) await pushNotify(userIds, { title, body, type, ref_type, ref_id });
+  })(), 'push');
 }
 
 async function pushRecipients({ user_id, role, customer_id }) {

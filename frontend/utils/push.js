@@ -94,6 +94,21 @@ export function pushSupported() {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+// Sinkronkan lencana ikon aplikasi (Android) dengan jumlah notifikasi belum-dibaca
+// milik user login. Dipanggil saat app dibuka/di-refresh dan setelah notif dibaca.
+export async function syncAppBadge() {
+  try {
+    const user = getUser();
+    if (!user) return;
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (!reg || typeof reg.setAppBadge !== 'function') return;
+    const me = await api.get('/api/auth/me');
+    const unread = Number(me.unread_notifications) || 0;
+    if (unread > 0) await reg.setAppBadge(unread);
+    else if (typeof reg.clearAppBadge === 'function') await reg.clearAppBadge();
+  } catch { /* offline / SW belum siap: abaikan */ }
+}
+
 export async function disablePush() {
   try {
     const registration = await navigator.serviceWorker.ready;

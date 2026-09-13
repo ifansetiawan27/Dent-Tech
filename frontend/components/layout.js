@@ -5,7 +5,7 @@ import { refreshIcons, toast } from './ui.js';
 import { avatarHtml } from './avatar.js';
 import { bindThemeToggle } from '../utils/theme.js';
 import { initPwa } from '../utils/pwa.js';
-import { pushSupported, isPushEnabled, enablePush, syncPushSubscription } from '../utils/push.js';
+import { pushSupported, isPushEnabled, enablePush, syncPushSubscription, syncAppBadge } from '../utils/push.js';
 
 // Banner ajakan mengaktifkan notifikasi OS (bunyi + banner lock screen).
 // Non-interaktif tidak bisa meminta izin di iOS — sediakan tombol gesture.
@@ -113,6 +113,7 @@ export function setupNotifBell(bellEl, role) {
           const type = el.getAttribute('data-ref-type');
           const refId = el.getAttribute('data-ref-id');
           try { await api.post(`/api/notifications/${id}/read`); } catch {}
+          syncAppBadge();
           const dest = refPath(type, refId, role);
           if (dest) window.location.href = dest;
           else { panel.classList.add('hidden'); refreshBadge(); panel.innerHTML = await notifDropdownHtml(); bindInner(); }
@@ -126,6 +127,7 @@ export function setupNotifBell(bellEl, role) {
     const readAll = panel.querySelector('#notif-read-all');
     if (readAll) readAll.addEventListener('click', async () => {
       try { await api.post('/api/notifications/read-all'); } catch {}
+      syncAppBadge();
       panel.innerHTML = await notifDropdownHtml();
       bindInner();
       refreshBadge();
@@ -136,6 +138,7 @@ export function setupNotifBell(bellEl, role) {
     if (!panel.contains(e.target) && !bellEl.contains(e.target)) panel.classList.add('hidden');
   });
   refreshBadge();
+  syncAppBadge();
 }
 
 function userMenu(btnEl, user) {
