@@ -6,8 +6,26 @@
  *  - Cross-origin (font/CDN): dibiarkan lewat tanpa intervensi.
  */
 
-const VERSION = 'denttech-v5';
+const VERSION = 'denttech-v6';
 const OFFLINE_URL = '/offline.html';
+
+// Lapor ke server bahwa push BENAR-BENAR diterima perangkat (diagnostik delivery).
+// Server tidak menulis apa pun; log ini hanya untuk memastikan pesan sampai.
+function ackPush(data) {
+  try {
+    self.registration.pushManager.getSubscription().then((sub) => fetch('/api/push/ack', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: sub ? sub.endpoint : '',
+        title: data.title || '',
+        tag: data.tag || '',
+        notifications: data.notifications || 0,
+        badge_api: typeof self.navigator.setAppBadge === 'function'
+      })
+    })).catch(() => {});
+  } catch { /* abaikan */ }
+}
 
 const PRECACHE_URLS = [
   OFFLINE_URL,
@@ -108,19 +126,24 @@ self.addEventListener('push', (event) => {
   };
   // showNotification WAJIB berhasil agar push tidak dibuang browser. Jika opsi
   // lengkap ditolak (perangkat/versi tertentu), ulangi dengan opsi minimal.
-  const shown = self.registration.showNotification(title, options).catch(() =>
-    self.registration.showNotification(title, { body: options.body, tag: options.tag })
-  );
-  // Badge dijalankan terpisah & tidak pernah menggagalkan notifikasi
-  // (Android tidak mendukung Badging API — badge-nya otomatis dari notifikasi).
-  let badge = Promise.resolve();
-  try {
-    const count = Number(data.badge) || 0;
-    if (typeof self.navigator.setAppBadge === 'function') {
-      badge = (count > 0 ? self.navigator.setAppBadge(count) : self.navigator.clearAppBadge?.()).catch(() => {});
-    }
-  } catch { /* badge opsional */ }
-  event.waitUntil(Promise.all([shown, badge]));
+  const shown = self.registration.showNotification(title, options)
+    .then(() => {
+      // Kick laporan: push benar-benar diterima perangkat ini.
+      ackPush(data);
+      // Coba tampilkan angka belum-dibaca di ikon (hanya platform yang mendukung
+      // Badging API; di Android lencana muncul otomatis dari notifikasi itu sendiri).
+      const count = Number(data.badge) || 0;
+      if (count > 0 && typeof self.navigator.setAppBadge === 'function') {
+        return self.navigator.setAppBadge(count).catch(() => {});
+      }
+      return undefined;
+    })
+    .catch(() =>
+      self.registration.showNotification(title, { body: options.body, tag: options.tag })
+        .then(() => ackPush(data))
+        .catch(() => {})
+    );
+  event.waitUntil(shown);
 });
 
 function pushTargetUrl(data) {

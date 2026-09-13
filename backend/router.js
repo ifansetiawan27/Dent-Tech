@@ -132,6 +132,7 @@ route('POST', '/api/push/subscribe', [], dashH.pushSubscribeHandler);
 route('POST', '/api/push/unsubscribe', [], dashH.pushUnsubscribeHandler);
 route('POST', '/api/push/test', [], dashH.pushTestHandler);
 route('GET', '/api/push/status', [], dashH.pushStatusHandler);
+route('POST', '/api/push/ack', null, dashH.pushAckHandler);
 
 route('POST', '/api/files', [], filesH.uploadFileHandler);
 route('GET', '/api/files/:id', null, filesH.getFileHandler);

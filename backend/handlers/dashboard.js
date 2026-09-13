@@ -2,6 +2,7 @@
 const { db } = require('../db');
 const { sendJSON, localDate, localMonthKey, uid, now } = require('../util');
 const { publicVapidKey, pushToUsers } = require('../push');
+const { rateAllowed } = require('./_common');
 
 async function dashboardHandler(ctx) {
   const role = ctx.user.role;
@@ -178,4 +179,20 @@ async function pushStatusHandler(ctx) {
   sendJSON(ctx.res, 200, { devices: Number(row.c) || 0, vapid: !!publicVapidKey() });
 }
 
-module.exports = { dashboardHandler, listNotificationsHandler, readNotificationHandler, readAllNotificationsHandler, auditLogsHandler, pushSubscribeHandler, pushUnsubscribeHandler, pushVapidHandler, pushTestHandler, pushStatusHandler };
+// Laporan dari service worker bahwa push BENAR-BENAR diterima perangkat
+// (diagnostik delivery). Hanya menulis ke log Worker — tidak menyentuh database.
+async function pushAckHandler(ctx) {
+  if (!rateAllowed('push-ack:' + (ctx.ip || 'unknown'), 30, 60 * 1000)) return sendJSON(ctx.res, 429, { ok: false });
+  const b = ctx.body || {};
+  console.log('[push-ack]', JSON.stringify({
+    endpoint_tail: String(b.endpoint || '').slice(-14),
+    title: String(b.title || '').slice(0, 80),
+    tag: String(b.tag || '').slice(0, 60),
+    notifications_shown: Number(b.notifications) || 0,
+    badge_api: !!b.badge_api,
+    at: now()
+  }));
+  sendJSON(ctx.res, 200, { ok: true });
+}
+
+module.exports = { dashboardHandler, listNotificationsHandler, readNotificationHandler, readAllNotificationsHandler, auditLogsHandler, pushSubscribeHandler, pushUnsubscribeHandler, pushVapidHandler, pushTestHandler, pushStatusHandler, pushAckHandler };
