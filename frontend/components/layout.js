@@ -5,7 +5,7 @@ import { refreshIcons, toast } from './ui.js';
 import { avatarHtml } from './avatar.js';
 import { bindThemeToggle } from '../utils/theme.js';
 import { initPwa } from '../utils/pwa.js';
-import { pushSupported, isPushEnabled, enablePush, syncPushSubscription, syncAppBadge } from '../utils/push.js';
+import { pushSupported, isPushEnabled, enablePush, syncPushSubscription, syncAppBadge, sendTestPush } from '../utils/push.js';
 
 // Banner ajakan mengaktifkan notifikasi OS (bunyi + banner lock screen).
 // Non-interaktif tidak bisa meminta izin di iOS — sediakan tombol gesture.
@@ -56,8 +56,9 @@ async function notifDropdownHtml() {
           </div>
         </div>`).join('')}
     </div>
-    <div class="px-4 py-2.5 border-t border-slate-100 text-center">
+    <div class="px-4 py-2.5 border-t border-slate-100 flex items-center justify-center gap-4">
       <button id="notif-read-all" class="text-xs font-medium text-blue-600 hover:underline">Tandai semua dibaca</button>
+      <button id="notif-test-push" class="text-xs font-medium text-slate-500 hover:underline">Tes notifikasi</button>
     </div>`;
   } catch {
     return `<div class="p-6 text-center text-sm text-slate-400">Gagal memuat notifikasi</div>`;
@@ -89,16 +90,33 @@ export function setupNotifBell(bellEl, role) {
   panel.className = 'hidden fixed z-[80] w-[calc(100%-1.5rem)] max-w-sm right-3 top-14 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden';
   document.body.appendChild(panel);
 
-  const refreshBadge = async () => {
+  let lastUnread = null;
+  const refreshBadge = async (announce = false) => {
     try {
       const me = await api.get('/api/auth/me');
+      const unread = Number(me.unread_notifications) || 0;
       const badge = bellEl.querySelector('[data-notif-badge]');
       if (badge) {
-        badge.textContent = me.unread_notifications > 0 ? String(me.unread_notifications) : '';
-        badge.classList.toggle('hidden', me.unread_notifications === 0);
+        badge.textContent = unread > 0 ? String(unread) : '';
+        badge.classList.toggle('hidden', unread === 0);
       }
+      // Notifikasi baru terdeteksi saat aplikasi terbuka → beri tahu tanpa refresh.
+      if (announce && lastUnread !== null && unread > lastUnread) {
+        toast('Notifikasi baru masuk');
+        if (!panel.classList.contains('hidden')) { panel.innerHTML = await notifDropdownHtml(); bindInner(); }
+      }
+      lastUnread = unread;
     } catch {}
   };
+
+  // Pembaruan otomatis: poll ringan saat halaman terlihat + sinkron saat app
+  // kembali ke depan. Tanpa ini lonceng hanya ter-update saat refresh manual.
+  const poll = setInterval(() => { if (!document.hidden) refreshBadge(true); }, 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { refreshBadge(true); syncAppBadge(); }
+  });
+  window.addEventListener('focus', () => refreshBadge(true));
+  window.addEventListener('beforeunload', () => clearInterval(poll));
 
   bellEl.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -131,6 +149,15 @@ export function setupNotifBell(bellEl, role) {
       panel.innerHTML = await notifDropdownHtml();
       bindInner();
       refreshBadge();
+    });
+    const testPush = panel.querySelector('#notif-test-push');
+    if (testPush) testPush.addEventListener('click', async () => {
+      testPush.disabled = true;
+      const res = await sendTestPush();
+      testPush.disabled = false;
+      if (res.ok && res.sent > 0) toast('Notifikasi uji terkirim — cek layar HP Anda');
+      else if (res.ok && !res.total) toast('Belum ada perangkat terdaftar. Aktifkan notifikasi dulu.', 'error');
+      else toast('Notifikasi uji gagal terkirim', 'error');
     });
   }
 

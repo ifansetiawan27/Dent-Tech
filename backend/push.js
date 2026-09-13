@@ -241,14 +241,14 @@ function publicVapidKey() {
 // Kirim push ke SEMUA subscription milik kumpulan user. Payload menyertakan
 // `badge` = jumlah notifikasi belum-dibaca penerima (untuk lencana ikon app).
 async function pushToUsers(userIds, payload) {
-  if (!Array.isArray(userIds) || !userIds.length) return { sent: 0 };
+  if (!Array.isArray(userIds) || !userIds.length) return { sent: 0, total: 0 };
   const keys = vapidKeys();
-  if (!keys) return { sent: 0 };
+  if (!keys) return { sent: 0, total: 0 };
   const unique = [...new Set(userIds.filter(Boolean))];
-  if (!unique.length) return { sent: 0 };
+  if (!unique.length) return { sent: 0, total: 0 };
   const placeholders = unique.map(() => '?').join(',');
   const subs = await db.prepare(`SELECT ps.*, ps.user_id FROM push_subscriptions ps WHERE ps.user_id IN (${placeholders})`).all(...unique);
-  if (!subs.length) return { sent: 0 };
+  if (!subs.length) return { sent: 0, total: 0 };
   // Jumlah belum-dibaca per penerima — predikat sama dengan listNotificationsHandler
   // (user langsung / per-role / per-customer). Dipakai untuk lencana ikon aplikasi.
   const unreadByUser = new Map();
@@ -271,7 +271,7 @@ async function pushToUsers(userIds, payload) {
       console.error(`[push] endpoint gagal: ${e?.message || e}`);
     }
   }
-  return { sent };
+  return { sent, total: subs.length };
 }
 
 // Kirim sebagai background task (menyertai notify() yang sudah async fire-and-forget).

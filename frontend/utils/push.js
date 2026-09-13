@@ -108,6 +108,16 @@ export async function syncAppBadge() {
   } catch { /* offline / belum didukung: abaikan */ }
 }
 
+// Kirim notifikasi uji ke perangkat user yang sedang login (verifikasi push).
+export async function sendTestPush() {
+  try {
+    const res = await api.post('/api/push/test');
+    return res && typeof res === 'object' ? res : { ok: false };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'gagal' };
+  }
+}
+
 export async function disablePush() {
   try {
     const registration = await navigator.serviceWorker.ready;

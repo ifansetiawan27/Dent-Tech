@@ -1,7 +1,7 @@
 'use strict';
 const { db } = require('../db');
 const { sendJSON, localDate, localMonthKey, uid, now } = require('../util');
-const { publicVapidKey } = require('../push');
+const { publicVapidKey, pushToUsers } = require('../push');
 
 async function dashboardHandler(ctx) {
   const role = ctx.user.role;
@@ -158,4 +158,17 @@ async function pushVapidHandler(ctx) {
   sendJSON(ctx.res, 200, { public_key: key });
 }
 
-module.exports = { dashboardHandler, listNotificationsHandler, readNotificationHandler, readAllNotificationsHandler, auditLogsHandler, pushSubscribeHandler, pushUnsubscribeHandler, pushVapidHandler };
+// Kirim notifikasi uji ke subscription milik user yang meminta (tanpa menulis
+// tabel notifications) — untuk memverifikasi bunyi/banner/lencana di perangkat.
+async function pushTestHandler(ctx) {
+  const key = publicVapidKey();
+  if (!key) return sendJSON(ctx.res, 503, { error: 'Web Push belum dikonfigurasi' });
+  const result = await pushToUsers([ctx.user.id], {
+    title: 'Tes Notifikasi Berhasil',
+    body: 'Notifikasi push aktif di perangkat ini. Kunci layar untuk menguji.',
+    type: 'INFO', ref_type: '', ref_id: '', badge: 0
+  });
+  sendJSON(ctx.res, 200, { ok: true, ...result });
+}
+
+module.exports = { dashboardHandler, listNotificationsHandler, readNotificationHandler, readAllNotificationsHandler, auditLogsHandler, pushSubscribeHandler, pushUnsubscribeHandler, pushVapidHandler, pushTestHandler };

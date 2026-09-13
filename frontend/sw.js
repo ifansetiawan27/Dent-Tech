@@ -6,7 +6,7 @@
  *  - Cross-origin (font/CDN): dibiarkan lewat tanpa intervensi.
  */
 
-const VERSION = 'denttech-v4';
+const VERSION = 'denttech-v5';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_URLS = [
@@ -97,16 +97,22 @@ self.addEventListener('push', (event) => {
     icon: '/assets/icons/icon-192.png',
     badge: '/assets/icons/icon-192.png',
     tag: data.ref_type && data.ref_id ? `${data.ref_type}-${data.ref_id}` : 'denttech-notification',
+    // renotify WAJIB true saat memakai tag: notifikasi baru dengan tag sama
+    // akan menggantikan yang lama TANPA bunyi/banner jika false.
+    renotify: true,
     data: { ref_type: data.ref_type || '', ref_id: data.ref_id || '' },
     vibrate: [200, 100, 200],
     // silent:false → Android/iOS membunyikan notifikasi (default nada sistem).
     silent: false,
     requireInteraction: false
   };
-  // showNotification WAJIB berhasil agar push tidak dibuang browser.
+  // showNotification WAJIB berhasil agar push tidak dibuang browser. Jika opsi
+  // lengkap ditolak (perangkat/versi tertentu), ulangi dengan opsi minimal.
+  const shown = self.registration.showNotification(title, options).catch(() =>
+    self.registration.showNotification(title, { body: options.body, tag: options.tag })
+  );
   // Badge dijalankan terpisah & tidak pernah menggagalkan notifikasi
   // (Android tidak mendukung Badging API — badge-nya otomatis dari notifikasi).
-  const shown = self.registration.showNotification(title, options);
   let badge = Promise.resolve();
   try {
     const count = Number(data.badge) || 0;
