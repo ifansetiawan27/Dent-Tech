@@ -43,6 +43,7 @@
     import { spinner, errorState, toast, refreshIcons, fileToDataUrl } from '/components/ui.js';
     import { esc, todayStr } from '/utils/format.js';
     import { equipmentTypeOptions } from '/utils/constants.js';
+    import { navigateAfterSubmit } from '/utils/navigation.js';
 
     requireAuth(['customer']);
     initMobileLayout('request', 'customer');
@@ -185,7 +186,7 @@
             try { await api.post('/api/files', { dataUrl: pendingPhoto, kind: 'request', ticket_id: res.id, caption: 'Foto masalah dari customer' }); } catch {}
           }
           toast(`Request ${res.number} berhasil dikirim`);
-          setTimeout(() => location.href = '/customer/ticket-detail.html?id=' + res.id, 600);
+          setTimeout(() => navigateAfterSubmit('/customer/ticket-detail.html?id=' + res.id), 600);
         } catch (err) {
           toast(err.message, 'error');
           btn.disabled = false;

@@ -46,6 +46,7 @@
   <script type="module">
     import { setToken, setUser, portalHome } from '/utils/auth.js';
     import { api } from '/services/api.js';
+    import { navigateAfterSubmit } from '/utils/navigation.js';
 
     const spinner = document.getElementById('cb-spinner');
     const errorBox = document.getElementById('cb-error');
@@ -83,7 +84,7 @@
         const res = await api.post('/api/auth/google/session', { access_token: accessToken });
         setToken(res.token);
         setUser(res.user);
-        window.location.href = portalHome(res.user.role);
+        navigateAfterSubmit(portalHome(res.user.role));
       } catch (e) {
         fail(e.message);
       }

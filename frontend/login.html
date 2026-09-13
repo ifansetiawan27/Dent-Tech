@@ -129,6 +129,7 @@
     import { setToken, setUser, getToken, getUser, portalHome } from '/utils/auth.js';
     import { api } from '/services/api.js';
     import { bindThemeToggle } from '/utils/theme.js';
+    import { navigateAfterSubmit } from '/utils/navigation.js';
 
     lucide.createIcons();
     bindThemeToggle(document.getElementById('theme-toggle'));
@@ -156,7 +157,7 @@
       return portalHome(role);
     }
 
-    if (getToken() && getUser()) window.location.href = pushTarget(getUser().role);
+    if (getToken() && getUser()) navigateAfterSubmit(pushTarget(getUser().role));
 
 (async () => {
       try {
@@ -204,7 +205,7 @@
         const res = await api.post('/api/auth/login', { email, password });
         setToken(res.token);
         setUser(res.user);
-        window.location.href = pushTarget(res.user.role);
+        navigateAfterSubmit(pushTarget(res.user.role));
       } catch (e) {
         errMsg.textContent = e.message;
         errBox.classList.remove('hidden');
