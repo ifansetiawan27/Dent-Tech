@@ -100,19 +100,21 @@
               <i data-lucide="x-circle" class="w-4 h-4 shrink-0"></i> Ticket ini dibatalkan
             </div>` : `
             <div class="mt-5">
-               <div class="flex items-center overflow-x-auto pb-1">
-                ${STEPS.map((s, i) => `
-                  <div class="flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}">
-                    <div class="flex flex-col items-center">
-                      <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${i <= idx ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}">
-                        ${i < idx ? '<i data-lucide="check" class="w-3 h-3"></i>' : i + 1}
+              <div class="overflow-x-auto pb-1">
+                <div class="flex items-center min-w-[560px]">
+                  ${STEPS.map((s, i) => `
+                    <div class="flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}">
+                      <div class="flex flex-col items-center">
+                        <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${i <= idx ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}">
+                          ${i < idx ? '<i data-lucide="check" class="w-3 h-3"></i>' : i + 1}
+                        </div>
                       </div>
-                    </div>
-                    ${i < STEPS.length - 1 ? `<div class="flex-1 h-0.5 mx-1 ${i < idx ? 'bg-blue-600' : 'bg-slate-100'}"></div>` : ''}
-                  </div>`).join('')}
-              </div>
-               <div class="grid grid-cols-10 mt-1.5 text-[8px] text-center text-slate-400 font-medium min-w-[560px]">
-                ${STEPS.map((s, i) => `<span class="${i <= idx ? 'text-blue-600' : ''}">${s.label}</span>`).join('')}
+                      ${i < STEPS.length - 1 ? `<div class="flex-1 h-0.5 mx-1 ${i < idx ? 'bg-blue-600' : 'bg-slate-100'}"></div>` : ''}
+                    </div>`).join('')}
+                </div>
+                <div class="grid grid-cols-10 mt-1.5 text-[8px] text-center text-slate-400 font-medium min-w-[560px]">
+                  ${STEPS.map((s, i) => `<span class="${i <= idx ? 'text-blue-600' : ''}">${s.label}</span>`).join('')}
+                </div>
               </div>
             </div>`}
         </div>

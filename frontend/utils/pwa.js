@@ -72,7 +72,9 @@ export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+    // updateViaCache 'none': pemeriksaan update SW selalu lewat jaringan,
+    // agar perangkat PWA segera mendapat service worker baru (bukan cache HTTP).
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {});
   });
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {

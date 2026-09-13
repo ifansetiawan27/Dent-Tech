@@ -100,13 +100,12 @@ export async function syncAppBadge() {
   try {
     const user = getUser();
     if (!user) return;
-    const reg = await navigator.serviceWorker?.getRegistration?.();
-    if (!reg || typeof reg.setAppBadge !== 'function') return;
+    if (typeof navigator.setAppBadge !== 'function') return;
     const me = await api.get('/api/auth/me');
     const unread = Number(me.unread_notifications) || 0;
-    if (unread > 0) await reg.setAppBadge(unread);
-    else if (typeof reg.clearAppBadge === 'function') await reg.clearAppBadge();
-  } catch { /* offline / SW belum siap: abaikan */ }
+    if (unread > 0) await navigator.setAppBadge(unread);
+    else if (typeof navigator.clearAppBadge === 'function') await navigator.clearAppBadge();
+  } catch { /* offline / belum didukung: abaikan */ }
 }
 
 export async function disablePush() {
