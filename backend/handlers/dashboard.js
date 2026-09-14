@@ -21,7 +21,9 @@ async function dashboardHandler(ctx) {
       WHERE i.status IN ('SENT','OVERDUE')`).get()).s;
     const paidMonth = (await db.prepare("SELECT COUNT(*) AS c FROM invoices WHERE status='PAID' AND substr(paid_at,1,7) = ?").get(monthKey)).c;
     const ticketsByStatus = await db.prepare('SELECT status, COUNT(*) AS count FROM tickets GROUP BY status').all();
-    const today = new Date().toISOString().slice(0, 10);
+    // Tanggal lokal (WIB), bukan UTC — agar "pekerjaan hari ini" tidak
+    // menampilkan jadwal kemarin pada dini hari.
+    const today = localDate();
     const todaysWorkOrders = await db.prepare(
       `SELECT wo.id, wo.number, wo.scheduled_date, wo.time_window, wo.status, t.number AS ticket_number, t.problem,
          c.name AS customer_name, u.name AS technician_name

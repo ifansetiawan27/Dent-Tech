@@ -100,10 +100,12 @@ async function startWorkOrderHandler(ctx) {
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'ASSIGNED') return sendJSON(ctx.res, 400, { error: 'Inspeksi hanya bisa dimulai dari status ASSIGNED' });
+  const t = await getTicket(wo.ticket_id);
+  if (!t) return sendJSON(ctx.res, 409, { error: 'Ticket untuk work order ini tidak ditemukan' });
+  if (t.status === 'CANCELLED') return sendJSON(ctx.res, 409, { error: 'Ticket sudah dibatalkan, pekerjaan tidak dapat dimulai' });
   const started = await db.prepare("UPDATE work_orders SET status = 'STARTED', started_at = ?, updated_at = ? WHERE id = ? AND status = 'ASSIGNED'").run(now(), now(), wo.id);
   if (!started.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
-  const t = await getTicket(wo.ticket_id);
-  if (t && t.status === 'ASSIGNED') {
+  if (t.status === 'ASSIGNED') {
     await setTicketStatus(t, 'IN_PROGRESS', ctx.user, 'Teknisi memulai inspeksi dan diagnosis');
     await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
   }
@@ -163,6 +165,9 @@ async function submitDiagnosisHandler(ctx) {
   if (!wo.equipment_identity_confirmed_at || !String(wo.serviced_equipment_name || '').trim() || !String(wo.serviced_equipment_type_model || '').trim() || !String(wo.serviced_equipment_serial_number || '').trim()) {
     return sendJSON(ctx.res, 400, { error: 'Konfirmasi nama, tipe/model, dan serial number alat sebelum mengirim diagnosis', code: 'EQUIPMENT_IDENTITY_REQUIRED' });
   }
+  const t = await getTicket(wo.ticket_id);
+  if (!t) return sendJSON(ctx.res, 409, { error: 'Ticket untuk work order ini tidak ditemukan' });
+  if (t.status === 'CANCELLED') return sendJSON(ctx.res, 409, { error: 'Ticket sudah dibatalkan, diagnosis tidak dapat dikirim' });
   const ts = now();
   let missingInspection = [];
   const transition = await db.transaction(async (tx) => {
@@ -180,8 +185,7 @@ async function submitDiagnosisHandler(ctx) {
     error: 'Foto inspeksi wajib belum lengkap', code: 'INSPECTION_PHOTOS_MISSING', missing_photo_kinds: missingInspection
   });
   if (!transition) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
-  const t = await getTicket(wo.ticket_id);
-  if (t) {
+  {
     await setTicketStatus(t, 'WAITING_QUOTATION', ctx.user, 'Diagnosis selesai, menunggu proforma invoice');
     timeline(t.id, 'DIAGNOSIS', 'Diagnosis selesai', 'Hasil inspeksi dikirim ke admin untuk penyusunan proforma invoice.', 'CUSTOMER_VISIBLE', ctx.user.id);
     notify({ role: 'admin', title: `Diagnosis ${wo.number} siap direview`, body: `${t.number} — buat proforma biaya perbaikan`, type: 'WORK_ORDER', ref_type: 'work_order', ref_id: wo.id });
@@ -195,11 +199,13 @@ async function startRepairHandler(ctx) {
   if (!wo) return sendJSON(ctx.res, 404, { error: 'Work order tidak ditemukan' });
   if (ctx.user.role !== 'admin' && wo.technician_id !== ctx.user.id) return sendJSON(ctx.res, 403, { error: 'Work order bukan milik Anda' });
   if (wo.status !== 'REPAIR_AUTHORIZED') return sendJSON(ctx.res, 400, { error: 'Perbaikan belum disetujui customer' });
+  const t = await getTicket(wo.ticket_id);
+  if (!t) return sendJSON(ctx.res, 409, { error: 'Ticket untuk work order ini tidak ditemukan' });
+  if (t.status === 'CANCELLED') return sendJSON(ctx.res, 409, { error: 'Ticket sudah dibatalkan, perbaikan tidak dapat dimulai' });
   const ts = now();
   const started = await db.prepare("UPDATE work_orders SET status = 'REPAIR_STARTED', updated_at = ? WHERE id = ? AND status = 'REPAIR_AUTHORIZED'").run(ts, wo.id);
   if (!started.changes) return sendJSON(ctx.res, 409, { error: 'Status work order berubah. Muat ulang halaman.' });
-  const t = await getTicket(wo.ticket_id);
-  if (t) {
+  {
     await setTicketStatus(t, 'REPAIR_IN_PROGRESS', ctx.user, 'Teknisi memulai perbaikan yang disetujui');
     timeline(t.id, 'STATUS', 'Perbaikan dimulai', 'Teknisi mulai mengerjakan perbaikan sesuai proforma yang disetujui.', 'CUSTOMER_VISIBLE', ctx.user.id);
     notify({ customer_id: t.customer_id, title: `Perbaikan ${t.number} dimulai`, body: 'Teknisi mulai mengerjakan perbaikan yang Anda setujui', type: 'WORK_ORDER', ref_type: 'ticket', ref_id: t.id });
@@ -290,11 +296,22 @@ async function addPartUsageHandler(ctx) {
   const q = Number(qty);
   if (!q || q <= 0) return sendJSON(ctx.res, 400, { error: 'Jumlah tidak valid' });
   if (part.stock < q) return sendJSON(ctx.res, 400, { error: `Stok tidak mencukupi (tersisa ${part.stock} ${part.unit})` });
-  const updated = await db.prepare('UPDATE parts SET stock = stock - ? WHERE id = ? AND stock >= ?').run(q, part.id, q);
-  if (!updated.changes) return sendJSON(ctx.res, 400, { error: `Stok tidak mencukupi (tersisa ${part.stock} ${part.unit})` });
-  await db.prepare('INSERT INTO part_usages (id, work_order_id, part_id, qty, unit_price, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(uid(), wo.id, part.id, q, part.price, note, now());
-  await db.prepare('UPDATE work_orders SET updated_at = ? WHERE id = ?').run(now(), wo.id);
+  // Stok + catatan pemakaian harus atomik: bila insert gagal, stok tidak boleh
+  // berkurang sendirian (stok hilang tanpa jejak pemakaian).
+  try {
+    await db.transaction(async (tx) => {
+      const updated = await tx.prepare('UPDATE parts SET stock = stock - ? WHERE id = ? AND stock >= ?').run(q, part.id, q);
+      if (!updated.changes) { const e = new Error(`Stok tidak mencukupi (tersisa ${part.stock} ${part.unit})`); e.status = 400; throw e; }
+      const lockedWo = await tx.prepare('SELECT status FROM work_orders WHERE id = ? FOR UPDATE').get(wo.id);
+      if (!lockedWo || lockedWo.status !== 'REPAIR_STARTED') { const e = new Error('Perbaikan sudah tidak berjalan. Muat ulang halaman.'); e.status = 409; throw e; }
+      await tx.prepare('INSERT INTO part_usages (id, work_order_id, part_id, qty, unit_price, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(uid(), wo.id, part.id, q, part.price, note, now());
+      await tx.prepare('UPDATE work_orders SET updated_at = ? WHERE id = ?').run(now(), wo.id);
+    });
+  } catch (e) {
+    if (e.status) return sendJSON(ctx.res, e.status, { error: e.message });
+    throw e;
+  }
   audit(ctx.user, 'CREATE', 'part_usage', wo.id, `Pakai ${q}x ${part.name} di ${wo.number}`, ctx.ip);
   sendJSON(ctx.res, 201, { ok: true, parts_total: await partTotalForWorkOrder(wo.id) });
 }
@@ -374,6 +391,7 @@ async function completeWorkOrderHandler(ctx) {
       t = await tx.prepare('SELECT * FROM tickets WHERE id = ? FOR UPDATE').get(lockedWo.ticket_id);
       proforma = await tx.prepare("SELECT * FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' ORDER BY created_at DESC LIMIT 1 FOR UPDATE").get(lockedWo.id);
       if (!t || !proforma || proforma.approval_status !== 'APPROVED') { const e = new Error('Proforma yang disetujui customer tidak ditemukan'); e.status = 409; throw e; }
+      if (t.status === 'CANCELLED') { const e = new Error('Ticket sudah dibatalkan, pekerjaan tidak dapat diselesaikan'); e.status = 409; throw e; }
       // Spare part hanya bisa dicatat saat REPAIR_STARTED, yaitu setelah proforma
       // disetujui. Sinkronkan ulang baris PART agar biaya part ikut tertagih.
       const partsSynced = await resyncWorkOrderParts(tx, proforma.id, lockedWo.id);

@@ -68,7 +68,7 @@
     lucide.createIcons();
 
     const user = getUser();
-    document.getElementById('pf-initials').textContent = user.name.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('pf-initials').textContent = (user.name || '?').split(' ').filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
     document.getElementById('pf-name').textContent = user.name;
     document.getElementById('pf-email').textContent = user.email;
     document.getElementById('pf-phone').textContent = user.phone || '';

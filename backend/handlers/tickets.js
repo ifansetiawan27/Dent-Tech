@@ -148,6 +148,8 @@ async function updateTicketHandler(ctx) {
   if (b.equipment_id) {
     const eq = await db.prepare('SELECT * FROM equipment WHERE id = ?').get(b.equipment_id);
     if (!eq) return sendJSON(ctx.res, 400, { error: 'Equipment tidak ditemukan' });
+    // Equipment harus milik customer ticket ini agar riwayat service tidak tertukar.
+    if (eq.customer_id !== t.customer_id) return sendJSON(ctx.res, 400, { error: 'Equipment bukan milik customer ticket ini' });
   }
   const fields = ['problem', 'description', 'service_type', 'priority', 'equipment_type', 'equipment_brand', 'service_address', 'preferred_date', 'preferred_time', 'contact_name', 'contact_phone'];
   for (const f of fields) {
@@ -204,10 +206,29 @@ async function changeStatusHandler(ctx) {
   const { status, note = '' } = ctx.body;
   const allowed = TICKET_TRANSITIONS[t.status] || [];
   if (!allowed.includes(status)) return sendJSON(ctx.res, 400, { error: `Transisi dari ${t.status} ke ${status} tidak diizinkan` });
+  // Status yang ditentukan proses (work order / invoice / laporan) tidak boleh
+  // diubah manual: bisa membuat ticket tidak sinkron dengan work order.
+  const woRows = await db.prepare('SELECT id, number, status FROM work_orders WHERE ticket_id = ?').all(t.id);
+  if (woRows.length) {
+    if (status === 'CLOSED') {
+      const openWo = woRows.find((w) => w.status !== 'APPROVED');
+      if (openWo) return sendJSON(ctx.res, 409, { error: `Ticket tidak bisa ditutup: work order ${openWo.number} masih berstatus ${openWo.status}` });
+    } else if (['REPAIR_AUTHORIZED', 'REPAIR_IN_PROGRESS'].includes(status)) {
+      return sendJSON(ctx.res, 409, { error: 'Status perbaikan hanya berubah lewat approval customer / aksi teknisi di work order' });
+    }
+  }
   await setTicketStatus(t, status, ctx.user, note);
   await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
-  timeline(t.id, 'STATUS', `Status menjadi ${status}`, note, status === 'CANCELLED' ? 'CUSTOMER_VISIBLE' : 'CUSTOMER_VISIBLE', ctx.user.id);
-  if (status === 'CANCELLED') notify({ customer_id: t.customer_id, title: `Ticket ${t.number} dibatalkan`, body: note || 'Ticket dibatalkan oleh admin', type: 'TICKET', ref_type: 'ticket', ref_id: t.id });
+  timeline(t.id, 'STATUS', `Status menjadi ${status}`, note, 'CUSTOMER_VISIBLE', ctx.user.id);
+  if (status === 'CANCELLED') {
+    // Batalkan juga work order yang masih berjalan agar tidak ada pekerjaan yatim.
+    for (const wo of woRows) {
+      if (wo.status === 'APPROVED') continue;
+      await db.prepare("UPDATE work_orders SET status = 'CANCELLED', updated_at = ? WHERE id = ?").run(now(), wo.id);
+      if (wo.status !== 'CANCELLED') audit(ctx.user, 'UPDATE', 'work_order', wo.id, `Dibatalkan otomatis karena ticket ${t.number} dibatalkan`, ctx.ip);
+    }
+    notify({ customer_id: t.customer_id, title: `Ticket ${t.number} dibatalkan`, body: note || 'Ticket dibatalkan oleh admin', type: 'TICKET', ref_type: 'ticket', ref_id: t.id });
+  }
   audit(ctx.user, 'UPDATE', 'ticket', t.id, `Ubah status ${t.number}: ${t.status} → ${status}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true });
 }
@@ -253,12 +274,25 @@ async function assignTicketHandler(ctx) {
   const servicedSerial = equipment?.serial_number || '';
   const woId = uid();
   const woNumber = await nextNumber('WO');
-  await db.prepare(`INSERT INTO work_orders (id, number, ticket_id, technician_id, checklist_template_id, scheduled_date, time_window, status,
-    serviced_equipment_name, serviced_equipment_type_model, serviced_equipment_serial_number, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, ?, ?, ?)`)
-    .run(woId, woNumber, t.id, tech.id, template ? template.id : null, scheduled_date, time_window, servicedName, servicedTypeModel, servicedSerial, now(), now());
-  await setTicketStatus(t, 'ASSIGNED', ctx.user, `Ditugaskan ke ${tech.name}`);
-  await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
+  // Satu transaksi: work order dibuat + status ticket berubah bersama-sama,
+  // sehingga tidak mungkin lahir work order tanpa ticket yang sinkron.
+  let conflict = null;
+  await db.transaction(async (tx) => {
+    const locked = await tx.prepare('SELECT id, status FROM tickets WHERE id = ? FOR UPDATE').get(t.id);
+    if (!locked) { const e = new Error('Ticket tidak ditemukan'); e.status = 404; throw e; }
+    if (!['OPEN', 'REVIEWING'].includes(locked.status)) {
+      conflict = `Ticket sudah berstatus ${locked.status} — tugaskan ulang tidak diizinkan. Muat ulang halaman.`;
+      return;
+    }
+    if (locked.status === 'CANCELLED') { conflict = 'Ticket sudah dibatalkan'; return; }
+    await tx.prepare(`INSERT INTO work_orders (id, number, ticket_id, technician_id, checklist_template_id, scheduled_date, time_window, status,
+      serviced_equipment_name, serviced_equipment_type_model, serviced_equipment_serial_number, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, ?, ?, ?)`)
+      .run(woId, woNumber, t.id, tech.id, template ? template.id : null, scheduled_date, time_window, servicedName, servicedTypeModel, servicedSerial, now(), now());
+    await setTicketStatus(t, 'ASSIGNED', ctx.user, `Ditugaskan ke ${tech.name}`, { executor: tx });
+    await tx.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
+  });
+  if (conflict) return sendJSON(ctx.res, 409, { error: conflict });
   timeline(t.id, 'ASSIGNMENT', 'Teknisi ditugaskan', `${tech.name} dijadwalkan ${scheduled_date} ${time_window}`.trim(), 'CUSTOMER_VISIBLE', ctx.user.id);
   notify({ user_id: tech.id, title: `Work order baru ${woNumber}`, body: `${t.problem} — ${scheduled_date} ${time_window}`.trim(), type: 'WORK_ORDER', ref_type: 'work_order', ref_id: woId });
   notify({ customer_id: t.customer_id, title: `Ticket ${t.number} dijadwalkan`, body: `Teknisi ${tech.name} dijadwalkan ${scheduled_date} ${time_window}`.trim(), type: 'WORK_ORDER', ref_type: 'ticket', ref_id: t.id });
@@ -291,6 +325,7 @@ async function internalNoteHandler(ctx) {
   const { message } = ctx.body;
   if (!message || !String(message).trim()) return sendJSON(ctx.res, 400, { error: 'Catatan tidak boleh kosong' });
   timeline(t.id, 'NOTE', `Catatan internal — ${ctx.user.name}`, String(message).trim(), 'INTERNAL', ctx.user.id);
+  await db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now(), t.id);
   audit(ctx.user, 'CREATE', 'note', t.id, `Catatan internal di ${t.number}`, ctx.ip);
   sendJSON(ctx.res, 201, { ok: true });
 }

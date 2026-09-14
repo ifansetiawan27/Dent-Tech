@@ -50,7 +50,7 @@
     lucide.createIcons();
 
     const user = getUser();
-    document.getElementById('greeting').textContent = 'Halo, ' + user.name.split(' ')[0];
+    document.getElementById('greeting').textContent = 'Halo, ' + ((user.name || '').split(' ')[0] || 'Teknisi');
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const content = document.getElementById('content');

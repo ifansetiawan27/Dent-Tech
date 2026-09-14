@@ -147,8 +147,18 @@ async function settleVerifiedOrder(orderId, transaction) {
     await transitionOrder(order.id, 'COMPLETED', tx, { completedAt: transaction.completed_at || ts, settledAt: now() });
     return { settled: true, status: 'COMPLETED', order: { ...order, status: 'COMPLETED', settled_at: ts }, paidInvoice };
   });
-  // Email lunas ke customer dikirim setelah transaksi commit (di luar tx DB gateway)
+  // Efek samping setelah transaksi commit (email + notifikasi + jejak audit),
+  // disamakan dengan pembayaran manual agar kedua jalur pembayaran sinkron.
   if (result.paidInvoice) {
+    const { notify, timeline, audit } = require('./_common');
+    const totalFormatted = `Rp ${Number(result.paidInvoice.total).toLocaleString('id-ID')}`;
+    if (result.paidInvoice.ticketId) {
+      timeline(result.paidInvoice.ticketId, 'PAYMENT', `Invoice ${result.paidInvoice.number} dibayar`, `Pembayaran QRIS terverifikasi ${totalFormatted}`, 'CUSTOMER_VISIBLE', null);
+    }
+    notify({ customer_id: result.paidInvoice.customerId, title: `Pembayaran ${result.paidInvoice.number} berhasil`, body: `${totalFormatted} via QRIS telah kami terima. Terima kasih.`, type: 'INVOICE', ref_type: 'invoice', ref_id: result.paidInvoice.id });
+    notify({ role: 'admin', title: `Invoice ${result.paidInvoice.number} dibayar`, body: `${totalFormatted} via QRIS`, type: 'INVOICE', ref_type: 'invoice', ref_id: result.paidInvoice.id });
+    const cust = await db.prepare('SELECT name FROM customers WHERE id = ?').get(result.paidInvoice.customerId).catch(() => null);
+    audit({ id: null, name: 'Sistem QRIS', role: 'system' }, 'UPDATE', 'invoice', result.paidInvoice.id, `Pembayaran QRIS ${result.paidInvoice.number} ${totalFormatted}${cust?.name ? ' dari ' + cust.name : ''}`, '');
     const { scheduleCustomerEmail, invoicePaidEmail } = require('../email');
     const { currentRuntime } = require('../runtime');
     const ctxLike = { runtimeEnv: currentRuntime()?.env || null, executionCtx: currentRuntime()?.executionCtx || null, user: null };

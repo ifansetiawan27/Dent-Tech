@@ -451,8 +451,9 @@ async function getPhotoHandler(ctx) {
   const ref = ctx.query.id || '';
   if (!String(ref).startsWith('avatar-')) return sendJSON(ctx.res, 400, { error: 'Request tidak valid' });
   const userId = String(ref).slice('avatar-'.length);
-  let allowed = verifyFileSig(ref, ctx.query.exp, ctx.query.sig);
-  if (!allowed && ctx.user) allowed = true;
+  // Hanya URL bertanda tangan sah, pemilik foto itu sendiri, atau admin.
+  let allowed = verifyFileSig(ref, ctx.query.exp, ctx.query.sig)
+    || (ctx.user && (ctx.user.id === userId || ctx.user.role === 'admin'));
   if (!allowed) return sendJSON(ctx.res, 403, { error: 'Tidak memiliki akses' });
   const u = await db.prepare('SELECT photo_path, photo_mime FROM users WHERE id = ?').get(userId);
   if (!u || !u.photo_path) return sendJSON(ctx.res, 404, { error: 'Foto tidak ditemukan' });

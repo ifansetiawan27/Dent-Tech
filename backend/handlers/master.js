@@ -141,10 +141,27 @@ async function deleteCustomerHandler(ctx) {
   if (!c) return sendJSON(ctx.res, 404, { error: 'Customer tidak ditemukan' });
   const tickets = (await db.prepare('SELECT COUNT(*) AS c FROM tickets WHERE customer_id = ?').get(c.id)).c;
   if (tickets > 0) return sendJSON(ctx.res, 409, { error: 'Customer memiliki riwayat ticket dan tidak dapat dihapus' });
-  await db.prepare('DELETE FROM customer_contacts WHERE customer_id = ?').run(c.id);
-  await db.prepare('DELETE FROM equipment WHERE customer_id = ?').run(c.id);
-  await db.prepare('DELETE FROM users WHERE customer_id = ? AND role = ?').run(c.id, 'customer');
-  await db.prepare('DELETE FROM customers WHERE id = ?').run(c.id);
+  // Periksa ketergantungan lain lebih dulu agar tidak gagal di tengah proses
+  // (penghapusan sebagian) dan tidak menghasilkan error 500.
+  const blockers = [];
+  const orders = (await db.prepare('SELECT COUNT(*) AS c FROM payment_orders WHERE customer_id = ?').get(c.id)).c;
+  if (orders > 0) blockers.push(`${orders} order pembayaran`);
+  const incomes = (await db.prepare('SELECT COUNT(*) AS c FROM finance_income WHERE customer_id = ?').get(c.id)).c;
+  if (incomes > 0) blockers.push(`${incomes} catatan keuangan`);
+  const invoices = (await db.prepare('SELECT COUNT(*) AS c FROM invoices WHERE customer_id = ?').get(c.id)).c;
+  if (invoices > 0) blockers.push(`${invoices} invoice`);
+  if (blockers.length) return sendJSON(ctx.res, 409, { error: `Customer tidak dapat dihapus: masih terkait ${blockers.join(', ')}` });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.prepare('DELETE FROM push_subscriptions WHERE user_id IN (SELECT id FROM users WHERE customer_id = ?)').run(c.id);
+      await tx.prepare('DELETE FROM customer_contacts WHERE customer_id = ?').run(c.id);
+      await tx.prepare('DELETE FROM equipment WHERE customer_id = ?').run(c.id);
+      await tx.prepare('DELETE FROM users WHERE customer_id = ? AND role = ?').run(c.id, 'customer');
+      await tx.prepare('DELETE FROM customers WHERE id = ?').run(c.id);
+    });
+  } catch (e) {
+    return sendJSON(ctx.res, 409, { error: 'Customer tidak dapat dihapus karena masih memiliki data terkait' });
+  }
   audit(ctx.user, 'DELETE', 'customer', c.id, `Menghapus customer ${c.name}`, ctx.ip);
   sendJSON(ctx.res, 200, { ok: true });
 }

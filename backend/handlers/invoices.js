@@ -85,7 +85,10 @@ async function invoiceDetail(inv, user, executor = db) {
     ]);
     const visible = (user && user.role === 'customer') ? rawPhotos.filter((p) => p.visibility !== 'INTERNAL') : rawPhotos;
     evidence.photos = visible.map(attachmentWithUrl);
-    evidence.checklist = checklist;
+    // Checklist inspeksi hanya dibuka ke customer setelah laporan disetujui —
+    // sama dengan aturan di getWorkOrderHandler (hindari bocor hasil inspeksi
+    // sebelum admin menyetujui laporan).
+    evidence.checklist = approvedReport ? checklist : null;
     evidence.diagnosis = approvedReport ? diagnosisRow || null : null;
   }
 
@@ -278,8 +281,10 @@ async function payInvoiceHandler(ctx) {
   if (inv.ticket_id) {
     const t = await getTicket(inv.ticket_id);
     if (t) timeline(t.id, 'PAYMENT', `Invoice ${inv.number} dibayar`, `Pembayaran ${method} ${reference}`.trim(), 'CUSTOMER_VISIBLE', ctx.user.id);
-    notify({ role: 'admin', title: `Invoice ${inv.number} dibayar`, body: `Rp ${totals.total.toLocaleString('id-ID')} via ${method}`, type: 'INVOICE', ref_type: 'invoice', ref_id: inv.id });
   }
+  notify({ role: 'admin', title: `Invoice ${inv.number} dibayar`, body: `Rp ${totals.total.toLocaleString('id-ID')} via ${method}`, type: 'INVOICE', ref_type: 'invoice', ref_id: inv.id });
+  // Customer juga diberi tahu (bukan hanya admin) agar status pembayaran sinkron.
+  notify({ customer_id: inv.customer_id, title: `Pembayaran ${paidDocumentNumber} berhasil`, body: `Rp ${totals.total.toLocaleString('id-ID')} via ${method} telah kami terima. Terima kasih.`, type: 'INVOICE', ref_type: 'invoice', ref_id: inv.id });
   audit(ctx.user, 'UPDATE', 'invoice', inv.id, `Pembayaran invoice ${inv.number} Rp ${totals.total}`, ctx.ip);
   await sendInvoicePaidEmail(ctx, {
     invoiceId: inv.id,
@@ -393,6 +398,7 @@ async function createProformaHandler(ctx) {
        if (wo.status !== 'WAITING_QUOTATION') { const e = new Error('Proforma hanya bisa dibuat setelah diagnosis dikirim teknisi'); e.status = 400; throw e; }
       t = await tx.prepare('SELECT * FROM tickets WHERE id = ?').get(wo.ticket_id);
       if (!t) { const e = new Error('Ticket tidak ditemukan'); e.status = 404; throw e; }
+      if (t.status === 'CANCELLED') { const e = new Error('Ticket sudah dibatalkan, proforma tidak dapat dibuat'); e.status = 409; throw e; }
       const existing = await tx.prepare("SELECT id, number FROM invoices WHERE work_order_id = ? AND type = 'PROFORMA' AND status != 'PAID'").get(wo.id);
       if (existing) { const e = new Error(`Proforma ${existing.number} sudah ada untuk work order ini`); e.status = 409; throw e; }
        await tx.prepare(`INSERT INTO invoices (id, number, ticket_id, work_order_id, customer_id, labor_cost, discount, tax_rate, status, type, approval_status, issued_at, due_at, created_at, updated_at, version)

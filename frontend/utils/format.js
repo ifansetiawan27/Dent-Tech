@@ -41,14 +41,14 @@ export function bindIDRInput(input) {
 export function fmtDate(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d)) return iso;
+  if (isNaN(d)) return '-';
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export function fmtDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d)) return iso;
+  if (isNaN(d)) return '-';
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
     d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 }
@@ -68,7 +68,7 @@ export function esc(s) {
 export function timeAgo(iso) {
   if (!iso) return '-';
   const then = new Date(iso).getTime();
-  if (isNaN(then)) return iso;
+  if (isNaN(then)) return '-';
   const diff = Date.now() - then;
   const m = Math.floor(diff / 60000);
   if (m < 1) return 'baru saja';
