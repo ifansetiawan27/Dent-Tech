@@ -18,7 +18,6 @@ async function pushStatusHtml() {
     ['Perangkat terdaftar di server', String(d.devicesOnServer), d.devicesOnServer > 0],
     ['Dijalankan sebagai', d.standalone ? 'Aplikasi (PWA)' : 'Browser', d.standalone]
   ];
-  const bad = rows.some((r) => !r[2]);
   return `
     <div class="px-4 py-3 border-t border-slate-100 bg-slate-50/60">
       <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Status notifikasi perangkat ini</p>
@@ -29,7 +28,6 @@ async function pushStatusHtml() {
             <span class="font-semibold ${ok ? 'text-emerald-600' : 'text-amber-600'}">${v}</span>
           </div>`).join('')}
       </div>
-      ${bad ? `<p class="mt-2 text-[11px] text-amber-700 leading-snug">Buka <strong>Setelan HP → Aplikasi → Dent Tech.id → Notifikasi</strong> lalu aktifkan (jangan "Senyap"), dan buka aplikasi dari ikonnya (bukan dari browser). Di iOS, tambahkan ke Home Screen lewat Safari.</p>` : ''}
     </div>`;
 }
 
